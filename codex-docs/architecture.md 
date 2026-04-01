@@ -1,0 +1,246 @@
+
+
+# Codex Architecture (MVP-Oriented)
+
+This document turns the Codex philosophy and principles into a concrete, MVP-oriented architecture.
+
+Codex is designed as a **content platform kernel**: a small core that manages structured knowledge and a set of extension points that allow infrastructure and behavior to evolve independently.
+
+---
+
+# 1. Architectural Shape
+
+## 1.1 Monolith First, Modular Always
+
+Codex starts as a **modular monolith**:
+
+- one deployable application (Docker or `java -jar`)
+- clear internal module boundaries
+- plugins as JARs (static extensions)
+- scripting runtime for dynamic extensions
+
+This approach keeps the MVP fast while preserving the ability to split modules into separate services later.
+
+## 1.2 Headless by Default
+
+Codex does not provide rendering, templating, or page composition as a first-class requirement.
+
+Codex manages content and exposes it through APIs and a CLI.
+
+---
+
+# 2. Core Domain Concepts
+
+## 2.1 Content Types
+
+Content Types define the structure of knowledge in Codex.
+
+### 2.1.1 Versionable Content Types
+
+Unlike many CMS platforms, **Content Types MUST be versioned**.
+
+Rationale:
+
+- schema changes are real changes to the meaning of content
+- versioning avoids "silent migrations" and production surprises
+- it enables safe, incremental evolution
+
+### 2.1.2 Composition
+
+A Content Type may be:
+
+- **simple**: a set of fields
+- **composed**: built from other Content Types
+
+Composition strategy options (MVP chooses one, future may support both):
+
+- **by reference**: composed fields refer to the source type
+- **by copy**: composed fields are copied at composition time
+
+The MVP should implement **one** strategy to keep complexity low.
+
+### 2.1.3 Schemaless Representation
+
+The Content Type structure must be storable as a schemaless document (e.g., JSON/YAML).
+
+Implications:
+
+- the core model is strongly typed in code
+- persistence uses a schemaless payload for flexibility
+- storage plugins can map it to filesystem or database formats
+
+---
+
+## 2.2 Content Items
+
+Content Items are instances of Content Types.
+
+Minimum lifecycle:
+
+- DRAFT → LIVE
+
+Key requirements:
+
+- versioning of items
+- publishing produces a deployable artifact (bundle)
+- item data can also be stored schemaless (JSON)
+
+---
+
+## 2.3 Users, Roles, and Permissions
+
+Codex should not become an identity provider.
+
+The design separates:
+
+- **AuthN (who you are)**: external providers (OIDC/OAuth2 now, SAML later)
+- **AuthZ (what you can do)**: Codex roles and permissions
+
+### 2.3.1 User Storage Model
+
+Users can be persisted by the same storage system used by the platform.
+
+A pragmatic model:
+
+- a small set of standard properties (id, username/email, status)
+- a schemaless "attributes" JSON field for additional info
+
+Storage examples:
+
+- filesystem plugin: key-based files per user
+- database plugin: users table + JSON column for attributes
+
+### 2.3.2 Roles
+
+A user may have **multiple roles**.
+
+Role categories/types are intentionally avoided in the MVP unless a real use case proves necessary.
+
+### 2.3.3 Permissions Model (Simple but Granular)
+
+Codex needs a permissions model that is:
+
+- granular enough for real-world use
+- simple enough to avoid edge-case explosions
+
+Guiding idea:
+
+- define permissions at **Content Type** level
+- allow overrides at **Content Item** level
+- keep inheritance rules explicit and minimal
+
+The MVP should avoid deep inheritance chains that create hard-to-debug behavior.
+
+---
+
+## 2.4 Sites and Multi-Language
+
+Codex may be used in multi-tenant scenarios (multiple sites/spaces) and multi-language content.
+
+### 2.4.1 Site as a First-Class Concept
+
+In some platforms, a site is modeled as a special Content Type. This tends to produce "special-case" conditionals across the codebase.
+
+Codex prefers:
+
+- **Site as a first-class domain concept**
+
+This reduces special-case behavior and clarifies responsibilities.
+
+### 2.4.2 Multi-Language
+
+Codex should support multi-language content.
+
+MVP options:
+
+- language variants as separate items linked by a common identity
+- language as a dimension of the item version
+
+The architecture must keep this open, but the MVP should implement the simplest approach that fits the first use cases.
+
+---
+
+# 3. Extension Points
+
+Codex is designed to be extensible by default.
+
+## 3.1 Hooks
+
+Lifecycle hooks allow custom behavior without modifying the core.
+
+Examples:
+
+- beforeSave
+- afterSave
+- beforePublish
+- afterPublish
+
+Hooks are the entry points for:
+
+- validation
+- enrichment
+- automation
+- AI pipelines
+
+## 3.2 Interceptors (Lightweight Filters)
+
+Codex supports a lightweight interceptor model inspired by practical experience:
+
+- interceptors can be registered dynamically
+- invocation order is configurable
+- interceptors behave like filters without the operational complexity of container-level filter chains
+
+Interceptors provide a stable mechanism for:
+
+- request/response decoration
+- auth policy enforcement
+- auditing
+- cross-cutting concerns
+
+---
+
+# 4. Templating and Rendering Stance
+
+Codex does not require templating to be a first-class concept.
+
+Instead:
+
+- Codex stores content as structured knowledge
+- consumers decide how to render it
+
+If a consumer wants a "Page" model, they can define a Content Type for it.
+
+In the future, Codex may offer **recipes/blueprints** via CLI (scaffolding) for common patterns, but the MVP prioritizes:
+
+- freedom
+- clarity
+- a clean kernel
+
+---
+
+# 5. MVP Module Map (Initial)
+
+The following modules are suggested for the MVP repository layout.
+
+- `codex-core` — content model, lifecycle, domain services
+- `codex-spi` — plugin interfaces (Archive, Index, etc.)
+- `codex-archive-fs` — filesystem storage plugin (MVP)
+- `codex-gateway` — REST API layer
+- `codex-cli` — CLI entry point
+- `codex-scriptorium` — scripting runtime (optional in MVP; can be deferred)
+- `codex-illuminator` — enrichment/AI module (optional in MVP; can be deferred)
+
+MVP can start with core + fs archive + gateway + cli, then add scripting and illumination when the lifecycle and events are stable.
+
+---
+
+# 6. Open Decisions (Tracked)
+
+The following decisions are intentionally left open until MVP constraints force a choice:
+
+- Content Type composition strategy: reference vs copy
+- Multi-language strategy: linked variants vs version dimension
+- Permissions inheritance: exact minimal rules
+- Bundle format: manifest structure and asset handling
+
+These should be tracked as ADRs (Architecture Decision Records) as the project evolves.
