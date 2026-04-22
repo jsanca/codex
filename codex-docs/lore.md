@@ -15,7 +15,7 @@ Every module in Codex reflects a function that once existed in the world of manu
 
 # The World of Codex
 
-The Codex ecosystem is composed of several conceptual components inspired by the historical lifecycle of manuscripts.
+The Codex ecosystem is composed of several conceptual modules inspired by the historical lifecycle of manuscripts.
 
 ## Codex
 
@@ -27,13 +27,13 @@ The Codex core is intentionally small. It defines the language and structure of 
 
 ---
 
-## Chronicle
+## Chronicon
 
-The **Chronicle** preserves history.
+The **Chronicon** preserves history.
 
 Every manuscript evolves over time. Changes are recorded so that knowledge can be traced, restored, and understood in context.
 
-Within Codex, the Chronicle manages:
+Within Codex, the Chronicon manages:
 
 - versioning
 - publishing lifecycle
@@ -43,13 +43,13 @@ It ensures that nothing is lost and that every change becomes part of the system
 
 ---
 
-## Archive
+## Archivum
 
-The **Archive** stores the manuscripts.
+The **Archivum** stores the manuscripts.
 
-Historically, archives preserved texts so they could survive generations. In Codex, the Archive represents the storage layer.
+Historically, archives preserved texts so they could survive generations. In Codex, the Archivum represents the storage layer.
 
-The Archive is designed to be replaceable and pluggable.
+The Archivum is designed to be replaceable and pluggable.
 
 Possible archive implementations include:
 
@@ -73,7 +73,7 @@ The Index may be implemented using different search technologies such as:
 - OpenSearch
 - other search engines
 
-Like the Archive, the Index is implemented through plugins.
+Like the Archivum, the Index is implemented through plugins.
 
 ---
 
@@ -93,13 +93,13 @@ This allows organizations to adapt Codex without modifying its core.
 
 ---
 
-## Illuminator
+## Illuminarium
 
-The **Illuminator** enriches manuscripts.
+The **Illuminarium** enriches manuscripts.
 
 Medieval manuscripts were often decorated and enhanced by illuminators who added visual and symbolic layers to the text.
 
-In Codex, the Illuminator represents systems that enrich content through automated processes.
+In Codex, the Illuminarium represents systems that enrich content through automated processes.
 
 Examples include:
 
@@ -108,17 +108,17 @@ Examples include:
 - classification
 - metadata extraction
 
-The Illuminator transforms content into something more meaningful and searchable.
+The Illuminarium transforms content into something more meaningful and searchable.
 
 ---
 
-## Gateway
+## Porta
 
-The **Gateway** exposes the Codex to the outside world.
+The **Porta** exposes the Codex to the outside world.
 
 Just as manuscripts were eventually read and shared, Codex exposes its knowledge through APIs and services.
 
-The Gateway is responsible for:
+The Porta is responsible for:
 
 - REST APIs
 - GraphQL APIs
@@ -127,6 +127,58 @@ The Gateway is responsible for:
 It acts as the bridge between the internal world of Codex and external applications.
 
 ---
+
+## Iter
+
+The **Iter** governs the path of content.
+
+A manuscript does not simply exist; it moves through stages, decisions, approvals, revisions, and publication. In Codex, the Iter represents workflow and orchestration.
+
+The Iter is responsible for:
+
+- transitions
+- actions
+- branching paths
+- lifecycle progression
+- execution history
+
+It defines the journey that content follows through the system.
+
+---
+
+## Custos
+
+The **Custos** is the identity module.
+
+In ancient contexts, a custos was a guardian or keeper. In Codex, the Custos represents identity, access, and custody over the manuscript world.
+
+The Custos is responsible for:
+
+- users
+- roles
+- permissions
+- access control
+- site-level authority
+
+It ensures that every action in Codex is performed by the right actor, with the right authority, in the right scope.
+
+---
+
+# The Modules of Codex
+
+The current conceptual modules of Codex are:
+
+- **Codex**
+- **Chronicon**
+- **Archivum**
+- **Index**
+- **Scriptorium**
+- **Illuminarium**
+- **Porta**
+- **Iter**
+- **Custos**
+- **Imaginarium**
+- **Olórin**
 
 # A Living Manuscript
 
@@ -139,3 +191,23 @@ Every extension becomes another layer of interpretation.
 Every deployment becomes another edition of the book.
 
 Just like the codices of history, the Codex platform is meant to evolve — page by page, chapter by chapter.
+
+---
+
+## Imaginarium
+
+The **Imaginarium** represents the AI and agentic extension space of Codex.
+
+It is the conceptual domain where intelligent assistants, enrichment agents, and higher-level reasoning systems may interact with the manuscript world.
+
+The Imaginarium is not part of the minimal Codex core. It is a future-facing layer for intelligence, interpretation, and collaboration.
+
+---
+
+## Olórin
+
+**Olórin** is the inner counselor of the Imaginarium.
+
+If the Imaginarium is the realm of agentic imagination, Olórin is its reflective core: the advisory presence that helps interpret, reason, and guide.
+
+Olórin represents the future subsystem where agentic reasoning may be grounded, moderated, and directed with purpose.
