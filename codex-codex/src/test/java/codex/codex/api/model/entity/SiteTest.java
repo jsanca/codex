@@ -1,6 +1,7 @@
 package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.SiteId;
+import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.SiteStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,16 +17,17 @@ class SiteTest {
     @Test
     @DisplayName("Should create Site with valid builder data")
     void siteBuilderValid() {
-        SiteId id = SiteId.generate();
+        final SiteId id = SiteId.generate();
+        final SiteKey key = SiteKey.of("main-site");
         Site site = Site.builder()
                 .id(id)
-                .key("main-site")
+                .key(key)
                 .displayName("Main Site")
                 .status(SiteStatus.STARTED)
                 .build();
 
         assertThat(site.id()).isEqualTo(id);
-        assertThat(site.key()).isEqualTo("main-site");
+        assertThat(site.key()).isEqualTo(key);
         assertThat(site.displayName()).isEqualTo("Main Site");
         assertThat(site.status()).isEqualTo(SiteStatus.STARTED);
         assertThat(site.aliases()).isEmpty();
@@ -43,7 +45,7 @@ class SiteTest {
                 .displayName("Name")
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Site key cannot be blank");
+                .hasMessageContaining("site key must have at least 2 characters");
     }
 
     @Test
