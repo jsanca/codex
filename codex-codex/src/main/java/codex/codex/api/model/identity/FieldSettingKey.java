@@ -1,4 +1,4 @@
-package codex.codex.api.model.entity;
+package codex.codex.api.model.identity;
 
 import java.util.Objects;
 

@@ -1,4 +1,4 @@
-package codex.codex.api.model.entity;
+package codex.codex.api.model.value;
 
 /**
  * First draft of known constraint kinds.

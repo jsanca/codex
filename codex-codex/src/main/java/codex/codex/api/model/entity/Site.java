@@ -1,6 +1,7 @@
 package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.SiteId;
+import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.SiteStatus;
 
 import java.time.Instant;
@@ -15,7 +16,7 @@ import java.util.Set;
  */
 public record Site(
     SiteId id,
-    String key,
+    SiteKey key,
     String displayName,
     Set<SiteAlias> aliases,
     SiteStatus status,
@@ -24,9 +25,9 @@ public record Site(
 ) {
     /**
      * Canonical constructor for Site.
-     * 
+     *
      * @param id the unique site identifier, cannot be null
-     * @param key the stable human-friendly key, cannot be null or blank
+     * @param key the stable human-friendly site key, cannot be null
      * @param displayName the display name for the site, cannot be null or blank
      * @param aliases external resolution aliases, defaults to empty set if null
      * @param status the operational status, defaults to STARTED if null
@@ -36,10 +37,6 @@ public record Site(
     public Site {
         Objects.requireNonNull(id, "Site id cannot be null");
         Objects.requireNonNull(key, "Site key cannot be null");
-        key = key.trim();
-        if (key.isBlank()) {
-            throw new IllegalArgumentException("Site key cannot be blank");
-        }
 
         Objects.requireNonNull(displayName, "Site displayName cannot be null");
         displayName = displayName.trim();
@@ -59,7 +56,7 @@ public record Site(
     public String toString() {
         return "Site{" +
                 "id=" + id +
-                ", key='" + key + '\'' +
+                ", key=" + key +
                 ", displayName='" + displayName + '\'' +
                 ", aliases=" + aliases +
                 ", status=" + status +
@@ -70,7 +67,7 @@ public record Site(
 
     /**
      * Creates a new builder for Site.
-     * 
+     *
      * @return a new Builder instance
      */
     public static Builder builder() {
@@ -82,7 +79,7 @@ public record Site(
      */
     public static class Builder {
         private SiteId id;
-        private String key;
+        private SiteKey key;
         private String displayName;
         private Set<SiteAlias> aliases;
         private SiteStatus status;
@@ -90,7 +87,8 @@ public record Site(
         private Instant createdAt;
 
         public Builder id(SiteId id) { this.id = id; return this; }
-        public Builder key(String key) { this.key = key; return this; }
+        public Builder key(SiteKey key) { this.key = key; return this; }
+        public Builder key(String key) { this.key = SiteKey.of(key); return this; }
         public Builder displayName(String displayName) { this.displayName = displayName; return this; }
 
         public Builder aliases(Set<SiteAlias> aliases) { this.aliases = aliases; return this; }
