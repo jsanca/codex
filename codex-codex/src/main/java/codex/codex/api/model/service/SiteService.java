@@ -8,7 +8,6 @@ import codex.fundamentum.api.model.Actor;
 import java.util.List;
 import java.util.Optional;
 
-// ... existing code ...
 /**
  * Service interface for managing {@link codex.codex.api.model.entity.Site} entities.
  * Provides the primary entry point for site-related business operations.
@@ -39,8 +38,8 @@ public interface SiteService {
     /**
      * Start an existing site
      *
-     * @param siteKey The stable key of the site to suspend. Must not be null.
-     * @param actor The actor performing the suspension. Must not be null.
+     * @param siteKey The stable key of the site to start. Must not be null.
+     * @param actor The actor performing the start operation. Must not be null.
      * @return The updated Site entity in started state.
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
@@ -65,6 +64,16 @@ public interface SiteService {
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
     Site archive(SiteKey siteKey, Actor actor);
+
+    /**
+     * Restores an archived site, making it active again.
+     *
+     * @param siteKey The stable key of the site to unarchive. Must not be null.
+     * @param actor The actor performing the unarchiving. Must not be null.
+     * @return The updated Site entity in active state.
+     * @throws IllegalArgumentException if the provided siteKey or actor is null.
+     */
+    Site unarchive(final SiteKey siteKey, final Actor actor);
 
     /**
      * Finds a site based on a specific alias.

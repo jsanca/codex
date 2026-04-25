@@ -74,6 +74,18 @@ public record Site(
         return new Builder();
     }
 
+    public static Builder copyOf(final Site site) {
+        Objects.requireNonNull(site, "site cannot be null");
+        return builder()
+                .id(site.id())
+                .key(site.key())
+                .displayName(site.displayName())
+                .aliases(site.aliases())
+                .status(site.status())
+                .attributes(site.attributes())
+                .createdAt(site.createdAt());
+    }
+
     /**
      * Builder for {@link Site}.
      */
@@ -118,5 +130,6 @@ public record Site(
         public Site build() {
             return new Site(id, key, displayName, aliases, status, attributes, createdAt);
         }
+
     }
 }

@@ -1,6 +1,7 @@
 package codex.codex.internal.repository;
 
 import codex.codex.api.model.entity.Site;
+import codex.codex.api.model.entity.SiteAlias;
 import codex.codex.api.model.identity.SiteKey;
 
 import java.util.List;
@@ -14,15 +15,24 @@ public final class MemorySiteRepository implements SiteRepository {
     private final Map<SiteKey, Site> sites = new ConcurrentHashMap<>();
 
     @Override
-    public Site save(Site site) {
+    public Site save(final Site site) {
         Objects.requireNonNull(site, "Site must not be null");
-        return sites.put(site.key(), site);
+        sites.put(site.key(), site);
+        return site;
     }
 
     @Override
     public Optional<Site> findByKey(final SiteKey key) {
         Objects.requireNonNull(key, "Key must not be null");
         return Optional.ofNullable(sites.get(key));
+    }
+
+    @Override
+    public Optional<Site> findByAlias(final SiteAlias alias) {
+        Objects.requireNonNull(alias, "alias must not be null");
+        return sites.values().stream()
+                .filter(site -> site.aliases().contains(alias))
+                .findFirst();
     }
 
     @Override

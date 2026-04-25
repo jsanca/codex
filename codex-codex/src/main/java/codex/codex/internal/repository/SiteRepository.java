@@ -1,6 +1,7 @@
 package codex.codex.internal.repository;
 
 import codex.codex.api.model.entity.Site;
+import codex.codex.api.model.entity.SiteAlias;
 import codex.codex.api.model.identity.SiteKey;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +32,14 @@ public interface SiteRepository {
      * @return An Optional containing the site if found.
      */
     Optional<Site> findByKey(SiteKey siteKey);
+
+    /**
+     * Finds a site by its alias.
+     *
+     * @param alias the alias to look up, must not be null
+     * @return An Optional containing the site if found.
+     */
+    Optional<Site> findByAlias(SiteAlias alias);
 
     /**
      * Checks if a site with the given key already exists.

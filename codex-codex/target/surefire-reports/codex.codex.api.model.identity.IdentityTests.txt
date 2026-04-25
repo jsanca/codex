@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: codex.codex.api.model.identity.IdentityTests
--------------------------------------------------------------------------------
-Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in codex.codex.api.model.identity.IdentityTests
