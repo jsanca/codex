@@ -30,12 +30,4 @@ public record SiteId(String value) {
         return new SiteId(value);
     }
 
-    /**
-     * Generates a new SiteId using a random UUID.
-     * 
-     * @return a new SiteId instance with a random UUID value
-     */
-    public static SiteId generate() {
-        return new SiteId(UUID.randomUUID().toString());
-    }
 }

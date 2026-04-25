@@ -1,4 +1,9 @@
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/CodexApiMarker.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/command/ArchiveSiteCommand.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/command/CreateSiteCommand.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/command/StartSiteCommand.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/command/SuspendSiteCommand.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/command/UnarchiveSiteCommand.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/ContentItem.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/ContentRevision.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
@@ -8,6 +13,11 @@
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/FieldSetting.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/Site.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/entity/SiteAlias.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/event/SiteArchivedEvent.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/event/SiteCreatedEvent.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/event/SiteStartedEvent.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/event/SiteSuspendedEvent.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/event/SiteUnarchivedEvent.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/identity/ContentItemId.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/identity/ContentRevisionId.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/api/model/identity/ContentTypeId.java
@@ -29,6 +39,8 @@
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/repository/MemorySiteRepository.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/repository/SiteRepository.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/service/internal/CodexSiteService.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/service/internal/EventPublishingSiteService.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/service/internal/InvalidSiteStatusTransitionException.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/service/internal/SiteAlreadyExistException.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/codex/codex/internal/service/internal/SiteIdentityGenerator.java
 /Users/jonathansanchez/gitprojects/codex/codex-codex/src/main/java/module-info.java

@@ -1,0 +1,4 @@
+--patch-module
+codex.codex=_
+--add-reads
+codex.codex=ALL-UNNAMED

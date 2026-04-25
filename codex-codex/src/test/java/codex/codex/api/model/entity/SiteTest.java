@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,7 +18,7 @@ class SiteTest {
     @Test
     @DisplayName("Should create Site with valid builder data")
     void siteBuilderValid() {
-        final SiteId id = SiteId.generate();
+        final SiteId id = SiteId.of(UUID.randomUUID().toString());
         final SiteKey key = SiteKey.of("main-site");
         Site site = Site.builder()
                 .id(id)
@@ -38,7 +39,7 @@ class SiteTest {
     @Test
     @DisplayName("Should throw exception when key is blank")
     void siteKeyBlank() {
-        SiteId id = SiteId.generate();
+        SiteId id = SiteId.of(UUID.randomUUID().toString());
         assertThatThrownBy(() -> Site.builder()
                 .id(id)
                 .key(" ")
@@ -52,7 +53,7 @@ class SiteTest {
     @DisplayName("Should default status to STARTED if not provided")
     void siteDefaultStatus() {
         Site site = Site.builder()
-                .id(SiteId.generate())
+                .id(SiteId.of(UUID.randomUUID().toString()))
                 .key("test")
                 .displayName("Test")
                 .build();
@@ -64,7 +65,7 @@ class SiteTest {
     @DisplayName("Should handle aliases from strings")
     void siteAliasesFromStrings() {
         Site site = Site.builder()
-                .id(SiteId.generate())
+                .id(SiteId.of(UUID.randomUUID().toString()))
                 .key("test")
                 .displayName("Test")
                 .aliasesFromStrings(Set.of("example.com", "www.example.com"))

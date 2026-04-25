@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -90,7 +91,7 @@ class MemorySiteRepositoryTest {
 
     private Site createSite(SiteKey key) {
         return Site.builder()
-                .id(SiteId.generate())
+                .id(SiteId.of(UUID.randomUUID().toString()))
                 .key(key)
                 .displayName("Site " + key.value())
                 .build();

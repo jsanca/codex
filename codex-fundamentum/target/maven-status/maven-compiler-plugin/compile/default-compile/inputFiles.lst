@@ -1,7 +1,11 @@
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/FundamentumApiMarker.java
+/Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/event/CodexEvent.java
+/Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/event/CodexEventDispatcher.java
+/Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/exception/InvalidStateTransitionException.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/exception/NotFoundException.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/model/Actor.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/model/ActorId.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/model/ActorType.java
+/Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/api/model/IdentityGenerator.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/codex/fundamentum/internal/DefaultFundamentumModule.java
 /Users/jonathansanchez/gitprojects/codex/codex-fundamentum/src/main/java/module-info.java

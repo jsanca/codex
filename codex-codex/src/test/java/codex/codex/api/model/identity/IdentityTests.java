@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -36,8 +38,8 @@ class IdentityTests {
     @Test
     @DisplayName("SiteId.generate() should create unique IDs")
     void siteIdGenerate() {
-        SiteId id1 = SiteId.generate();
-        SiteId id2 = SiteId.generate();
+        SiteId id1 = SiteId.of(UUID.randomUUID().toString());
+        SiteId id2 = SiteId.of(UUID.randomUUID().toString());
         assertThat(id1).isNotEqualTo(id2);
         assertThat(id1.value()).isNotBlank();
     }

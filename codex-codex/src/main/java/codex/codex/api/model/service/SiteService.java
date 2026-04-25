@@ -1,5 +1,6 @@
 package codex.codex.api.model.service;
 
+import codex.codex.api.model.command.*;
 import codex.codex.api.model.entity.Site;
 import codex.codex.api.model.entity.SiteAlias;
 import codex.codex.api.model.identity.SiteKey;
@@ -18,12 +19,12 @@ public interface SiteService {
     /**
      * Creates and persists a new site instance associated with the given actor.
      *
-     * @param site The site entity to be created. Must not be null.
+     * @param createSiteCommand The create site command containing details about the new site to create. Must not be null.
      * @param actor The actor initiating the creation. Must not be null.
      * @return The saved, fully constructed Site entity, including generated IDs or keys.
      * @throws IllegalArgumentException if the provided site or actor is null.
      */
-    Site create(Site site, Actor actor);
+    Site create(CreateSiteCommand createSiteCommand, Actor actor);
 
     /**
      * Retrieves an existing site using its unique, stable key.
@@ -38,42 +39,42 @@ public interface SiteService {
     /**
      * Start an existing site
      *
-     * @param siteKey The stable key of the site to start. Must not be null.
+     * @param startSiteCommand command to start a site. Must not be null.
      * @param actor The actor performing the start operation. Must not be null.
      * @return The updated Site entity in started state.
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
-    Site start(SiteKey siteKey, Actor actor);
+    Site start(StartSiteCommand startSiteCommand, Actor actor);
 
     /**
      * Suspends an existing site, making it temporarily inactive.
      *
-     * @param siteKey The stable key of the site to suspend. Must not be null.
+     * @param suspendSiteCommand command to suspend. Must not be null.
      * @param actor The actor performing the suspension. Must not be null.
      * @return The updated Site entity in suspended state.
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
-    Site suspend(SiteKey siteKey, Actor actor);
+    Site suspend(SuspendSiteCommand suspendSiteCommand, Actor actor);
 
     /**
      * Archives an existing site, moving it to a long-term storage/inactive state.
      *
-     * @param siteKey The stable key of the site to archive. Must not be null.
+     * @param archiveSiteCommand command to archive. Must not be null.
      * @param actor The actor performing the archiving. Must not be null.
      * @return The updated Site entity in archived state.
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
-    Site archive(SiteKey siteKey, Actor actor);
+    Site archive(ArchiveSiteCommand archiveSiteCommand, Actor actor);
 
     /**
      * Restores an archived site, making it active again.
      *
-     * @param siteKey The stable key of the site to unarchive. Must not be null.
+     * @param unarchiveSiteCommand command to unarchive. Must not be null.
      * @param actor The actor performing the unarchiving. Must not be null.
      * @return The updated Site entity in active state.
      * @throws IllegalArgumentException if the provided siteKey or actor is null.
      */
-    Site unarchive(final SiteKey siteKey, final Actor actor);
+    Site unarchive(final UnarchiveSiteCommand unarchiveSiteCommand, final Actor actor);
 
     /**
      * Finds a site based on a specific alias.

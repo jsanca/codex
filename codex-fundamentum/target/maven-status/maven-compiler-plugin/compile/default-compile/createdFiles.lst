@@ -1,7 +1,8 @@
 codex/fundamentum/api/model/ActorId.class
-module-info.class
 codex/fundamentum/api/model/ActorType.class
 codex/fundamentum/api/model/Actor.class
+codex/fundamentum/api/FundamentumApiMarker.class
+module-info.class
+codex/fundamentum/api/exception/InvalidStateTransitionException.class
 codex/fundamentum/internal/DefaultFundamentumModule.class
 codex/fundamentum/api/exception/NotFoundException.class
-codex/fundamentum/api/FundamentumApiMarker.class

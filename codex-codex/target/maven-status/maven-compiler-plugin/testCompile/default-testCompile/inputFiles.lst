@@ -1,0 +1,8 @@
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/api/model/entity/ContentRevisionTest.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeVersionTest.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/api/model/entity/SiteTest.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/api/model/identity/IdentityTests.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/api/model/value/ValueTests.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/internal/repository/MemorySiteRepositoryTest.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/internal/service/internal/CodexSiteServiceTest.java
+/Users/jonathansanchez/gitprojects/codex/codex-codex/src/test/java/codex/codex/internal/service/internal/EventPublishingSiteServiceTest.java
