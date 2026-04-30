@@ -23,4 +23,6 @@
 hs_err_pid*
 replay_pid*
 
-*/target/*
+# Maven - Arreglado para multimódulos
+target/
+**/target/
