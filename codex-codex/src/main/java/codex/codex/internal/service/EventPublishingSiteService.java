@@ -1,35 +1,47 @@
-package codex.codex.internal.service.internal;
+package codex.codex.internal.service;
 
 import codex.codex.api.model.command.*;
 import codex.codex.api.model.entity.Site;
-import codex.codex.api.model.entity.SiteAlias;
 import codex.codex.api.model.event.SiteArchivedEvent;
 import codex.codex.api.model.event.SiteCreatedEvent;
 import codex.codex.api.model.event.SiteStartedEvent;
 import codex.codex.api.model.event.SiteSuspendedEvent;
 import codex.codex.api.model.event.SiteUnarchivedEvent;
-import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.SiteService;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 
 import java.time.Clock;
-import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
-public class EventPublishingSiteService implements SiteService {
+/**
+ * A {@link SiteService} decorator that publishes domain events after each mutating operation.
+ * Read-only operations are forwarded transparently via {@link ForwardingSiteService}.
+ *
+ * @author jsanca
+ */
+public class EventPublishingSiteService implements ForwardingSiteService {
 
     private final SiteService delegate;
     private final CodexEventDispatcher eventDispatcher;
     private final Clock clock;
 
+    /**
+     * @param siteService     the delegate to forward calls to; must not be null
+     * @param eventDispatcher the dispatcher used to publish domain events; must not be null
+     * @param clock           the clock used to timestamp events; must not be null
+     */
     public EventPublishingSiteService(final SiteService siteService,
                                       final CodexEventDispatcher eventDispatcher,
                                       final Clock clock) {
         this.delegate = Objects.requireNonNull(siteService, "siteService must not be null");
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher, "eventDispatcher must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
+    @Override
+    public SiteService getDelegate() {
+        return delegate;
     }
 
     @Override
@@ -44,11 +56,6 @@ public class EventPublishingSiteService implements SiteService {
         ));
 
         return site;
-    }
-
-    @Override
-    public Optional<Site> findByKey(final SiteKey siteKey, final Actor actor) {
-        return delegate.findByKey(siteKey, actor);
     }
 
     @Override
@@ -105,15 +112,5 @@ public class EventPublishingSiteService implements SiteService {
         ));
 
         return site;
-    }
-
-    @Override
-    public Optional<Site> findByAlias(final SiteAlias alias, final Actor actor) {
-        return delegate.findByAlias(alias, actor);
-    }
-
-    @Override
-    public List<Site> findAll(final Actor actor) {
-        return delegate.findAll(actor);
     }
 }

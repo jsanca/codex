@@ -1,4 +1,4 @@
-package codex.codex.internal.service.internal;
+package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateSiteCommand;
 import codex.codex.api.model.identity.SiteId;

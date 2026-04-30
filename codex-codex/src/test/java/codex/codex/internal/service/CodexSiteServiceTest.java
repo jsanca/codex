@@ -1,4 +1,4 @@
-package codex.codex.internal.service.internal;
+package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ArchiveSiteCommand;
 import codex.codex.api.model.command.CreateSiteCommand;
