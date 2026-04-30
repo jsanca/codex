@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/codex-archivum/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-archivum/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-bom/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-bom/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-chronicon/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-chronicon/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-codex/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-codex/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-custos/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-custos/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-fundamentum/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-fundamentum/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-illuminarium/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-illuminarium/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-imaginarium/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-imaginarium/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-index/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-index/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-iter/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-iter/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-olorin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-olorin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-porta/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-porta/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-scriptorium/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/codex-scriptorium/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

@@ -393,3 +393,6 @@ Spring Boot annotations (`@Transactional`, `@Component`, `@Autowired`) must neve
 - Use enums for closed sets of domain values
 - Keep changes small and focused
 - Ask before making architectural decisions that affect module boundaries
+
+## Author's Coding Identity
+See [CODING_IDENTITY.md](link) for the broader design fingerprint that informs all decisions in this project.
