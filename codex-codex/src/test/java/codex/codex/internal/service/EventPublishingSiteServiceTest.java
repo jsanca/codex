@@ -7,6 +7,7 @@ import codex.codex.api.model.event.*;
 import codex.codex.api.model.identity.SiteId;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.SiteService;
+import codex.codex.api.model.value.SiteStatus;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
@@ -66,7 +67,8 @@ class EventPublishingSiteServiceTest {
     @Test
     void start_ShouldDelegateAndPublishEvent() {
         StartSiteCommand command = StartSiteCommand.of(testKey);
-        Site site = createSite();
+        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.SUSPENDED));
+        Site site = createSiteWithStatus(SiteStatus.STARTED);
         delegate.nextStartResult = site;
 
         Site result = service.start(command, testActor);
@@ -82,7 +84,8 @@ class EventPublishingSiteServiceTest {
     @Test
     void suspend_ShouldDelegateAndPublishEvent() {
         SuspendSiteCommand command = SuspendSiteCommand.of(testKey);
-        Site site = createSite();
+        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.STARTED));
+        Site site = createSiteWithStatus(SiteStatus.SUSPENDED);
         delegate.nextSuspendResult = site;
 
         Site result = service.suspend(command, testActor);
@@ -98,7 +101,8 @@ class EventPublishingSiteServiceTest {
     @Test
     void archive_ShouldDelegateAndPublishEvent() {
         ArchiveSiteCommand command = ArchiveSiteCommand.of(testKey);
-        Site site = createSite();
+        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.SUSPENDED));
+        Site site = createSiteWithStatus(SiteStatus.ARCHIVED);
         delegate.nextArchiveResult = site;
 
         Site result = service.archive(command, testActor);
@@ -114,7 +118,8 @@ class EventPublishingSiteServiceTest {
     @Test
     void unarchive_ShouldDelegateAndPublishEvent() {
         UnarchiveSiteCommand command = UnarchiveSiteCommand.of(testKey);
-        Site site = createSite();
+        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.ARCHIVED));
+        Site site = createSiteWithStatus(SiteStatus.SUSPENDED);
         delegate.nextUnarchiveResult = site;
 
         Site result = service.unarchive(command, testActor);
@@ -167,10 +172,15 @@ class EventPublishingSiteServiceTest {
     }
 
     private Site createSite() {
+        return createSiteWithStatus(SiteStatus.STARTED);
+    }
+
+    private Site createSiteWithStatus(final SiteStatus status) {
         return Site.builder()
                 .id(testId)
                 .key(testKey)
                 .displayName("Test Site")
+                .status(status)
                 .build();
     }
 

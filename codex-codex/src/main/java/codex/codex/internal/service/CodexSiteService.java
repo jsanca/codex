@@ -26,12 +26,12 @@ public final class CodexSiteService implements SiteService {
     private final Clock clock;
     private final IdentityGenerator<CreateSiteCommand, SiteId> siteIdentityGenerator;
 
-    protected CodexSiteService(final SiteRepository siteRepository,
+    public CodexSiteService(final SiteRepository siteRepository,
                             final Clock clock) {
         this (siteRepository, clock, new SiteIdentityGenerator());
     }
 
-    protected CodexSiteService(final SiteRepository siteRepository,
+    public CodexSiteService(final SiteRepository siteRepository,
                             final Clock clock,
                             final IdentityGenerator<CreateSiteCommand, SiteId> siteIdentityGenerator) {
 

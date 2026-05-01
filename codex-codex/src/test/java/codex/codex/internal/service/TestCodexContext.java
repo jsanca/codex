@@ -1,59 +1,33 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.service.SiteService;
-import codex.codex.internal.repository.MemorySiteRepository;
-import codex.fundamentum.api.concurrent.CodexExecutor;
+import codex.codex.internal.runtime.CodexRuntime;
 import codex.fundamentum.api.event.CodexEvent;
-import codex.fundamentum.api.event.CodexEventDispatcher;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Reusable test fixture that wires the full site event pipeline using real production
- * components — no mocks, no Spring, no external infrastructure.
- *
- * <p>Pipeline:</p>
- * <pre>
- * TransactionContext
- *   → EventPublishingSiteService
- *     → CodexSiteService
- *       → MemorySiteRepository
- *   → DeferredEventDispatcher
- *     → RecordingCodexEventDispatcher
- * </pre>
+ * Reusable test fixture that wires the full site event pipeline via {@link CodexRuntime}.
+ * Each test should create a fresh instance via {@link #create()} to guarantee isolation.
  */
 public final class TestCodexContext {
 
-    static final Clock CLOCK = Clock.fixed(Instant.parse("2026-04-30T12:00:00Z"), ZoneId.of("UTC"));
+    private final CodexRuntime runtime;
 
-    private final SiteService siteService;
-    private final RecordingCodexEventDispatcher recordingDispatcher;
-
-    private TestCodexContext(final SiteService siteService,
-                             final RecordingCodexEventDispatcher recordingDispatcher) {
-        this.siteService = Objects.requireNonNull(siteService);
-        this.recordingDispatcher = Objects.requireNonNull(recordingDispatcher);
+    private TestCodexContext(final CodexRuntime runtime) {
+        this.runtime = Objects.requireNonNull(runtime);
     }
 
     /**
-     * Creates a fully wired context with a fresh in-memory repository.
+     * Creates a fully wired in-memory context backed by {@link CodexRuntime#inMemory()}.
      *
-     * @return a new context ready for use in a single test
+     * @return a new, isolated context
      */
     public static TestCodexContext create() {
-        final MemorySiteRepository repository = new MemorySiteRepository();
-        final RecordingCodexEventDispatcher recording = new RecordingCodexEventDispatcher();
-        final DeferredEventDispatcher deferred = new DeferredEventDispatcher(recording, new SynchronousExecutor());
-        final CodexSiteService core = new CodexSiteService(repository, CLOCK);
-        final SiteService service = new EventPublishingSiteService(core, deferred, CLOCK);
-        return new TestCodexContext(service, recording);
+        return new TestCodexContext(CodexRuntime.inMemory());
     }
 
     /**
@@ -62,7 +36,7 @@ public final class TestCodexContext {
      * @return the site service
      */
     public SiteService siteService() {
-        return siteService;
+        return runtime.siteService();
     }
 
     /**
@@ -71,15 +45,15 @@ public final class TestCodexContext {
      * @return immutable snapshot of dispatched events
      */
     public List<CodexEvent> events() {
-        return List.copyOf(recordingDispatcher.dispatched);
+        return runtime.recordedEvents();
     }
 
     /**
      * Asserts that no events have been dispatched since the last {@link #clearEvents()}.
      */
     public void assertNoEvents() {
-        assertTrue(recordingDispatcher.dispatched.isEmpty(),
-                "Expected no events but found: " + recordingDispatcher.dispatched);
+        assertTrue(runtime.recordedEvents().isEmpty(),
+                "Expected no events but found: " + runtime.recordedEvents());
     }
 
     /**
@@ -90,38 +64,17 @@ public final class TestCodexContext {
      * @return the single dispatched event cast to {@code type}
      */
     public <E extends CodexEvent> E assertSingleEvent(final Class<E> type) {
-        assertEquals(1, recordingDispatcher.dispatched.size(),
-                "Expected exactly one event but found: " + recordingDispatcher.dispatched);
-        assertInstanceOf(type, recordingDispatcher.dispatched.getFirst());
-        return type.cast(recordingDispatcher.dispatched.getFirst());
+        final List<CodexEvent> events = runtime.recordedEvents();
+        assertEquals(1, events.size(),
+                "Expected exactly one event but found: " + events);
+        assertInstanceOf(type, events.getFirst());
+        return type.cast(events.getFirst());
     }
 
     /**
      * Clears all recorded events. Call between logical steps of a multi-step test.
      */
     public void clearEvents() {
-        recordingDispatcher.dispatched.clear();
-    }
-
-    private static final class RecordingCodexEventDispatcher implements CodexEventDispatcher {
-
-        final List<CodexEvent> dispatched = new ArrayList<>();
-
-        @Override
-        public void dispatch(final CodexEvent event) {
-            dispatched.add(Objects.requireNonNull(event));
-        }
-    }
-
-    private static final class SynchronousExecutor implements CodexExecutor {
-
-        @Override
-        public void submit(final Runnable task) {
-            task.run();
-        }
-
-        @Override
-        public void shutdown() {
-        }
+        runtime.clearRecordedEvents();
     }
 }
