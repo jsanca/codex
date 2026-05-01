@@ -1,0 +1,1130 @@
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/command/ActivateContentTypeCommand.java b/codex-codex/src/main/java/codex/codex/api/model/command/ActivateContentTypeCommand.java
+index dad5037..599cbab 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/command/ActivateContentTypeCommand.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/command/ActivateContentTypeCommand.java
+@@ -1,6 +1,7 @@
+ package codex.codex.api.model.command;
+ 
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ import java.util.Objects;
+ 
+@@ -8,19 +9,32 @@ import java.util.Objects;
+  * Command to activate a {@link codex.codex.api.model.entity.ContentType},
+  * transitioning it from {@code DRAFT} to {@code ACTIVE}.
+  */
+-public record ActivateContentTypeCommand(ContentTypeKey key) {
++public record ActivateContentTypeCommand(SiteKey siteKey, ContentTypeKey key) {
+ 
+     public ActivateContentTypeCommand {
++        Objects.requireNonNull(siteKey, "siteKey cannot be null");
+         Objects.requireNonNull(key, "key cannot be null");
+     }
+ 
+     /**
+-     * Factory method.
++     * Factory method using typed keys.
+      *
+-     * @param key the key of the content type to activate
++     * @param siteKey the site scope
++     * @param key     the key of the content type to activate
+      * @return a new {@link ActivateContentTypeCommand}
+      */
+-    public static ActivateContentTypeCommand of(final ContentTypeKey key) {
+-        return new ActivateContentTypeCommand(key);
++    public static ActivateContentTypeCommand of(final SiteKey siteKey, final ContentTypeKey key) {
++        return new ActivateContentTypeCommand(siteKey, key);
++    }
++
++    /**
++     * Convenience factory method using raw strings.
++     *
++     * @param siteKey the site scope as a string
++     * @param key     the key of the content type to activate
++     * @return a new {@link ActivateContentTypeCommand}
++     */
++    public static ActivateContentTypeCommand of(final String siteKey, final String key) {
++        return new ActivateContentTypeCommand(SiteKey.of(siteKey), ContentTypeKey.of(key));
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/command/ArchiveContentTypeCommand.java b/codex-codex/src/main/java/codex/codex/api/model/command/ArchiveContentTypeCommand.java
+index 56b9970..5b30fa7 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/command/ArchiveContentTypeCommand.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/command/ArchiveContentTypeCommand.java
+@@ -1,6 +1,7 @@
+ package codex.codex.api.model.command;
+ 
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ import java.util.Objects;
+ 
+@@ -8,19 +9,32 @@ import java.util.Objects;
+  * Command to archive a {@link codex.codex.api.model.entity.ContentType},
+  * transitioning it to {@code ARCHIVED} status.
+  */
+-public record ArchiveContentTypeCommand(ContentTypeKey key) {
++public record ArchiveContentTypeCommand(SiteKey siteKey, ContentTypeKey key) {
+ 
+     public ArchiveContentTypeCommand {
++        Objects.requireNonNull(siteKey, "siteKey cannot be null");
+         Objects.requireNonNull(key, "key cannot be null");
+     }
+ 
+     /**
+-     * Factory method.
++     * Factory method using typed keys.
+      *
+-     * @param key the key of the content type to archive
++     * @param siteKey the site scope
++     * @param key     the key of the content type to archive
+      * @return a new {@link ArchiveContentTypeCommand}
+      */
+-    public static ArchiveContentTypeCommand of(final ContentTypeKey key) {
+-        return new ArchiveContentTypeCommand(key);
++    public static ArchiveContentTypeCommand of(final SiteKey siteKey, final ContentTypeKey key) {
++        return new ArchiveContentTypeCommand(siteKey, key);
++    }
++
++    /**
++     * Convenience factory method using raw strings.
++     *
++     * @param siteKey the site scope as a string
++     * @param key     the key of the content type to archive
++     * @return a new {@link ArchiveContentTypeCommand}
++     */
++    public static ArchiveContentTypeCommand of(final String siteKey, final String key) {
++        return new ArchiveContentTypeCommand(SiteKey.of(siteKey), ContentTypeKey.of(key));
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/command/CreateContentTypeCommand.java b/codex-codex/src/main/java/codex/codex/api/model/command/CreateContentTypeCommand.java
+index f9afc5a..b60dfec 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/command/CreateContentTypeCommand.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/command/CreateContentTypeCommand.java
+@@ -1,16 +1,22 @@
+ package codex.codex.api.model.command;
+ 
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ import java.util.Objects;
+ 
+ /**
+  * Command to create a new {@link codex.codex.api.model.entity.ContentType}.
+  * The new content type is initially placed in {@code DRAFT} status.
++ * <p>
++ * The {@code siteKey} determines the scope of the content type. Use {@link SiteKey#SYSTEM}
++ * for global (platform-wide) content types shared across all sites. Use a regular
++ * {@link SiteKey} for site-specific content types.
+  */
+-public record CreateContentTypeCommand(ContentTypeKey key, String displayName) {
++public record CreateContentTypeCommand(SiteKey siteKey, ContentTypeKey key, String displayName) {
+ 
+     public CreateContentTypeCommand {
++        Objects.requireNonNull(siteKey, "siteKey cannot be null");
+         Objects.requireNonNull(key, "key cannot be null");
+         Objects.requireNonNull(displayName, "displayName cannot be null");
+         displayName = displayName.trim();
+@@ -20,13 +26,30 @@ public record CreateContentTypeCommand(ContentTypeKey key, String displayName) {
+     }
+ 
+     /**
+-     * Factory method.
++     * Factory method using typed keys.
+      *
++     * @param siteKey     the site scope; use {@link SiteKey#SYSTEM} for global content types
++     * @param key         the stable key for the new content type within the site scope
++     * @param displayName the human-readable label
++     * @return a new {@link CreateContentTypeCommand}
++     */
++    public static CreateContentTypeCommand of(final SiteKey siteKey,
++                                              final ContentTypeKey key,
++                                              final String displayName) {
++        return new CreateContentTypeCommand(siteKey, key, displayName);
++    }
++
++    /**
++     * Convenience factory method using raw strings.
++     *
++     * @param siteKey     the site scope as a string; use {@code "system"} for global content types
+      * @param key         the stable key for the new content type
+      * @param displayName the human-readable label
+      * @return a new {@link CreateContentTypeCommand}
+      */
+-    public static CreateContentTypeCommand of(final ContentTypeKey key, final String displayName) {
+-        return new CreateContentTypeCommand(key, displayName);
++    public static CreateContentTypeCommand of(final String siteKey,
++                                              final String key,
++                                              final String displayName) {
++        return new CreateContentTypeCommand(SiteKey.of(siteKey), ContentTypeKey.of(key), displayName);
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+index 707997d..fc0286c 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+@@ -2,7 +2,9 @@ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeStatus;
++import codex.fundamentum.api.model.ActorId;
+ 
+ import java.time.Instant;
+ import java.util.Objects;
+@@ -10,15 +12,22 @@ import java.util.Objects;
+ /**
+  * Defines a logical schema for content items in Codex.
+  * <p>
+- * A {@code ContentType} acts as the root for a set of versioned schema definitions.
++ * A {@code ContentType} is scoped by {@link SiteKey}. The logical identity of a content type
++ * is the combination of {@code siteKey + key} — a {@code ContentTypeKey} alone is not globally
++ * unique. Global (platform-wide) content types use {@link SiteKey#SYSTEM} as their site scope.
++ * <p>
+  * Its lifecycle follows the {@link ContentTypeStatus} state machine:
+  * {@code DRAFT → ACTIVE}, {@code DRAFT → ARCHIVED}, {@code ACTIVE → ARCHIVED}.
+  */
+ public record ContentType(
+         ContentTypeId id,
++        SiteKey siteKey,
+         ContentTypeKey key,
+         String displayName,
+         ContentTypeStatus status,
++        ActorId owner,
++        ActorId createdBy,
++        ActorId updatedBy,
+         Instant createdAt,
+         Instant updatedAt
+ ) {
+@@ -27,14 +36,19 @@ public record ContentType(
+      * Canonical constructor for {@link ContentType}.
+      *
+      * @param id          unique identifier; must not be null
+-     * @param key         stable human-friendly key; must not be null
++     * @param siteKey     owning site scope; must not be null
++     * @param key         stable human-friendly key within the site scope; must not be null
+      * @param displayName human-readable label; must not be null or blank
+      * @param status      lifecycle status; defaults to {@link ContentTypeStatus#DRAFT} if null
++     * @param owner       the actor that owns this content type; must not be null
++     * @param createdBy   the actor that created this content type; must not be null
++     * @param updatedBy   the actor that last updated this content type; must not be null
+      * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
+      * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
+      */
+     public ContentType {
+         Objects.requireNonNull(id, "ContentType id cannot be null");
++        Objects.requireNonNull(siteKey, "ContentType siteKey cannot be null");
+         Objects.requireNonNull(key, "ContentType key cannot be null");
+         Objects.requireNonNull(displayName, "ContentType displayName cannot be null");
+         displayName = displayName.trim();
+@@ -44,6 +58,9 @@ public record ContentType(
+         if (status == null) {
+             status = ContentTypeStatus.DRAFT;
+         }
++        Objects.requireNonNull(owner, "ContentType owner cannot be null");
++        Objects.requireNonNull(createdBy, "ContentType createdBy cannot be null");
++        Objects.requireNonNull(updatedBy, "ContentType updatedBy cannot be null");
+         createdAt = createdAt == null ? Instant.now() : createdAt;
+         updatedAt = updatedAt == null ? createdAt : updatedAt;
+     }
+@@ -68,9 +85,13 @@ public record ContentType(
+         Objects.requireNonNull(contentType, "contentType cannot be null");
+         return builder()
+                 .id(contentType.id())
++                .siteKey(contentType.siteKey())
+                 .key(contentType.key())
+                 .displayName(contentType.displayName())
+                 .status(contentType.status())
++                .owner(contentType.owner())
++                .createdBy(contentType.createdBy())
++                .updatedBy(contentType.updatedBy())
+                 .createdAt(contentType.createdAt())
+                 .updatedAt(contentType.updatedAt());
+     }
+@@ -79,9 +100,13 @@ public record ContentType(
+     public String toString() {
+         return "ContentType{" +
+                 "id=" + id +
++                ", siteKey=" + siteKey +
+                 ", key=" + key +
+                 ", displayName='" + displayName + '\'' +
+                 ", status=" + status +
++                ", owner=" + owner +
++                ", createdBy=" + createdBy +
++                ", updatedBy=" + updatedBy +
+                 ", createdAt=" + createdAt +
+                 ", updatedAt=" + updatedAt +
+                 '}';
+@@ -92,16 +117,24 @@ public record ContentType(
+      */
+     public static class Builder {
+         private ContentTypeId id;
++        private SiteKey siteKey;
+         private ContentTypeKey key;
+         private String displayName;
+         private ContentTypeStatus status;
++        private ActorId owner;
++        private ActorId createdBy;
++        private ActorId updatedBy;
+         private Instant createdAt;
+         private Instant updatedAt;
+ 
+         public Builder id(ContentTypeId id) { this.id = id; return this; }
++        public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
+         public Builder key(ContentTypeKey key) { this.key = key; return this; }
+         public Builder displayName(String displayName) { this.displayName = displayName; return this; }
+         public Builder status(ContentTypeStatus status) { this.status = status; return this; }
++        public Builder owner(ActorId owner) { this.owner = owner; return this; }
++        public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
++        public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
+         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
+ 
+@@ -111,7 +144,8 @@ public record ContentType(
+          * @return a validated {@code ContentType}
+          */
+         public ContentType build() {
+-            return new ContentType(id, key, displayName, status, createdAt, updatedAt);
++            return new ContentType(id, siteKey, key, displayName, status,
++                    owner, createdBy, updatedBy, createdAt, updatedAt);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/service/ContentTypeService.java b/codex-codex/src/main/java/codex/codex/api/model/service/ContentTypeService.java
+index 61c311d..80b0ae6 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/service/ContentTypeService.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/service/ContentTypeService.java
+@@ -5,6 +5,7 @@ import codex.codex.api.model.command.ArchiveContentTypeCommand;
+ import codex.codex.api.model.command.CreateContentTypeCommand;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.fundamentum.api.model.Actor;
+ 
+ import java.util.List;
+@@ -13,8 +14,8 @@ import java.util.Optional;
+ /**
+  * Application service for managing {@link ContentType} lifecycle.
+  * <p>
+- * Every operation is actor-aware for audit context. Implementations own business
+- * semantics such as duplicate-key prevention, status transitions, and identity generation.
++ * Content types are scoped by {@link SiteKey}. The logical identity is
++ * {@code siteKey + contentTypeKey}. Every operation is actor-aware for audit context.
+  * This interface is designed to be wrapped by event-publishing decorators following the
+  * same pattern used by {@link SiteService}.
+  */
+@@ -23,7 +24,7 @@ public interface ContentTypeService {
+     /**
+      * Creates a new content type in {@code DRAFT} status.
+      *
+-     * @param command the creation command; must not be null
++     * @param command the creation command containing site scope, key, and display name; must not be null
+      * @param actor   the acting principal; must not be null
+      * @return the persisted content type
+      */
+@@ -50,16 +51,26 @@ public interface ContentTypeService {
+     ContentType archive(ArchiveContentTypeCommand command, Actor actor);
+ 
+     /**
+-     * Finds a content type by its stable key.
++     * Finds a content type by its scoped identity.
+      *
+-     * @param key   the content type key; must not be null
+-     * @param actor the acting principal; must not be null
++     * @param siteKey the site scope; must not be null
++     * @param key     the content type key; must not be null
++     * @param actor   the acting principal; must not be null
+      * @return the content type wrapped in an {@link Optional}, or empty if not found
+      */
+-    Optional<ContentType> findByKey(ContentTypeKey key, Actor actor);
++    Optional<ContentType> findByKey(SiteKey siteKey, ContentTypeKey key, Actor actor);
++
++    /**
++     * Returns all content types for a given site.
++     *
++     * @param siteKey the site scope; must not be null
++     * @param actor   the acting principal; must not be null
++     * @return immutable list of content types for the site
++     */
++    List<ContentType> findBySiteKey(SiteKey siteKey, Actor actor);
+ 
+     /**
+-     * Returns all content types visible to the actor.
++     * Returns all content types across all sites visible to the actor.
+      *
+      * @param actor the acting principal; must not be null
+      * @return immutable list of all content types
+diff --git a/codex-codex/src/main/java/codex/codex/internal/repository/ContentTypeRepository.java b/codex-codex/src/main/java/codex/codex/internal/repository/ContentTypeRepository.java
+index 066076e..de3fdd4 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/repository/ContentTypeRepository.java
++++ b/codex-codex/src/main/java/codex/codex/internal/repository/ContentTypeRepository.java
+@@ -2,18 +2,23 @@ package codex.codex.internal.repository;
+ 
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ import java.util.List;
+ import java.util.Optional;
+ 
+ /**
+  * Storage contract for {@link ContentType} entities.
+- * Implementations own only storage concerns; no business logic belongs here.
++ * <p>
++ * The logical identity of a content type is {@code siteKey + key}. All scoped
++ * operations therefore require both parameters. Implementations own only storage
++ * concerns; no business logic belongs here.
+  */
+ public interface ContentTypeRepository {
+ 
+     /**
+-     * Persists a content type, creating or replacing any existing record with the same key.
++     * Persists a content type, creating or replacing any existing record with the same
++     * {@code siteKey + key} identity.
+      *
+      * @param contentType the content type to save; must not be null
+      * @return the saved content type
+@@ -21,23 +26,33 @@ public interface ContentTypeRepository {
+     ContentType save(ContentType contentType);
+ 
+     /**
+-     * Looks up a content type by its stable key.
++     * Looks up a content type by its scoped identity.
+      *
+-     * @param key the content type key; must not be null
++     * @param siteKey the site scope; must not be null
++     * @param key     the content type key; must not be null
+      * @return the content type wrapped in an {@link Optional}, or empty if not found
+      */
+-    Optional<ContentType> findByKey(ContentTypeKey key);
++    Optional<ContentType> findByKey(SiteKey siteKey, ContentTypeKey key);
+ 
+     /**
+-     * Returns {@code true} if a content type with the given key already exists.
++     * Returns {@code true} if a content type with the given scoped identity exists.
+      *
+-     * @param key the content type key; must not be null
++     * @param siteKey the site scope; must not be null
++     * @param key     the content type key; must not be null
+      * @return {@code true} if found
+      */
+-    boolean existsByKey(ContentTypeKey key);
++    boolean existsByKey(SiteKey siteKey, ContentTypeKey key);
+ 
+     /**
+-     * Returns all stored content types as an immutable snapshot.
++     * Returns all content types for a given site as an immutable snapshot.
++     *
++     * @param siteKey the site scope; must not be null
++     * @return list of content types for the site; never null
++     */
++    List<ContentType> findBySiteKey(SiteKey siteKey);
++
++    /**
++     * Returns all stored content types across all sites as an immutable snapshot.
+      *
+      * @return list of all content types; never null
+      */
+diff --git a/codex-codex/src/main/java/codex/codex/internal/repository/MemoryContentTypeRepository.java b/codex-codex/src/main/java/codex/codex/internal/repository/MemoryContentTypeRepository.java
+index 9cf17fe..546ca50 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/repository/MemoryContentTypeRepository.java
++++ b/codex-codex/src/main/java/codex/codex/internal/repository/MemoryContentTypeRepository.java
+@@ -2,6 +2,7 @@ package codex.codex.internal.repository;
+ 
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ import java.util.List;
+ import java.util.Map;
+@@ -12,31 +13,48 @@ import java.util.concurrent.ConcurrentHashMap;
+ /**
+  * In-memory implementation of {@link ContentTypeRepository}.
+  * Suitable for local development and testing.
++ * <p>
++ * Content types are keyed by the composite {@code siteKey + contentTypeKey} identity,
++ * allowing the same {@link ContentTypeKey} to exist independently under different sites.
+  */
+ public final class MemoryContentTypeRepository implements ContentTypeRepository {
+ 
+-    private final Map<ContentTypeKey, ContentType> store = new ConcurrentHashMap<>();
++    private final Map<RepositoryKey, ContentType> store = new ConcurrentHashMap<>();
+ 
+     @Override
+     public ContentType save(final ContentType contentType) {
+         Objects.requireNonNull(contentType, "contentType must not be null");
+-        store.put(contentType.key(), contentType);
++        store.put(new RepositoryKey(contentType.siteKey(), contentType.key()), contentType);
+         return contentType;
+     }
+ 
+     @Override
+-    public Optional<ContentType> findByKey(final ContentTypeKey key) {
++    public Optional<ContentType> findByKey(final SiteKey siteKey, final ContentTypeKey key) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
+         Objects.requireNonNull(key, "key must not be null");
+-        return Optional.ofNullable(store.get(key));
++        return Optional.ofNullable(store.get(new RepositoryKey(siteKey, key)));
+     }
+ 
+     @Override
+-    public boolean existsByKey(final ContentTypeKey key) {
+-        return store.containsKey(Objects.requireNonNull(key, "key must not be null"));
++    public boolean existsByKey(final SiteKey siteKey, final ContentTypeKey key) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
++        Objects.requireNonNull(key, "key must not be null");
++        return store.containsKey(new RepositoryKey(siteKey, key));
++    }
++
++    @Override
++    public List<ContentType> findBySiteKey(final SiteKey siteKey) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
++        return store.entrySet().stream()
++                .filter(entry -> entry.getKey().siteKey().equals(siteKey))
++                .map(Map.Entry::getValue)
++                .toList();
+     }
+ 
+     @Override
+     public List<ContentType> findAll() {
+         return List.copyOf(store.values());
+     }
++
++    private record RepositoryKey(SiteKey siteKey, ContentTypeKey contentTypeKey) {}
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
+index 89a1bbd..9154ce5 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
+@@ -6,6 +6,7 @@ import codex.codex.api.model.command.CreateContentTypeCommand;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.service.ContentTypeService;
+ import codex.codex.api.model.value.ContentTypeStatus;
+ import codex.codex.internal.repository.ContentTypeRepository;
+@@ -23,9 +24,10 @@ import java.util.Optional;
+ /**
+  * Core implementation of {@link ContentTypeService}.
+  * <p>
+- * Owns business semantics: duplicate-key prevention, status transition rules,
+- * and deterministic identity generation. Designed to be wrapped by decorators
+- * for event publishing following the same pattern used for {@code SiteService}.
++ * Owns business semantics: scoped duplicate-key prevention, status transition rules,
++ * ownership metadata, and deterministic identity generation.
++ * Designed to be wrapped by decorators for event publishing following the same pattern
++ * used for {@code SiteService}.
+  */
+ public final class CodexContentTypeService implements ContentTypeService {
+ 
+@@ -52,18 +54,23 @@ public final class CodexContentTypeService implements ContentTypeService {
+         Objects.requireNonNull(command, "command must not be null");
+         Objects.requireNonNull(actor, "actor must not be null");
+ 
+-        LOGGER.debug("Creating content type key: {} by actor: {}", command.key(), actor);
++        LOGGER.debug("Creating content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
+ 
+-        if (repository.existsByKey(command.key())) {
+-            throw new ContentTypeAlreadyExistsException(command.key());
++        if (repository.existsByKey(command.siteKey(), command.key())) {
++            throw new ContentTypeAlreadyExistsException(command.siteKey(), command.key());
+         }
+ 
+         final ContentType contentType = ContentType.builder()
+                 .id(identityGenerator.nextIdentity(command))
++                .siteKey(command.siteKey())
+                 .key(command.key())
+                 .displayName(command.displayName())
+                 .status(ContentTypeStatus.DRAFT)
++                .owner(actor.id())
++                .createdBy(actor.id())
++                .updatedBy(actor.id())
+                 .createdAt(clock.instant())
++                .updatedAt(clock.instant())
+                 .build();
+ 
+         return repository.save(contentType);
+@@ -74,9 +81,9 @@ public final class CodexContentTypeService implements ContentTypeService {
+         Objects.requireNonNull(command, "command must not be null");
+         Objects.requireNonNull(actor, "actor must not be null");
+ 
+-        LOGGER.debug("Activating content type key: {} by actor: {}", command.key(), actor);
++        LOGGER.debug("Activating content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
+ 
+-        final ContentType contentType = loadOrThrow(command.key());
++        final ContentType contentType = loadOrThrow(command.siteKey(), command.key());
+ 
+         if (contentType.status() == ContentTypeStatus.ACTIVE) {
+             return contentType;
+@@ -84,11 +91,13 @@ public final class CodexContentTypeService implements ContentTypeService {
+ 
+         if (contentType.status() == ContentTypeStatus.ARCHIVED) {
+             throw new InvalidContentTypeStatusTransitionException(
+-                    "Cannot activate archived content type: " + command.key(), contentType);
++                    "Cannot activate archived content type: " + command.siteKey() + "/" + command.key(),
++                    contentType);
+         }
+ 
+         return repository.save(ContentType.copyOf(contentType)
+                 .status(ContentTypeStatus.ACTIVE)
++                .updatedBy(actor.id())
+                 .updatedAt(clock.instant())
+                 .build());
+     }
+@@ -98,9 +107,9 @@ public final class CodexContentTypeService implements ContentTypeService {
+         Objects.requireNonNull(command, "command must not be null");
+         Objects.requireNonNull(actor, "actor must not be null");
+ 
+-        LOGGER.debug("Archiving content type key: {} by actor: {}", command.key(), actor);
++        LOGGER.debug("Archiving content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
+ 
+-        final ContentType contentType = loadOrThrow(command.key());
++        final ContentType contentType = loadOrThrow(command.siteKey(), command.key());
+ 
+         if (contentType.status() == ContentTypeStatus.ARCHIVED) {
+             return contentType;
+@@ -108,17 +117,28 @@ public final class CodexContentTypeService implements ContentTypeService {
+ 
+         return repository.save(ContentType.copyOf(contentType)
+                 .status(ContentTypeStatus.ARCHIVED)
++                .updatedBy(actor.id())
+                 .updatedAt(clock.instant())
+                 .build());
+     }
+ 
+     @Override
+-    public Optional<ContentType> findByKey(final ContentTypeKey key, final Actor actor) {
++    public Optional<ContentType> findByKey(final SiteKey siteKey, final ContentTypeKey key, final Actor actor) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
+         Objects.requireNonNull(key, "key must not be null");
+         Objects.requireNonNull(actor, "actor must not be null");
+ 
+-        LOGGER.debug("Finding content type by key: {} by actor: {}", key, actor);
+-        return repository.findByKey(key);
++        LOGGER.debug("Finding content type {}/{} by actor: {}", siteKey, key, actor);
++        return repository.findByKey(siteKey, key);
++    }
++
++    @Override
++    public List<ContentType> findBySiteKey(final SiteKey siteKey, final Actor actor) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
++        Objects.requireNonNull(actor, "actor must not be null");
++
++        LOGGER.debug("Finding content types for site {} by actor: {}", siteKey, actor);
++        return repository.findBySiteKey(siteKey);
+     }
+ 
+     @Override
+@@ -129,8 +149,8 @@ public final class CodexContentTypeService implements ContentTypeService {
+         return repository.findAll();
+     }
+ 
+-    private ContentType loadOrThrow(final ContentTypeKey key) {
+-        return repository.findByKey(key)
+-                .orElseThrow(() -> new NotFoundException("ContentType not found: " + key));
++    private ContentType loadOrThrow(final SiteKey siteKey, final ContentTypeKey key) {
++        return repository.findByKey(siteKey, key)
++                .orElseThrow(() -> new NotFoundException("ContentType not found: " + siteKey + "/" + key));
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeAlreadyExistsException.java b/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeAlreadyExistsException.java
+index 09991e0..b708edb 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeAlreadyExistsException.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeAlreadyExistsException.java
+@@ -1,14 +1,15 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ 
+ /**
+  * Thrown when attempting to create a {@link codex.codex.api.model.entity.ContentType}
+- * whose key already exists in the repository.
++ * whose {@code siteKey + key} identity already exists in the repository.
+  */
+ public class ContentTypeAlreadyExistsException extends RuntimeException {
+ 
+-    public ContentTypeAlreadyExistsException(final ContentTypeKey key) {
+-        super("ContentType already exists: " + key);
++    public ContentTypeAlreadyExistsException(final SiteKey siteKey, final ContentTypeKey key) {
++        super("ContentType already exists: " + siteKey + "/" + key);
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeIdentityGenerator.java b/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeIdentityGenerator.java
+index 5c318d7..611155f 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeIdentityGenerator.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/ContentTypeIdentityGenerator.java
+@@ -10,14 +10,17 @@ import java.util.UUID;
+ 
+ /**
+  * Generates a deterministic {@link ContentTypeId} from a {@link CreateContentTypeCommand}.
+- * The same key always produces the same identifier, enabling safe re-creation semantics.
++ * <p>
++ * Identity is based on {@code siteKey + contentTypeKey}, so the same key in different
++ * site scopes produces different identifiers and the same key in the same site always
++ * produces the same identifier.
+  */
+ class ContentTypeIdentityGenerator implements IdentityGenerator<CreateContentTypeCommand, ContentTypeId> {
+ 
+     @Override
+     public ContentTypeId nextIdentity(final CreateContentTypeCommand source) {
+         Objects.requireNonNull(source, "source cannot be null");
+-        final String identitySource = "content-type:" + source.key().value();
++        final String identitySource = "content-type:" + source.siteKey().value() + ":" + source.key().value();
+         final UUID uuid = UUID.nameUUIDFromBytes(identitySource.getBytes(StandardCharsets.UTF_8));
+         return ContentTypeId.of(uuid.toString());
+     }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/repository/MemoryContentTypeRepositoryTest.java b/codex-codex/src/test/java/codex/codex/internal/repository/MemoryContentTypeRepositoryTest.java
+index 78839e3..886d717 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/repository/MemoryContentTypeRepositoryTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/repository/MemoryContentTypeRepositoryTest.java
+@@ -3,6 +3,8 @@ package codex.codex.internal.repository;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
++import codex.fundamentum.api.model.ActorId;
+ import org.junit.jupiter.api.BeforeEach;
+ import org.junit.jupiter.api.DisplayName;
+ import org.junit.jupiter.api.Test;
+@@ -16,8 +18,9 @@ class MemoryContentTypeRepositoryTest {
+ 
+     private MemoryContentTypeRepository repository;
+ 
++    private final SiteKey siteKey = SiteKey.of("acme");
+     private final ContentTypeKey key = ContentTypeKey.of("blog-post");
+-    private final ContentTypeId id = ContentTypeId.generate();
++    private final ActorId actorId = ActorId.of("system:test");
+ 
+     @BeforeEach
+     void setUp() {
+@@ -27,66 +30,110 @@ class MemoryContentTypeRepositoryTest {
+     @Test
+     @DisplayName("save should return saved content type")
+     void saveShouldReturnSavedContentType() {
+-        final ContentType contentType = buildContentType();
+-        final ContentType result = repository.save(contentType);
+-        assertEquals(contentType, result);
++        final ContentType ct = build(siteKey, key);
++        assertEquals(ct, repository.save(ct));
+     }
+ 
+     @Test
+-    @DisplayName("findByKey should return saved content type")
++    @DisplayName("findByKey should return saved content type using siteKey + key")
+     void findByKeyShouldReturnSavedContentType() {
+-        final ContentType contentType = buildContentType();
+-        repository.save(contentType);
+-        final Optional<ContentType> result = repository.findByKey(key);
++        repository.save(build(siteKey, key));
++        final Optional<ContentType> result = repository.findByKey(siteKey, key);
+         assertTrue(result.isPresent());
+-        assertEquals(contentType, result.get());
++        assertEquals(key, result.get().key());
++        assertEquals(siteKey, result.get().siteKey());
++    }
++
++    @Test
++    @DisplayName("findByKey should return empty when siteKey differs")
++    void findByKeyShouldReturnEmptyWhenSiteKeyDiffers() {
++        repository.save(build(siteKey, key));
++        assertTrue(repository.findByKey(SiteKey.of("other-site"), key).isEmpty());
+     }
+ 
+     @Test
+     @DisplayName("findByKey should return empty when missing")
+     void findByKeyShouldReturnEmptyWhenMissing() {
+-        assertTrue(repository.findByKey(key).isEmpty());
++        assertTrue(repository.findByKey(siteKey, key).isEmpty());
+     }
+ 
+     @Test
+-    @DisplayName("existsByKey should return true when saved")
++    @DisplayName("existsByKey should return true when saved with same siteKey + key")
+     void existsByKeyShouldReturnTrueWhenSaved() {
+-        repository.save(buildContentType());
+-        assertTrue(repository.existsByKey(key));
++        repository.save(build(siteKey, key));
++        assertTrue(repository.existsByKey(siteKey, key));
++    }
++
++    @Test
++    @DisplayName("existsByKey should return false when siteKey differs")
++    void existsByKeyShouldReturnFalseWhenSiteKeyDiffers() {
++        repository.save(build(siteKey, key));
++        assertFalse(repository.existsByKey(SiteKey.of("other-site"), key));
+     }
+ 
+     @Test
+     @DisplayName("existsByKey should return false when missing")
+     void existsByKeyShouldReturnFalseWhenMissing() {
+-        assertFalse(repository.existsByKey(key));
++        assertFalse(repository.existsByKey(siteKey, key));
++    }
++
++    @Test
++    @DisplayName("same ContentTypeKey can exist under different SiteKey values")
++    void sameKeyCanExistUnderDifferentSites() {
++        final SiteKey siteA = SiteKey.of("site-a");
++        final SiteKey siteB = SiteKey.of("site-b");
++        repository.save(build(siteA, key));
++        repository.save(build(siteB, key));
++        assertTrue(repository.existsByKey(siteA, key));
++        assertTrue(repository.existsByKey(siteB, key));
++        assertEquals(2, repository.findAll().size());
++    }
++
++    @Test
++    @DisplayName("findBySiteKey returns only content types for that site")
++    void findBySiteKeyReturnsOnlyMatchingSite() {
++        repository.save(build(siteKey, key));
++        repository.save(build(siteKey, ContentTypeKey.of("product")));
++        repository.save(build(SiteKey.of("other-site"), key));
++        final List<ContentType> result = repository.findBySiteKey(siteKey);
++        assertEquals(2, result.size());
++        assertTrue(result.stream().allMatch(ct -> ct.siteKey().equals(siteKey)));
++    }
++
++    @Test
++    @DisplayName("findBySiteKey returns empty list when no content types exist for that site")
++    void findBySiteKeyReturnsEmptyWhenNoneForSite() {
++        assertTrue(repository.findBySiteKey(siteKey).isEmpty());
+     }
+ 
+     @Test
+     @DisplayName("findAll should return all saved content types")
+     void findAllShouldReturnAllSavedContentTypes() {
+-        repository.save(buildContentType());
+-        repository.save(ContentType.builder()
+-                .id(ContentTypeId.generate())
+-                .key(ContentTypeKey.of("product"))
+-                .displayName("Product")
+-                .build());
+-        final List<ContentType> all = repository.findAll();
+-        assertEquals(2, all.size());
++        repository.save(build(siteKey, key));
++        repository.save(build(SiteKey.SYSTEM, ContentTypeKey.of("global-type")));
++        assertEquals(2, repository.findAll().size());
+     }
+ 
+     @Test
+     @DisplayName("required arguments should not accept null")
+     void requiredArgumentsShouldNotAcceptNull() {
+         assertThrows(NullPointerException.class, () -> repository.save(null));
+-        assertThrows(NullPointerException.class, () -> repository.findByKey(null));
+-        assertThrows(NullPointerException.class, () -> repository.existsByKey(null));
++        assertThrows(NullPointerException.class, () -> repository.findByKey(null, key));
++        assertThrows(NullPointerException.class, () -> repository.findByKey(siteKey, null));
++        assertThrows(NullPointerException.class, () -> repository.existsByKey(null, key));
++        assertThrows(NullPointerException.class, () -> repository.existsByKey(siteKey, null));
++        assertThrows(NullPointerException.class, () -> repository.findBySiteKey(null));
+     }
+ 
+-    private ContentType buildContentType() {
++    private ContentType build(final SiteKey sk, final ContentTypeKey ctk) {
+         return ContentType.builder()
+-                .id(id)
+-                .key(key)
+-                .displayName("Blog Post")
++                .id(ContentTypeId.generate())
++                .siteKey(sk)
++                .key(ctk)
++                .displayName("Test Type")
++                .owner(actorId)
++                .createdBy(actorId)
++                .updatedBy(actorId)
+                 .build();
+     }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
+index 82bcfd6..0f499ed 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
+@@ -5,6 +5,7 @@ import codex.codex.api.model.command.ArchiveContentTypeCommand;
+ import codex.codex.api.model.command.CreateContentTypeCommand;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeStatus;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
+ import codex.fundamentum.api.exception.NotFoundException;
+@@ -27,6 +28,7 @@ class CodexContentTypeServiceTest {
+     private CodexContentTypeService service;
+ 
+     private final Actor actor = Actor.system("test");
++    private final SiteKey siteKey = SiteKey.of("acme");
+     private final ContentTypeKey key = ContentTypeKey.of("blog-post");
+     private final Clock clock = Clock.fixed(Instant.parse("2026-05-01T00:00:00Z"), ZoneOffset.UTC);
+ 
+@@ -36,129 +38,217 @@ class CodexContentTypeServiceTest {
+         service = new CodexContentTypeService(repository, clock);
+     }
+ 
++    // --- create ---
++
+     @Test
+-    @DisplayName("create should create draft content type")
+-    void createShouldCreateDraftContentType() {
+-        final ContentType result = service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
++    @DisplayName("create should create draft content type with siteKey")
++    void createShouldCreateDraftContentTypeWithSiteKey() {
++        final ContentType result = service.create(cmd("Blog Post"), actor);
+         assertNotNull(result.id());
++        assertEquals(siteKey, result.siteKey());
+         assertEquals(key, result.key());
+         assertEquals("Blog Post", result.displayName());
+         assertEquals(ContentTypeStatus.DRAFT, result.status());
+         assertEquals(clock.instant(), result.createdAt());
++        assertEquals(clock.instant(), result.updatedAt());
++    }
++
++    @Test
++    @DisplayName("create should set owner from actor id")
++    void createShouldSetOwnerFromActorId() {
++        final ContentType result = service.create(cmd("Blog Post"), actor);
++        assertEquals(actor.id(), result.owner());
++    }
++
++    @Test
++    @DisplayName("create should set createdBy from actor id")
++    void createShouldSetCreatedByFromActorId() {
++        final ContentType result = service.create(cmd("Blog Post"), actor);
++        assertEquals(actor.id(), result.createdBy());
++    }
++
++    @Test
++    @DisplayName("create should set updatedBy from actor id")
++    void createShouldSetUpdatedByFromActorId() {
++        final ContentType result = service.create(cmd("Blog Post"), actor);
++        assertEquals(actor.id(), result.updatedBy());
++    }
++
++    @Test
++    @DisplayName("create should allow same content type key under different site keys")
++    void createShouldAllowSameKeyUnderDifferentSites() {
++        service.create(cmd("Blog Post"), actor);
++        final SiteKey other = SiteKey.of("other-site");
++        final ContentType result = service.create(
++                CreateContentTypeCommand.of(other, key, "Blog Post"), actor);
++        assertEquals(other, result.siteKey());
+     }
+ 
+     @Test
+-    @DisplayName("create should throw when key already exists")
+-    void createShouldThrowWhenKeyAlreadyExists() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
++    @DisplayName("create should reject duplicate key in same site")
++    void createShouldRejectDuplicateKeyInSameSite() {
++        service.create(cmd("Blog Post"), actor);
+         assertThrows(ContentTypeAlreadyExistsException.class, () ->
+-                service.create(CreateContentTypeCommand.of(key, "Another"), actor));
++                service.create(cmd("Another"), actor));
++    }
++
++    @Test
++    @DisplayName("create should allow global content type using SiteKey.SYSTEM")
++    void createShouldAllowGlobalContentTypeUsingSiteKeySystem() {
++        final ContentType result = service.create(
++                CreateContentTypeCommand.of(SiteKey.SYSTEM, key, "Global Blog Post"), actor);
++        assertEquals(SiteKey.SYSTEM, result.siteKey());
++        assertEquals(key, result.key());
+     }
+ 
++    // --- findByKey ---
++
+     @Test
+-    @DisplayName("findByKey should return existing content type")
+-    void findByKeyShouldReturnExistingContentType() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        final Optional<ContentType> result = service.findByKey(key, actor);
++    @DisplayName("findByKey should find by siteKey + key")
++    void findByKeyShouldFindBySiteKeyAndKey() {
++        service.create(cmd("Blog Post"), actor);
++        final Optional<ContentType> result = service.findByKey(siteKey, key, actor);
+         assertTrue(result.isPresent());
+         assertEquals(key, result.get().key());
+     }
+ 
++    @Test
++    @DisplayName("findByKey should return empty when siteKey differs")
++    void findByKeyShouldReturnEmptyWhenSiteKeyDiffers() {
++        service.create(cmd("Blog Post"), actor);
++        assertTrue(service.findByKey(SiteKey.of("other-site"), key, actor).isEmpty());
++    }
++
+     @Test
+     @DisplayName("findByKey should return empty when missing")
+     void findByKeyShouldReturnEmptyWhenMissing() {
+-        assertTrue(service.findByKey(key, actor).isEmpty());
++        assertTrue(service.findByKey(siteKey, key, actor).isEmpty());
+     }
+ 
+     @Test
+     @DisplayName("findAll should return all content types")
+     void findAllShouldReturnAllContentTypes() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        service.create(CreateContentTypeCommand.of(ContentTypeKey.of("product"), "Product"), actor);
++        service.create(cmd("Blog Post"), actor);
++        service.create(CreateContentTypeCommand.of(SiteKey.SYSTEM, ContentTypeKey.of("product"), "Product"), actor);
+         final List<ContentType> all = service.findAll(actor);
+         assertEquals(2, all.size());
+     }
+ 
++    // --- activate ---
++
+     @Test
+     @DisplayName("activate should move draft to active")
+     void activateShouldMoveDraftToActive() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        final ContentType result = service.activate(ActivateContentTypeCommand.of(key), actor);
++        service.create(cmd("Blog Post"), actor);
++        final ContentType result = service.activate(activateCmd(), actor);
+         assertEquals(ContentTypeStatus.ACTIVE, result.status());
+     }
+ 
++    @Test
++    @DisplayName("activate should set updatedBy from actor id")
++    void activateShouldSetUpdatedByFromActorId() {
++        service.create(cmd("Blog Post"), actor);
++        final Actor other = Actor.system("other");
++        final ContentType result = service.activate(activateCmd(), other);
++        assertEquals(other.id(), result.updatedBy());
++    }
++
++    @Test
++    @DisplayName("activate should update updatedAt")
++    void activateShouldUpdateUpdatedAt() {
++        service.create(cmd("Blog Post"), actor);
++        final ContentType result = service.activate(activateCmd(), actor);
++        assertEquals(clock.instant(), result.updatedAt());
++    }
++
+     @Test
+     @DisplayName("activate should be idempotent when already active")
+     void activateShouldBeIdempotentWhenAlreadyActive() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        service.activate(ActivateContentTypeCommand.of(key), actor);
+-        final ContentType result = service.activate(ActivateContentTypeCommand.of(key), actor);
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        final ContentType result = service.activate(activateCmd(), actor);
+         assertEquals(ContentTypeStatus.ACTIVE, result.status());
+     }
+ 
+     @Test
+     @DisplayName("activate should fail when archived")
+     void activateShouldFailWhenArchived() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        service.archive(ArchiveContentTypeCommand.of(key), actor);
++        service.create(cmd("Blog Post"), actor);
++        service.archive(archiveCmd(), actor);
+         assertThrows(InvalidContentTypeStatusTransitionException.class, () ->
+-                service.activate(ActivateContentTypeCommand.of(key), actor));
++                service.activate(activateCmd(), actor));
+     }
+ 
+     @Test
+-    @DisplayName("archive should move draft to archived")
+-    void archiveShouldMoveDraftToArchived() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        final ContentType result = service.archive(ArchiveContentTypeCommand.of(key), actor);
+-        assertEquals(ContentTypeStatus.ARCHIVED, result.status());
++    @DisplayName("missing content type should throw NotFoundException for activate")
++    void missingContentTypeShouldThrowNotFoundExceptionForActivate() {
++        assertThrows(NotFoundException.class, () -> service.activate(activateCmd(), actor));
+     }
+ 
++    // --- archive ---
++
+     @Test
+-    @DisplayName("archive should move active to archived")
+-    void archiveShouldMoveActiveToArchived() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        service.activate(ActivateContentTypeCommand.of(key), actor);
+-        final ContentType result = service.archive(ArchiveContentTypeCommand.of(key), actor);
++    @DisplayName("archive should move draft to archived and set updatedBy from actor id")
++    void archiveShouldMoveDraftToArchivedAndSetUpdatedBy() {
++        service.create(cmd("Blog Post"), actor);
++        final ContentType result = service.archive(archiveCmd(), actor);
+         assertEquals(ContentTypeStatus.ARCHIVED, result.status());
++        assertEquals(actor.id(), result.updatedBy());
+     }
+ 
+     @Test
+-    @DisplayName("archive should be idempotent when already archived")
+-    void archiveShouldBeIdempotentWhenAlreadyArchived() {
+-        service.create(CreateContentTypeCommand.of(key, "Blog Post"), actor);
+-        service.archive(ArchiveContentTypeCommand.of(key), actor);
+-        final ContentType result = service.archive(ArchiveContentTypeCommand.of(key), actor);
++    @DisplayName("archive should move active to archived and set updatedBy from actor id")
++    void archiveShouldMoveActiveToArchivedAndSetUpdatedBy() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        final ContentType result = service.archive(archiveCmd(), actor);
+         assertEquals(ContentTypeStatus.ARCHIVED, result.status());
++        assertEquals(actor.id(), result.updatedBy());
+     }
+ 
+     @Test
+-    @DisplayName("missing content type should throw NotFoundException for activate")
+-    void missingContentTypeShouldThrowNotFoundExceptionForActivate() {
+-        assertThrows(NotFoundException.class, () ->
+-                service.activate(ActivateContentTypeCommand.of(key), actor));
++    @DisplayName("archive should be idempotent when already archived")
++    void archiveShouldBeIdempotentWhenAlreadyArchived() {
++        service.create(cmd("Blog Post"), actor);
++        service.archive(archiveCmd(), actor);
++        final ContentType result = service.archive(archiveCmd(), actor);
++        assertEquals(ContentTypeStatus.ARCHIVED, result.status());
+     }
+ 
+     @Test
+     @DisplayName("missing content type should throw NotFoundException for archive")
+     void missingContentTypeShouldThrowNotFoundExceptionForArchive() {
+-        assertThrows(NotFoundException.class, () ->
+-                service.archive(ArchiveContentTypeCommand.of(key), actor));
++        assertThrows(NotFoundException.class, () -> service.archive(archiveCmd(), actor));
+     }
+ 
++    // --- null checks ---
++
+     @Test
+     @DisplayName("required arguments should not accept null")
+     void requiredArgumentsShouldNotAcceptNull() {
+         assertThrows(NullPointerException.class, () -> service.create(null, actor));
+-        assertThrows(NullPointerException.class, () ->
+-                service.create(CreateContentTypeCommand.of(key, "Blog Post"), null));
++        assertThrows(NullPointerException.class, () -> service.create(cmd("Blog Post"), null));
+         assertThrows(NullPointerException.class, () -> service.activate(null, actor));
+-        assertThrows(NullPointerException.class, () ->
+-                service.activate(ActivateContentTypeCommand.of(key), null));
++        assertThrows(NullPointerException.class, () -> service.activate(activateCmd(), null));
+         assertThrows(NullPointerException.class, () -> service.archive(null, actor));
+-        assertThrows(NullPointerException.class, () ->
+-                service.archive(ArchiveContentTypeCommand.of(key), null));
+-        assertThrows(NullPointerException.class, () -> service.findByKey(null, actor));
+-        assertThrows(NullPointerException.class, () -> service.findByKey(key, null));
++        assertThrows(NullPointerException.class, () -> service.archive(archiveCmd(), null));
++        assertThrows(NullPointerException.class, () -> service.findByKey(null, key, actor));
++        assertThrows(NullPointerException.class, () -> service.findByKey(siteKey, null, actor));
++        assertThrows(NullPointerException.class, () -> service.findByKey(siteKey, key, null));
+         assertThrows(NullPointerException.class, () -> service.findAll(null));
+     }
++
++    // --- helpers ---
++
++    private CreateContentTypeCommand cmd(final String displayName) {
++        return CreateContentTypeCommand.of(siteKey, key, displayName);
++    }
++
++    private ActivateContentTypeCommand activateCmd() {
++        return ActivateContentTypeCommand.of(siteKey, key);
++    }
++
++    private ArchiveContentTypeCommand archiveCmd() {
++        return ArchiveContentTypeCommand.of(siteKey, key);
++    }
+ }
