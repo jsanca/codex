@@ -1,0 +1,1107 @@
+diff --git a/.idea/misc.xml b/.idea/misc.xml
+index 90dee70..77e40ef 100644
+--- a/.idea/misc.xml
++++ b/.idea/misc.xml
+@@ -1,4 +1,12 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+-  <component name="KubernetesApiProvider">{}</component>
++  <component name="ExternalStorageConfigurationManager" enabled="true" />
++  <component name="MavenProjectsManager">
++    <option name="originalFiles">
++      <list>
++        <option value="$PROJECT_DIR$/pom.xml" />
++      </list>
++    </option>
++  </component>
++  <component name="ProjectRootManager" version="2" languageLevel="JDK_25" default="true" project-jdk-name="temurin-25" project-jdk-type="JavaSDK" />
+ </project>
+\ No newline at end of file
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+index f488590..707997d 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+@@ -1,129 +1,117 @@
+ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentTypeId;
+-import codex.codex.api.model.identity.SiteId;
+-import codex.codex.api.model.identity.FieldKey;
++import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.value.ContentTypeStatus;
++
+ import java.time.Instant;
+-import java.util.Map;
+ import java.util.Objects;
+ 
+ /**
+- * Defines a logical type of content in Codex.
++ * Defines a logical schema for content items in Codex.
+  * <p>
+- * ContentType acts as the root for a set of versioned schema definitions.
++ * A {@code ContentType} acts as the root for a set of versioned schema definitions.
++ * Its lifecycle follows the {@link ContentTypeStatus} state machine:
++ * {@code DRAFT → ACTIVE}, {@code DRAFT → ARCHIVED}, {@code ACTIVE → ARCHIVED}.
+  */
+ public record ContentType(
+-    ContentTypeId id,
+-    SiteId siteId,
+-    String key,
+-    String displayName,
+-    String description,
+-    Map<FieldKey, Object> attributes,
+-    Instant createdAt
++        ContentTypeId id,
++        ContentTypeKey key,
++        String displayName,
++        ContentTypeStatus status,
++        Instant createdAt,
++        Instant updatedAt
+ ) {
++
+     /**
+-     * Canonical constructor for ContentType.
+-     * 
+-     * @param id the unique content type identifier, cannot be null
+-     * @param siteId the owner site identifier, cannot be null
+-     * @param key the stable unique key within the site, cannot be null or blank
+-     * @param displayName the display name for the type, cannot be null or blank
+-     * @param description optional description
+-     * @param attributes extensible metadata, defaults to empty map if null
+-     * @param createdAt the creation timestamp, defaults to now if null
++     * Canonical constructor for {@link ContentType}.
++     *
++     * @param id          unique identifier; must not be null
++     * @param key         stable human-friendly key; must not be null
++     * @param displayName human-readable label; must not be null or blank
++     * @param status      lifecycle status; defaults to {@link ContentTypeStatus#DRAFT} if null
++     * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
++     * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
+      */
+     public ContentType {
+         Objects.requireNonNull(id, "ContentType id cannot be null");
+-        Objects.requireNonNull(siteId, "ContentType siteId cannot be null");
+         Objects.requireNonNull(key, "ContentType key cannot be null");
+-        key = key.trim();
+-        if (key.isBlank()) {
+-            throw new IllegalArgumentException("ContentType key cannot be blank");
+-        }
+-
+         Objects.requireNonNull(displayName, "ContentType displayName cannot be null");
+         displayName = displayName.trim();
+         if (displayName.isBlank()) {
+             throw new IllegalArgumentException("ContentType displayName cannot be blank");
+         }
+-
+-        if (description != null) {
+-            description = description.trim();
+-            if (description.isBlank()) {
+-                description = null;
+-            }
++        if (status == null) {
++            status = ContentTypeStatus.DRAFT;
+         }
+-
+-        attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+         createdAt = createdAt == null ? Instant.now() : createdAt;
++        updatedAt = updatedAt == null ? createdAt : updatedAt;
++    }
++
++    /**
++     * Creates a new {@link Builder} for {@link ContentType}.
++     *
++     * @return a new builder instance
++     */
++    public static Builder builder() {
++        return new Builder();
++    }
++
++    /**
++     * Creates a pre-populated {@link Builder} from an existing {@link ContentType}.
++     * Use this to produce a modified copy without constructing from scratch.
++     *
++     * @param contentType the source; must not be null
++     * @return a builder pre-populated with all fields from {@code contentType}
++     */
++    public static Builder copyOf(final ContentType contentType) {
++        Objects.requireNonNull(contentType, "contentType cannot be null");
++        return builder()
++                .id(contentType.id())
++                .key(contentType.key())
++                .displayName(contentType.displayName())
++                .status(contentType.status())
++                .createdAt(contentType.createdAt())
++                .updatedAt(contentType.updatedAt());
+     }
+ 
+     @Override
+     public String toString() {
+         return "ContentType{" +
+                 "id=" + id +
+-                ", siteId=" + siteId +
+-                ", key='" + key + '\'' +
++                ", key=" + key +
+                 ", displayName='" + displayName + '\'' +
+-                ", description='" + description + '\'' +
+-                ", attributes=" + attributes +
++                ", status=" + status +
+                 ", createdAt=" + createdAt +
++                ", updatedAt=" + updatedAt +
+                 '}';
+     }
+ 
+-    /**
+-     * Creates a new builder for ContentType.
+-     * 
+-     * @return a new Builder instance
+-     */
+-    public static Builder builder() {
+-        return new Builder();
+-    }
+-
+     /**
+      * Builder for {@link ContentType}.
+      */
+     public static class Builder {
+         private ContentTypeId id;
+-        private SiteId siteId;
+-        private String key;
++        private ContentTypeKey key;
+         private String displayName;
+-        private String description;
+-        private Map<FieldKey, Object> attributes;
++        private ContentTypeStatus status;
+         private Instant createdAt;
++        private Instant updatedAt;
+ 
+         public Builder id(ContentTypeId id) { this.id = id; return this; }
+-        public Builder siteId(SiteId siteId) { this.siteId = siteId; return this; }
+-        public Builder key(String key) { this.key = key; return this; }
++        public Builder key(ContentTypeKey key) { this.key = key; return this; }
+         public Builder displayName(String displayName) { this.displayName = displayName; return this; }
+-        public Builder description(String description) { this.description = description; return this; }
+-
+-        public Builder attributes(Map<FieldKey, Object> attributes) { this.attributes = attributes; return this; }
+-
+-        /**
+-         * Sets attributes from a map of raw strings.
+-         * 
+-         * @param attributes the map of raw attribute strings
+-         * @return this builder
+-         */
+-        public Builder attributesFromStrings(Map<String, Object> attributes) {
+-            this.attributes = attributes == null ? null : attributes.entrySet().stream()
+-                    .collect(java.util.stream.Collectors.toMap(
+-                            entry -> FieldKey.of(entry.getKey()),
+-                            Map.Entry::getValue
+-                    ));
+-            return this;
+-        }
+-
++        public Builder status(ContentTypeStatus status) { this.status = status; return this; }
+         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
++        public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
+ 
+         /**
+-         * Builds a new ContentType instance.
+-         * 
+-         * @return a new ContentType instance
++         * Builds a new {@link ContentType} instance.
++         *
++         * @return a validated {@code ContentType}
+          */
+         public ContentType build() {
+-            return new ContentType(id, siteId, key, displayName, description, attributes, createdAt);
++            return new ContentType(id, key, displayName, status, createdAt, updatedAt);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/CodexSiteService.java b/codex-codex/src/main/java/codex/codex/internal/service/CodexSiteService.java
+index 6e82e62..8be750b 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/CodexSiteService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/CodexSiteService.java
+@@ -26,12 +26,12 @@ public final class CodexSiteService implements SiteService {
+     private final Clock clock;
+     private final IdentityGenerator<CreateSiteCommand, SiteId> siteIdentityGenerator;
+ 
+-    protected CodexSiteService(final SiteRepository siteRepository,
++    public CodexSiteService(final SiteRepository siteRepository,
+                             final Clock clock) {
+         this (siteRepository, clock, new SiteIdentityGenerator());
+     }
+ 
+-    protected CodexSiteService(final SiteRepository siteRepository,
++    public CodexSiteService(final SiteRepository siteRepository,
+                             final Clock clock,
+                             final IdentityGenerator<CreateSiteCommand, SiteId> siteIdentityGenerator) {
+ 
+diff --git a/codex-codex/src/main/java/module-info.java b/codex-codex/src/main/java/module-info.java
+index 065c9f4..6b5cbee 100644
+--- a/codex-codex/src/main/java/module-info.java
++++ b/codex-codex/src/main/java/module-info.java
+@@ -2,7 +2,10 @@ module codex.codex {
+     requires transitive codex.fundamentum;
+     requires org.slf4j;
+     exports codex.codex.api;
++    exports codex.codex.api.model.command;
++    exports codex.codex.api.model.entity;
++    exports codex.codex.api.model.event;
+     exports codex.codex.api.model.identity;
++    exports codex.codex.api.model.service;
+     exports codex.codex.api.model.value;
+-    exports codex.codex.api.model.entity;
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingSiteServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingSiteServiceTest.java
+index a196770..baceb26 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingSiteServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingSiteServiceTest.java
+@@ -7,6 +7,7 @@ import codex.codex.api.model.event.*;
+ import codex.codex.api.model.identity.SiteId;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.service.SiteService;
++import codex.codex.api.model.value.SiteStatus;
+ import codex.fundamentum.api.event.CodexEvent;
+ import codex.fundamentum.api.event.CodexEventDispatcher;
+ import codex.fundamentum.api.model.Actor;
+@@ -66,7 +67,8 @@ class EventPublishingSiteServiceTest {
+     @Test
+     void start_ShouldDelegateAndPublishEvent() {
+         StartSiteCommand command = StartSiteCommand.of(testKey);
+-        Site site = createSite();
++        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.SUSPENDED));
++        Site site = createSiteWithStatus(SiteStatus.STARTED);
+         delegate.nextStartResult = site;
+ 
+         Site result = service.start(command, testActor);
+@@ -82,7 +84,8 @@ class EventPublishingSiteServiceTest {
+     @Test
+     void suspend_ShouldDelegateAndPublishEvent() {
+         SuspendSiteCommand command = SuspendSiteCommand.of(testKey);
+-        Site site = createSite();
++        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.STARTED));
++        Site site = createSiteWithStatus(SiteStatus.SUSPENDED);
+         delegate.nextSuspendResult = site;
+ 
+         Site result = service.suspend(command, testActor);
+@@ -98,7 +101,8 @@ class EventPublishingSiteServiceTest {
+     @Test
+     void archive_ShouldDelegateAndPublishEvent() {
+         ArchiveSiteCommand command = ArchiveSiteCommand.of(testKey);
+-        Site site = createSite();
++        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.SUSPENDED));
++        Site site = createSiteWithStatus(SiteStatus.ARCHIVED);
+         delegate.nextArchiveResult = site;
+ 
+         Site result = service.archive(command, testActor);
+@@ -114,7 +118,8 @@ class EventPublishingSiteServiceTest {
+     @Test
+     void unarchive_ShouldDelegateAndPublishEvent() {
+         UnarchiveSiteCommand command = UnarchiveSiteCommand.of(testKey);
+-        Site site = createSite();
++        delegate.nextFindByKeyResult = Optional.of(createSiteWithStatus(SiteStatus.ARCHIVED));
++        Site site = createSiteWithStatus(SiteStatus.SUSPENDED);
+         delegate.nextUnarchiveResult = site;
+ 
+         Site result = service.unarchive(command, testActor);
+@@ -167,10 +172,15 @@ class EventPublishingSiteServiceTest {
+     }
+ 
+     private Site createSite() {
++        return createSiteWithStatus(SiteStatus.STARTED);
++    }
++
++    private Site createSiteWithStatus(final SiteStatus status) {
+         return Site.builder()
+                 .id(testId)
+                 .key(testKey)
+                 .displayName("Test Site")
++                .status(status)
+                 .build();
+     }
+ 
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/SiteEventPipelineIntegrationTest.java b/codex-codex/src/test/java/codex/codex/internal/service/SiteEventPipelineIntegrationTest.java
+index 14c4792..4839641 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/SiteEventPipelineIntegrationTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/SiteEventPipelineIntegrationTest.java
+@@ -1,10 +1,7 @@
+ package codex.codex.internal.service;
+ 
+-import codex.codex.api.model.command.ArchiveSiteCommand;
+-import codex.codex.api.model.command.CreateSiteCommand;
+-import codex.codex.api.model.command.SuspendSiteCommand;
+-import codex.codex.api.model.event.SiteCreatedEvent;
+-import codex.codex.api.model.event.SiteSuspendedEvent;
++import codex.codex.api.model.command.*;
++import codex.codex.api.model.event.*;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.fundamentum.api.model.Actor;
+ import codex.fundamentum.api.tx.TransactionContext;
+@@ -49,7 +46,7 @@ class SiteEventPipelineIntegrationTest {
+         final SiteCreatedEvent event = ctx.assertSingleEvent(SiteCreatedEvent.class);
+         assertEquals(SITE_KEY, event.key());
+         assertEquals(ACTOR, event.actor());
+-        assertEquals(TestCodexContext.CLOCK.instant(), event.occurredAt());
++        assertNotNull(event.occurredAt());
+     }
+ 
+     @Test
+@@ -65,6 +62,18 @@ class SiteEventPipelineIntegrationTest {
+         ctx.assertNoEvents();
+     }
+ 
++    // --- outside transaction ---
++
++    @Test
++    @DisplayName("outside transaction dispatches immediately")
++    void outsideTransactionDispatchesImmediately() {
++        ctx.siteService().findByKey(SITE_KEY, ACTOR);
++        ctx.assertNoEvents();
++
++        ctx.siteService().create(CreateSiteCommand.of(SITE_KEY, "Integration Site"), ACTOR);
++        ctx.assertSingleEvent(SiteCreatedEvent.class);
++    }
++
+     // --- suspend ---
+ 
+     @Test
+@@ -106,6 +115,97 @@ class SiteEventPipelineIntegrationTest {
+         ctx.assertNoEvents();
+     }
+ 
++    @Test
++    @DisplayName("rollback after suspend does not dispatch SiteSuspendedEvent")
++    void rollbackAfterSuspendDoesNotDispatchSiteSuspendedEvent() throws Exception {
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().create(CreateSiteCommand.of(SITE_KEY, "Integration Site"), ACTOR);
++            return null;
++        });
++        ctx.clearEvents();
++
++        assertThrows(RuntimeException.class, () ->
++            TransactionContext.runInTransaction(() -> {
++                ctx.siteService().suspend(SuspendSiteCommand.of(SITE_KEY), ACTOR);
++                throw new RuntimeException("forced rollback");
++            })
++        );
++
++        ctx.assertNoEvents();
++    }
++
++    // --- state machine transitions ---
++
++    @Test
++    @DisplayName("archive after suspend dispatches SiteArchivedEvent")
++    void archiveAfterSuspendDispatchesSiteArchivedEvent() throws Exception {
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().create(CreateSiteCommand.of(SITE_KEY, "Integration Site"), ACTOR);
++            return null;
++        });
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().suspend(SuspendSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++        ctx.clearEvents();
++
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().archive(ArchiveSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++
++        final SiteArchivedEvent event = ctx.assertSingleEvent(SiteArchivedEvent.class);
++        assertEquals(SITE_KEY, event.key());
++    }
++
++    @Test
++    @DisplayName("unarchive archived dispatches SiteUnarchivedEvent")
++    void unarchiveArchivedDispatchesSiteUnarchivedEvent() throws Exception {
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().create(CreateSiteCommand.of(SITE_KEY, "Integration Site"), ACTOR);
++            return null;
++        });
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().suspend(SuspendSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().archive(ArchiveSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++        ctx.clearEvents();
++
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().unarchive(UnarchiveSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++
++        final SiteUnarchivedEvent event = ctx.assertSingleEvent(SiteUnarchivedEvent.class);
++        assertEquals(SITE_KEY, event.key());
++    }
++
++    @Test
++    @DisplayName("start suspended dispatches SiteStartedEvent")
++    void startSuspendedDispatchesSiteStartedEvent() throws Exception {
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().create(CreateSiteCommand.of(SITE_KEY, "Integration Site"), ACTOR);
++            return null;
++        });
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().suspend(SuspendSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++        ctx.clearEvents();
++
++        TransactionContext.runInTransaction(() -> {
++            ctx.siteService().start(StartSiteCommand.of(SITE_KEY), ACTOR);
++            return null;
++        });
++
++        final SiteStartedEvent event = ctx.assertSingleEvent(SiteStartedEvent.class);
++        assertEquals(SITE_KEY, event.key());
++    }
++
+     // --- invalid transition ---
+ 
+     @Test
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java b/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
+index edd42d6..dd6bdcd 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
+@@ -1,59 +1,33 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.service.SiteService;
+-import codex.codex.internal.repository.MemorySiteRepository;
+-import codex.fundamentum.api.concurrent.CodexExecutor;
++import codex.codex.internal.runtime.CodexRuntime;
+ import codex.fundamentum.api.event.CodexEvent;
+-import codex.fundamentum.api.event.CodexEventDispatcher;
+ 
+-import java.time.Clock;
+-import java.time.Instant;
+-import java.time.ZoneId;
+-import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Objects;
+ 
+ import static org.junit.jupiter.api.Assertions.*;
+ 
+ /**
+- * Reusable test fixture that wires the full site event pipeline using real production
+- * components — no mocks, no Spring, no external infrastructure.
+- *
+- * <p>Pipeline:</p>
+- * <pre>
+- * TransactionContext
+- *   → EventPublishingSiteService
+- *     → CodexSiteService
+- *       → MemorySiteRepository
+- *   → DeferredEventDispatcher
+- *     → RecordingCodexEventDispatcher
+- * </pre>
++ * Reusable test fixture that wires the full site event pipeline via {@link CodexRuntime}.
++ * Each test should create a fresh instance via {@link #create()} to guarantee isolation.
+  */
+ public final class TestCodexContext {
+ 
+-    static final Clock CLOCK = Clock.fixed(Instant.parse("2026-04-30T12:00:00Z"), ZoneId.of("UTC"));
++    private final CodexRuntime runtime;
+ 
+-    private final SiteService siteService;
+-    private final RecordingCodexEventDispatcher recordingDispatcher;
+-
+-    private TestCodexContext(final SiteService siteService,
+-                             final RecordingCodexEventDispatcher recordingDispatcher) {
+-        this.siteService = Objects.requireNonNull(siteService);
+-        this.recordingDispatcher = Objects.requireNonNull(recordingDispatcher);
++    private TestCodexContext(final CodexRuntime runtime) {
++        this.runtime = Objects.requireNonNull(runtime);
+     }
+ 
+     /**
+-     * Creates a fully wired context with a fresh in-memory repository.
++     * Creates a fully wired in-memory context backed by {@link CodexRuntime#inMemory()}.
+      *
+-     * @return a new context ready for use in a single test
++     * @return a new, isolated context
+      */
+     public static TestCodexContext create() {
+-        final MemorySiteRepository repository = new MemorySiteRepository();
+-        final RecordingCodexEventDispatcher recording = new RecordingCodexEventDispatcher();
+-        final DeferredEventDispatcher deferred = new DeferredEventDispatcher(recording, new SynchronousExecutor());
+-        final CodexSiteService core = new CodexSiteService(repository, CLOCK);
+-        final SiteService service = new EventPublishingSiteService(core, deferred, CLOCK);
+-        return new TestCodexContext(service, recording);
++        return new TestCodexContext(CodexRuntime.inMemory());
+     }
+ 
+     /**
+@@ -62,7 +36,7 @@ public final class TestCodexContext {
+      * @return the site service
+      */
+     public SiteService siteService() {
+-        return siteService;
++        return runtime.siteService();
+     }
+ 
+     /**
+@@ -71,15 +45,15 @@ public final class TestCodexContext {
+      * @return immutable snapshot of dispatched events
+      */
+     public List<CodexEvent> events() {
+-        return List.copyOf(recordingDispatcher.dispatched);
++        return runtime.recordedEvents();
+     }
+ 
+     /**
+      * Asserts that no events have been dispatched since the last {@link #clearEvents()}.
+      */
+     public void assertNoEvents() {
+-        assertTrue(recordingDispatcher.dispatched.isEmpty(),
+-                "Expected no events but found: " + recordingDispatcher.dispatched);
++        assertTrue(runtime.recordedEvents().isEmpty(),
++                "Expected no events but found: " + runtime.recordedEvents());
+     }
+ 
+     /**
+@@ -90,38 +64,17 @@ public final class TestCodexContext {
+      * @return the single dispatched event cast to {@code type}
+      */
+     public <E extends CodexEvent> E assertSingleEvent(final Class<E> type) {
+-        assertEquals(1, recordingDispatcher.dispatched.size(),
+-                "Expected exactly one event but found: " + recordingDispatcher.dispatched);
+-        assertInstanceOf(type, recordingDispatcher.dispatched.getFirst());
+-        return type.cast(recordingDispatcher.dispatched.getFirst());
++        final List<CodexEvent> events = runtime.recordedEvents();
++        assertEquals(1, events.size(),
++                "Expected exactly one event but found: " + events);
++        assertInstanceOf(type, events.getFirst());
++        return type.cast(events.getFirst());
+     }
+ 
+     /**
+      * Clears all recorded events. Call between logical steps of a multi-step test.
+      */
+     public void clearEvents() {
+-        recordingDispatcher.dispatched.clear();
+-    }
+-
+-    private static final class RecordingCodexEventDispatcher implements CodexEventDispatcher {
+-
+-        final List<CodexEvent> dispatched = new ArrayList<>();
+-
+-        @Override
+-        public void dispatch(final CodexEvent event) {
+-            dispatched.add(Objects.requireNonNull(event));
+-        }
+-    }
+-
+-    private static final class SynchronousExecutor implements CodexExecutor {
+-
+-        @Override
+-        public void submit(final Runnable task) {
+-            task.run();
+-        }
+-
+-        @Override
+-        public void shutdown() {
+-        }
++        runtime.clearRecordedEvents();
+     }
+ }
+diff --git a/codex-docs/tasks/Task6-Codex-Runtime.md b/codex-docs/tasks/Task6-Codex-Runtime.md
+index e69de29..054f292 100644
+--- a/codex-docs/tasks/Task6-Codex-Runtime.md
++++ b/codex-docs/tasks/Task6-Codex-Runtime.md
+@@ -0,0 +1,85 @@
++# Task: Implement CodexRuntime as the composition root for codex-codex
++
++## Objective
++Create `CodexRuntime` as the manual composition root for `codex-codex`.
++It wires all real components together and exposes them through a clean API.
++The client never sees how the pipeline is assembled internally.
++
++## Location
++`codex.codex.internal.runtime.CodexRuntime`
++
++## API
++
++```java
++public final class CodexRuntime {
++
++    public static CodexRuntime inMemory() { ... }
++
++    public SiteService siteService() { ... }
++
++    public CodexEventDispatcher eventDispatcher() { ... }
++
++    public Clock clock() { ... }
++
++    public void shutdown() { ... }
++}
++```
++
++## Internal wiring for inMemory()
++
++The full pipeline must be assembled in this order:
++
++MemorySiteRepository
++Clock.systemUTC()
++SiteIdentityGenerator
++CodexSiteService(repository, clock, identityGenerator)
++RecordingCodexEventDispatcher (or LoggerCodexEventDispatcher as delegate)
++CodexExecutor via CodexExecutorConfig.of(50)
++DeferredEventDispatcher(delegate, asyncExecutor)
++EventPublishingSiteService(codexSiteService, deferredDispatcher, clock)
++
++
++`siteService()` returns the outermost decorator — `EventPublishingSiteService`.
++`eventDispatcher()` returns the `DeferredEventDispatcher`.
++
++## Lifecycle
++
++- `shutdown()` must call `asyncExecutor.shutdown()`
++- `CodexRuntime` should implement `AutoCloseable` so it can be used
++  in try-with-resources
++
++## Simplify TestCodexContext
++
++Once `CodexRuntime` exists, update `TestCodexContext` to delegate to it:
++
++```java
++public final class TestCodexContext {
++
++    private final CodexRuntime runtime;
++
++    public static TestCodexContext create() {
++        return new TestCodexContext(CodexRuntime.inMemory());
++    }
++
++    public SiteService siteService() {
++        return runtime.siteService();
++    }
++
++    public List<CodexEvent> events() { ... }
++
++    public void assertNoEvents() { ... }
++
++    public <E extends CodexEvent> E assertSingleEvent(Class<E> type) { ... }
++
++    public void clearEvents() { ... }
++}
++```
++
++## Constraints
++- Follow CLAUDE.md conventions
++- No Spring annotations anywhere
++- Constructor injection throughout
++- `CodexRuntime` is not exported in module-info.java
++- `shutdown()` must be idempotent
++- Proper JavaDoc on all public methods
++- Logs on startup and shutdown
+\ No newline at end of file
+diff --git a/codex-docs/tasks/Task7-Content-Typess.md b/codex-docs/tasks/Task7-Content-Typess.md
+index e69de29..42c8cec 100644
+--- a/codex-docs/tasks/Task7-Content-Typess.md
++++ b/codex-docs/tasks/Task7-Content-Typess.md
+@@ -0,0 +1,400 @@
++# Task7: Content Types Foundation
++
++## Objective
++
++Implement the first foundation for Content Types in `codex-codex`.
++
++This task introduces the initial domain model, repository, in-memory repository, service contract, and internal service implementation for managing content types.
++
++A Content Type defines the schema for future content items. This task should not implement content items yet.
++
++The goal is to create a clean, minimal, framework-agnostic foundation that follows the same architectural style already used for `Site`.
++
++## Important architectural direction
++
++`ContentTypeService` must not be a simple mirror of `ContentTypeRepository`.
++
++The repository owns storage concerns.
++
++The service owns application semantics such as:
++
++- creating a content type
++- finding content types
++- validating duplicate keys
++- preparing the model for future versioning
++- preparing the model for future events
++- preparing the model for future field/schema operations
++
++Do not implement field mutation operations yet unless explicitly required for compilation.
++
++## Location
++
++Use these packages:
++
++```text
++codex.codex.api.model.entity
++codex.codex.api.model.identity
++codex.codex.api.model.command
++codex.codex.api.model.service
++codex.codex.internal.repository
++codex.codex.internal.service
++```
++
++Do not introduce Spring, JPA, REST controllers, persistence annotations, or external infrastructure.
++
++# Domain model
++
++Create the following minimal model if it does not already exist.
++
++ContentTypeId
++
++Location: codex.codex.api.model.identity.ContentTypeId
++
++Requirements:
++
++1. Use a Java record
++2. Wrap a String value
++3. Validate non-null
++4. Validate non-blank
++5. Provide a static factory method
++6. Prefer a deterministic or generated factory if the project already has an identity pattern
++
++Example shape:
++```
++public record ContentTypeId(String value) {
++    public ContentTypeId {
++        // validation
++    }
++
++    public static ContentTypeId of(String value) { ... }
++}
++```
++
++# ContentTypeKey
++
++Location: codex.codex.api.model.identity.ContentTypeKey
++
++Requirements:
++
++1) Use a Java record
++2) Wrap a String value
++3) Validate non-null
++4) Trim and normalize to lowercase
++5) Validate non-blank
++6) Use a safe key format similar to SiteKey
++7) Provide a static factory method
++
++This key represents the stable human-friendly identity of the content type.
++
++Examples:
++```
++blog-post
++product
++landing-page
++author-profile
++```
++
++# ContentTypeStatus
++Location: codex.codex.api.model.value.ContentTypeStatus
++
++Initial values:
++```
++DRAFT,
++ACTIVE,
++ARCHIVED
++```
++
++Semantics:
++
++- DRAFT: schema is being defined
++- ACTIVE: schema can be used by content items
++- ARCHIVED: schema is retired from normal use
++
++# ContentType
++Location: codex.codex.api.model.entity.ContentType
++
++Requirements:
++
++- Use a Java record unless this conflicts with the existing style
++- Fields:
++    -- ContentTypeId id
++    -- ContentTypeKey key
++    -- String displayName
++    -- ContentTypeStatus status
++    -- Instant createdAt
++    -- Instant updatedAt
++    -- Validate required fields
++    -- Trim displayName
++    -- Default status to DRAFT if null
++    -- Default timestamps if appropriate, following the existing project style
++    -- Provide builder/copy pattern if the existing entities use it
++
++Do not implement fields/schema definitions in this task unless they already exist and can be safely reused.
++
++# Commands
++
++Create these commands:
++```
++CreateContentTypeCommand
++ActivateContentTypeCommand
++ArchiveContentTypeCommand
++```
++
++Location: codex.codex.api.model.command
++
++## CreateContentTypeCommand
++
++Fields:
++```
++ContentTypeKey key
++String displayName
++```
++
++Requirements:
++
++- Validate non-null key
++- Validate non-null/non-blank displayName
++- Provide static factory method of(...)
++
++# ActivateContentTypeCommand
++
++Fields:
++```
++ContentTypeKey key
++```
++
++Requirements:
++
++- Validate non-null key
++- Provide static factory method of(...)
++
++## ArchiveContentTypeCommand
++
++Fields:
++```
++ContentTypeKey key
++```
++
++Requirements:
++
++- Validate non-null key
++- Provide static factory method of(...)
++
++# Repository
++
++Create: codex.codex.internal.repository.ContentTypeRepository
++
++Contract:
++```
++public interface ContentTypeRepository {
++
++    ContentType save(ContentType contentType);
++
++    Optional<ContentType> findByKey(ContentTypeKey key);
++
++    boolean existsByKey(ContentTypeKey key);
++
++    List<ContentType> findAll();
++}
++```
++
++Constraints:
++
++- Repository methods use ContentTypeKey, not raw String
++- No Spring
++- No persistence framework
++- No generic iterator/filter API yet
++
++# In-memory repository
++
++Create: codex.codex.internal.repository.MemoryContentTypeRepository
++
++Requirements:
++
++- Implements ContentTypeRepository
++- Uses an in-memory map keyed by ContentTypeKey
++- Validates null arguments with Objects.requireNonNull
++- save(...) returns the saved ContentType
++- findAll() returns an immutable snapshot
++- Preserve behavior style already used by MemorySiteRepository
++
++# Service contract
++
++Create: codex.codex.api.model.service.ContentTypeService
++
++Contract: 
++```
++public interface ContentTypeService {
++
++    ContentType create(CreateContentTypeCommand command, Actor actor);
++
++    ContentType activate(ActivateContentTypeCommand command, Actor actor);
++
++    ContentType archive(ArchiveContentTypeCommand command, Actor actor);
++
++    Optional<ContentType> findByKey(ContentTypeKey key, Actor actor);
++
++    List<ContentType> findAll(Actor actor);
++}
++```
++
++Important:
++
++- This service is actor-aware.
++- Use codex.fundamentum.api.model.Actor.
++- Do not use Spring Security, Principal, Auth0, JWT, or framework concepts.
++- Do not add permission services yet.
++
++# Internal service implementation
++
++Create: codex.codex.internal.service.CodexContentTypeService
++
++Requirements:
++
++- final
++- Implements ContentTypeService
++- Constructor receives:
++  -- ContentTypeRepository
++  -- Clock
++  -- optional identity generator if needed by the existing style
++- Validate constructor dependencies with Objects.requireNonNull
++- Use SLF4J logging
++- Log public mutating operations at debug level
++- Validate all method inputs with Objects.requireNonNull
++  Behavior:
++
++#create
++Require non-null command and actor
++If a content type with the same key already exists, throw a semantic exception
++Create a new ContentType
++Initial status should be DRAFT
++Save and return it
++
++# activate
++Require non-null command and actor
++Load the content type by key
++If missing, throw NotFoundException
++If already ACTIVE, return the existing content type without saving
++If ARCHIVED, throw an invalid transition exception
++If DRAFT, save a copy with status ACTIVE
++
++# archive
++Require non-null command and actor
++Load the content type by key
++If missing, throw NotFoundException
++If already ARCHIVED, return the existing content type without saving
++If DRAFT or ACTIVE, save a copy with status ARCHIVED
++
++# findByKey
++Require non-null key and actor
++Delegate to repository
++
++# findAll
++Require non-null actor
++Delegate to repository
++
++Exceptions
++
++Create semantic exceptions only if they do not already exist.
++
++Suggested exceptions:
++```
++ContentTypeAlreadyExistsException
++InvalidContentTypeStatusTransitionException
++```
++
++Location: codex.codex.internal.service
++
++Do not create a large exception hierarchy unless the project already has one.
++
++Use existing NotFoundException from fundamentum if available.
++
++# Events
++
++Do not implement content type events in this task.
++
++However, design the service so that it can later be decorated by an event-publishing wrapper, following the same pattern used for SiteService.
++
++Possible future events:
++
++```
++ContentTypeCreatedEvent
++ContentTypeActivatedEvent
++ContentTypeArchivedEvent
++```
++
++# Runtime
++
++Do not modify CodexRuntime in this task unless all ContentType pieces compile and adding the service is straightforward.
++
++If modifying CodexRuntime, expose:
++
++```
++public ContentTypeService contentTypeService()
++```
++
++and wire:
++
++```
++MemoryContentTypeRepository
++CodexContentTypeService
++```
++
++Do not add event publishing for content types yet.
++
++# Tests
++
++Add plain JUnit 5 tests.
++
++No Spring.
++
++No mocks unless absolutely necessary.
++
++Prefer real in-memory repository.
++
++## Repository tests
++
++Create tests for MemoryContentTypeRepository:
++
++save should return saved content type
++findByKey should return saved content type
++findByKey should return empty when missing
++existsByKey should return true when saved
++existsByKey should return false when missing
++findAll should return all saved content types
++required arguments should not accept null
++Service tests
++
++## Create tests for CodexContentTypeService:
++
++create should create draft content type
++create should throw when key already exists
++findByKey should return existing content type
++findByKey should return empty when missing
++findAll should return all content types
++activate should move draft to active
++activate should be idempotent when already active
++activate should fail when archived
++archive should move draft to archived
++archive should move active to archived
++archive should be idempotent when already archived
++missing content type should throw NotFoundException for activate
++missing content type should throw NotFoundException for archive
++required arguments should not accept null
++
++## Constraints
++Follow CLAUDE.md conventions.
++Follow the same style used by the existing Site implementation.
++No Spring annotations.
++No JPA.
++No persistence framework.
++No REST controllers.
++No JavaScript extension system.
++No permission service yet.
++No content item implementation yet.
++No event wrapper yet.
++No broad refactors.
++Do not modify unrelated files.
++Keep comments and JavaDoc in English.
++Prefer small, explicit, testable classes.
++Run the smallest relevant Maven test or compile command after implementation.
+\ No newline at end of file
