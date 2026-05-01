@@ -5,6 +5,7 @@ import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.SiteKey;
 import codex.fundamentum.api.model.Actor;
 
 import java.util.List;
@@ -13,8 +14,8 @@ import java.util.Optional;
 /**
  * Application service for managing {@link ContentType} lifecycle.
  * <p>
- * Every operation is actor-aware for audit context. Implementations own business
- * semantics such as duplicate-key prevention, status transitions, and identity generation.
+ * Content types are scoped by {@link SiteKey}. The logical identity is
+ * {@code siteKey + contentTypeKey}. Every operation is actor-aware for audit context.
  * This interface is designed to be wrapped by event-publishing decorators following the
  * same pattern used by {@link SiteService}.
  */
@@ -23,7 +24,7 @@ public interface ContentTypeService {
     /**
      * Creates a new content type in {@code DRAFT} status.
      *
-     * @param command the creation command; must not be null
+     * @param command the creation command containing site scope, key, and display name; must not be null
      * @param actor   the acting principal; must not be null
      * @return the persisted content type
      */
@@ -50,16 +51,26 @@ public interface ContentTypeService {
     ContentType archive(ArchiveContentTypeCommand command, Actor actor);
 
     /**
-     * Finds a content type by its stable key.
+     * Finds a content type by its scoped identity.
      *
-     * @param key   the content type key; must not be null
-     * @param actor the acting principal; must not be null
+     * @param siteKey the site scope; must not be null
+     * @param key     the content type key; must not be null
+     * @param actor   the acting principal; must not be null
      * @return the content type wrapped in an {@link Optional}, or empty if not found
      */
-    Optional<ContentType> findByKey(ContentTypeKey key, Actor actor);
+    Optional<ContentType> findByKey(SiteKey siteKey, ContentTypeKey key, Actor actor);
 
     /**
-     * Returns all content types visible to the actor.
+     * Returns all content types for a given site.
+     *
+     * @param siteKey the site scope; must not be null
+     * @param actor   the acting principal; must not be null
+     * @return immutable list of content types for the site
+     */
+    List<ContentType> findBySiteKey(SiteKey siteKey, Actor actor);
+
+    /**
+     * Returns all content types across all sites visible to the actor.
      *
      * @param actor the acting principal; must not be null
      * @return immutable list of all content types

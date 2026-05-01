@@ -1,6 +1,13 @@
 # Compiled class file
 *.class
 
+# IntelliJ IDEA
+.idea/misc.xml
+# O mejor aún, ignora todo lo que no sea esencial
+.idea/**
+!.idea/vcs.xml
+!.idea/runConfigurations/
+
 # Log file
 *.log
 

@@ -6,6 +6,7 @@ import codex.codex.api.model.command.CreateContentTypeCommand;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.value.ContentTypeStatus;
 import codex.codex.internal.repository.ContentTypeRepository;
@@ -23,9 +24,10 @@ import java.util.Optional;
 /**
  * Core implementation of {@link ContentTypeService}.
  * <p>
- * Owns business semantics: duplicate-key prevention, status transition rules,
- * and deterministic identity generation. Designed to be wrapped by decorators
- * for event publishing following the same pattern used for {@code SiteService}.
+ * Owns business semantics: scoped duplicate-key prevention, status transition rules,
+ * ownership metadata, and deterministic identity generation.
+ * Designed to be wrapped by decorators for event publishing following the same pattern
+ * used for {@code SiteService}.
  */
 public final class CodexContentTypeService implements ContentTypeService {
 
@@ -52,18 +54,23 @@ public final class CodexContentTypeService implements ContentTypeService {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
 
-        LOGGER.debug("Creating content type key: {} by actor: {}", command.key(), actor);
+        LOGGER.debug("Creating content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
 
-        if (repository.existsByKey(command.key())) {
-            throw new ContentTypeAlreadyExistsException(command.key());
+        if (repository.existsByKey(command.siteKey(), command.key())) {
+            throw new ContentTypeAlreadyExistsException(command.siteKey(), command.key());
         }
 
         final ContentType contentType = ContentType.builder()
                 .id(identityGenerator.nextIdentity(command))
+                .siteKey(command.siteKey())
                 .key(command.key())
                 .displayName(command.displayName())
                 .status(ContentTypeStatus.DRAFT)
+                .owner(actor.id())
+                .createdBy(actor.id())
+                .updatedBy(actor.id())
                 .createdAt(clock.instant())
+                .updatedAt(clock.instant())
                 .build();
 
         return repository.save(contentType);
@@ -74,9 +81,9 @@ public final class CodexContentTypeService implements ContentTypeService {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
 
-        LOGGER.debug("Activating content type key: {} by actor: {}", command.key(), actor);
+        LOGGER.debug("Activating content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
 
-        final ContentType contentType = loadOrThrow(command.key());
+        final ContentType contentType = loadOrThrow(command.siteKey(), command.key());
 
         if (contentType.status() == ContentTypeStatus.ACTIVE) {
             return contentType;
@@ -84,11 +91,13 @@ public final class CodexContentTypeService implements ContentTypeService {
 
         if (contentType.status() == ContentTypeStatus.ARCHIVED) {
             throw new InvalidContentTypeStatusTransitionException(
-                    "Cannot activate archived content type: " + command.key(), contentType);
+                    "Cannot activate archived content type: " + command.siteKey() + "/" + command.key(),
+                    contentType);
         }
 
         return repository.save(ContentType.copyOf(contentType)
                 .status(ContentTypeStatus.ACTIVE)
+                .updatedBy(actor.id())
                 .updatedAt(clock.instant())
                 .build());
     }
@@ -98,9 +107,9 @@ public final class CodexContentTypeService implements ContentTypeService {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
 
-        LOGGER.debug("Archiving content type key: {} by actor: {}", command.key(), actor);
+        LOGGER.debug("Archiving content type {}/{} by actor: {}", command.siteKey(), command.key(), actor);
 
-        final ContentType contentType = loadOrThrow(command.key());
+        final ContentType contentType = loadOrThrow(command.siteKey(), command.key());
 
         if (contentType.status() == ContentTypeStatus.ARCHIVED) {
             return contentType;
@@ -108,17 +117,28 @@ public final class CodexContentTypeService implements ContentTypeService {
 
         return repository.save(ContentType.copyOf(contentType)
                 .status(ContentTypeStatus.ARCHIVED)
+                .updatedBy(actor.id())
                 .updatedAt(clock.instant())
                 .build());
     }
 
     @Override
-    public Optional<ContentType> findByKey(final ContentTypeKey key, final Actor actor) {
+    public Optional<ContentType> findByKey(final SiteKey siteKey, final ContentTypeKey key, final Actor actor) {
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
 
-        LOGGER.debug("Finding content type by key: {} by actor: {}", key, actor);
-        return repository.findByKey(key);
+        LOGGER.debug("Finding content type {}/{} by actor: {}", siteKey, key, actor);
+        return repository.findByKey(siteKey, key);
+    }
+
+    @Override
+    public List<ContentType> findBySiteKey(final SiteKey siteKey, final Actor actor) {
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Finding content types for site {} by actor: {}", siteKey, actor);
+        return repository.findBySiteKey(siteKey);
     }
 
     @Override
@@ -129,8 +149,8 @@ public final class CodexContentTypeService implements ContentTypeService {
         return repository.findAll();
     }
 
-    private ContentType loadOrThrow(final ContentTypeKey key) {
-        return repository.findByKey(key)
-                .orElseThrow(() -> new NotFoundException("ContentType not found: " + key));
+    private ContentType loadOrThrow(final SiteKey siteKey, final ContentTypeKey key) {
+        return repository.findByKey(siteKey, key)
+                .orElseThrow(() -> new NotFoundException("ContentType not found: " + siteKey + "/" + key));
     }
 }

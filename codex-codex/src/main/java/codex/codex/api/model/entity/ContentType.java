@@ -2,7 +2,9 @@ package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentTypeStatus;
+import codex.fundamentum.api.model.ActorId;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -10,15 +12,22 @@ import java.util.Objects;
 /**
  * Defines a logical schema for content items in Codex.
  * <p>
- * A {@code ContentType} acts as the root for a set of versioned schema definitions.
+ * A {@code ContentType} is scoped by {@link SiteKey}. The logical identity of a content type
+ * is the combination of {@code siteKey + key} — a {@code ContentTypeKey} alone is not globally
+ * unique. Global (platform-wide) content types use {@link SiteKey#SYSTEM} as their site scope.
+ * <p>
  * Its lifecycle follows the {@link ContentTypeStatus} state machine:
  * {@code DRAFT → ACTIVE}, {@code DRAFT → ARCHIVED}, {@code ACTIVE → ARCHIVED}.
  */
 public record ContentType(
         ContentTypeId id,
+        SiteKey siteKey,
         ContentTypeKey key,
         String displayName,
         ContentTypeStatus status,
+        ActorId owner,
+        ActorId createdBy,
+        ActorId updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -27,14 +36,19 @@ public record ContentType(
      * Canonical constructor for {@link ContentType}.
      *
      * @param id          unique identifier; must not be null
-     * @param key         stable human-friendly key; must not be null
+     * @param siteKey     owning site scope; must not be null
+     * @param key         stable human-friendly key within the site scope; must not be null
      * @param displayName human-readable label; must not be null or blank
      * @param status      lifecycle status; defaults to {@link ContentTypeStatus#DRAFT} if null
+     * @param owner       the actor that owns this content type; must not be null
+     * @param createdBy   the actor that created this content type; must not be null
+     * @param updatedBy   the actor that last updated this content type; must not be null
      * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
      * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
      */
     public ContentType {
         Objects.requireNonNull(id, "ContentType id cannot be null");
+        Objects.requireNonNull(siteKey, "ContentType siteKey cannot be null");
         Objects.requireNonNull(key, "ContentType key cannot be null");
         Objects.requireNonNull(displayName, "ContentType displayName cannot be null");
         displayName = displayName.trim();
@@ -44,6 +58,9 @@ public record ContentType(
         if (status == null) {
             status = ContentTypeStatus.DRAFT;
         }
+        Objects.requireNonNull(owner, "ContentType owner cannot be null");
+        Objects.requireNonNull(createdBy, "ContentType createdBy cannot be null");
+        Objects.requireNonNull(updatedBy, "ContentType updatedBy cannot be null");
         createdAt = createdAt == null ? Instant.now() : createdAt;
         updatedAt = updatedAt == null ? createdAt : updatedAt;
     }
@@ -68,9 +85,13 @@ public record ContentType(
         Objects.requireNonNull(contentType, "contentType cannot be null");
         return builder()
                 .id(contentType.id())
+                .siteKey(contentType.siteKey())
                 .key(contentType.key())
                 .displayName(contentType.displayName())
                 .status(contentType.status())
+                .owner(contentType.owner())
+                .createdBy(contentType.createdBy())
+                .updatedBy(contentType.updatedBy())
                 .createdAt(contentType.createdAt())
                 .updatedAt(contentType.updatedAt());
     }
@@ -79,9 +100,13 @@ public record ContentType(
     public String toString() {
         return "ContentType{" +
                 "id=" + id +
+                ", siteKey=" + siteKey +
                 ", key=" + key +
                 ", displayName='" + displayName + '\'' +
                 ", status=" + status +
+                ", owner=" + owner +
+                ", createdBy=" + createdBy +
+                ", updatedBy=" + updatedBy +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';
@@ -92,16 +117,24 @@ public record ContentType(
      */
     public static class Builder {
         private ContentTypeId id;
+        private SiteKey siteKey;
         private ContentTypeKey key;
         private String displayName;
         private ContentTypeStatus status;
+        private ActorId owner;
+        private ActorId createdBy;
+        private ActorId updatedBy;
         private Instant createdAt;
         private Instant updatedAt;
 
         public Builder id(ContentTypeId id) { this.id = id; return this; }
+        public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
         public Builder key(ContentTypeKey key) { this.key = key; return this; }
         public Builder displayName(String displayName) { this.displayName = displayName; return this; }
         public Builder status(ContentTypeStatus status) { this.status = status; return this; }
+        public Builder owner(ActorId owner) { this.owner = owner; return this; }
+        public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
+        public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
 
@@ -111,7 +144,8 @@ public record ContentType(
          * @return a validated {@code ContentType}
          */
         public ContentType build() {
-            return new ContentType(id, key, displayName, status, createdAt, updatedAt);
+            return new ContentType(id, siteKey, key, displayName, status,
+                    owner, createdBy, updatedBy, createdAt, updatedAt);
         }
     }
 }

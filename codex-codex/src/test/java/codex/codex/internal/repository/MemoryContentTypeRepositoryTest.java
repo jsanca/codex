@@ -3,6 +3,8 @@ package codex.codex.internal.repository;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.SiteKey;
+import codex.fundamentum.api.model.ActorId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,8 +18,9 @@ class MemoryContentTypeRepositoryTest {
 
     private MemoryContentTypeRepository repository;
 
+    private final SiteKey siteKey = SiteKey.of("acme");
     private final ContentTypeKey key = ContentTypeKey.of("blog-post");
-    private final ContentTypeId id = ContentTypeId.generate();
+    private final ActorId actorId = ActorId.of("system:test");
 
     @BeforeEach
     void setUp() {
@@ -27,66 +30,110 @@ class MemoryContentTypeRepositoryTest {
     @Test
     @DisplayName("save should return saved content type")
     void saveShouldReturnSavedContentType() {
-        final ContentType contentType = buildContentType();
-        final ContentType result = repository.save(contentType);
-        assertEquals(contentType, result);
+        final ContentType ct = build(siteKey, key);
+        assertEquals(ct, repository.save(ct));
     }
 
     @Test
-    @DisplayName("findByKey should return saved content type")
+    @DisplayName("findByKey should return saved content type using siteKey + key")
     void findByKeyShouldReturnSavedContentType() {
-        final ContentType contentType = buildContentType();
-        repository.save(contentType);
-        final Optional<ContentType> result = repository.findByKey(key);
+        repository.save(build(siteKey, key));
+        final Optional<ContentType> result = repository.findByKey(siteKey, key);
         assertTrue(result.isPresent());
-        assertEquals(contentType, result.get());
+        assertEquals(key, result.get().key());
+        assertEquals(siteKey, result.get().siteKey());
+    }
+
+    @Test
+    @DisplayName("findByKey should return empty when siteKey differs")
+    void findByKeyShouldReturnEmptyWhenSiteKeyDiffers() {
+        repository.save(build(siteKey, key));
+        assertTrue(repository.findByKey(SiteKey.of("other-site"), key).isEmpty());
     }
 
     @Test
     @DisplayName("findByKey should return empty when missing")
     void findByKeyShouldReturnEmptyWhenMissing() {
-        assertTrue(repository.findByKey(key).isEmpty());
+        assertTrue(repository.findByKey(siteKey, key).isEmpty());
     }
 
     @Test
-    @DisplayName("existsByKey should return true when saved")
+    @DisplayName("existsByKey should return true when saved with same siteKey + key")
     void existsByKeyShouldReturnTrueWhenSaved() {
-        repository.save(buildContentType());
-        assertTrue(repository.existsByKey(key));
+        repository.save(build(siteKey, key));
+        assertTrue(repository.existsByKey(siteKey, key));
+    }
+
+    @Test
+    @DisplayName("existsByKey should return false when siteKey differs")
+    void existsByKeyShouldReturnFalseWhenSiteKeyDiffers() {
+        repository.save(build(siteKey, key));
+        assertFalse(repository.existsByKey(SiteKey.of("other-site"), key));
     }
 
     @Test
     @DisplayName("existsByKey should return false when missing")
     void existsByKeyShouldReturnFalseWhenMissing() {
-        assertFalse(repository.existsByKey(key));
+        assertFalse(repository.existsByKey(siteKey, key));
+    }
+
+    @Test
+    @DisplayName("same ContentTypeKey can exist under different SiteKey values")
+    void sameKeyCanExistUnderDifferentSites() {
+        final SiteKey siteA = SiteKey.of("site-a");
+        final SiteKey siteB = SiteKey.of("site-b");
+        repository.save(build(siteA, key));
+        repository.save(build(siteB, key));
+        assertTrue(repository.existsByKey(siteA, key));
+        assertTrue(repository.existsByKey(siteB, key));
+        assertEquals(2, repository.findAll().size());
+    }
+
+    @Test
+    @DisplayName("findBySiteKey returns only content types for that site")
+    void findBySiteKeyReturnsOnlyMatchingSite() {
+        repository.save(build(siteKey, key));
+        repository.save(build(siteKey, ContentTypeKey.of("product")));
+        repository.save(build(SiteKey.of("other-site"), key));
+        final List<ContentType> result = repository.findBySiteKey(siteKey);
+        assertEquals(2, result.size());
+        assertTrue(result.stream().allMatch(ct -> ct.siteKey().equals(siteKey)));
+    }
+
+    @Test
+    @DisplayName("findBySiteKey returns empty list when no content types exist for that site")
+    void findBySiteKeyReturnsEmptyWhenNoneForSite() {
+        assertTrue(repository.findBySiteKey(siteKey).isEmpty());
     }
 
     @Test
     @DisplayName("findAll should return all saved content types")
     void findAllShouldReturnAllSavedContentTypes() {
-        repository.save(buildContentType());
-        repository.save(ContentType.builder()
-                .id(ContentTypeId.generate())
-                .key(ContentTypeKey.of("product"))
-                .displayName("Product")
-                .build());
-        final List<ContentType> all = repository.findAll();
-        assertEquals(2, all.size());
+        repository.save(build(siteKey, key));
+        repository.save(build(SiteKey.SYSTEM, ContentTypeKey.of("global-type")));
+        assertEquals(2, repository.findAll().size());
     }
 
     @Test
     @DisplayName("required arguments should not accept null")
     void requiredArgumentsShouldNotAcceptNull() {
         assertThrows(NullPointerException.class, () -> repository.save(null));
-        assertThrows(NullPointerException.class, () -> repository.findByKey(null));
-        assertThrows(NullPointerException.class, () -> repository.existsByKey(null));
+        assertThrows(NullPointerException.class, () -> repository.findByKey(null, key));
+        assertThrows(NullPointerException.class, () -> repository.findByKey(siteKey, null));
+        assertThrows(NullPointerException.class, () -> repository.existsByKey(null, key));
+        assertThrows(NullPointerException.class, () -> repository.existsByKey(siteKey, null));
+        assertThrows(NullPointerException.class, () -> repository.findBySiteKey(null));
     }
 
-    private ContentType buildContentType() {
+    private ContentType build(final SiteKey sk, final ContentTypeKey ctk) {
         return ContentType.builder()
-                .id(id)
-                .key(key)
-                .displayName("Blog Post")
+                .id(ContentTypeId.generate())
+                .siteKey(sk)
+                .key(ctk)
+                .displayName("Test Type")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
                 .build();
     }
 }
