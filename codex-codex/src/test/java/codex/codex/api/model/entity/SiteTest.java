@@ -3,10 +3,10 @@ package codex.codex.api.model.entity;
 import codex.codex.api.model.identity.SiteId;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.SiteStatus;
+import codex.fundamentum.api.lifecycle.LifecycleParticipation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -59,6 +59,60 @@ class SiteTest {
                 .build();
         
         assertThat(site.status()).isEqualTo(SiteStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("regular site defaults lifecycle participation to MANAGED")
+    void siteDefaultsLifecycleParticipationToManaged() {
+        final Site site = Site.builder()
+                .id(SiteId.of(UUID.randomUUID().toString()))
+                .key("test")
+                .displayName("Test")
+                .build();
+        assertThat(site.lifecycleParticipation()).isEqualTo(LifecycleParticipation.MANAGED);
+    }
+
+    @Test
+    @DisplayName("builder can set lifecycle participation")
+    void siteBuilderSetsLifecycleParticipation() {
+        final Site site = Site.builder()
+                .id(SiteId.of(UUID.randomUUID().toString()))
+                .key("test")
+                .displayName("Test")
+                .lifecycleParticipation(LifecycleParticipation.READ_ONLY)
+                .build();
+        assertThat(site.lifecycleParticipation()).isEqualTo(LifecycleParticipation.READ_ONLY);
+    }
+
+    @Test
+    @DisplayName("Site.copyOf preserves lifecycle participation")
+    void siteCopyOfPreservesLifecycleParticipation() {
+        final Site original = Site.builder()
+                .id(SiteId.of(UUID.randomUUID().toString()))
+                .key("test")
+                .displayName("Test")
+                .lifecycleParticipation(LifecycleParticipation.EXTERNAL)
+                .build();
+        final Site copy = Site.copyOf(original).build();
+        assertThat(copy.lifecycleParticipation()).isEqualTo(LifecycleParticipation.EXTERNAL);
+    }
+
+    @Test
+    @DisplayName("Site.system() returns a site with key SiteKey.SYSTEM")
+    void systemSiteHasSystemKey() {
+        assertThat(Site.system().key()).isEqualTo(SiteKey.SYSTEM);
+    }
+
+    @Test
+    @DisplayName("Site.system() returns a site with status STARTED")
+    void systemSiteHasStatusStarted() {
+        assertThat(Site.system().status()).isEqualTo(SiteStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("Site.system() returns lifecycle participation SYSTEM_MANAGED")
+    void systemSiteHasSystemManagedParticipation() {
+        assertThat(Site.system().lifecycleParticipation()).isEqualTo(LifecycleParticipation.SYSTEM_MANAGED);
     }
 
     @Test

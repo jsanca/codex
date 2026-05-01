@@ -13,6 +13,7 @@ import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.SiteStatus;
 import codex.codex.internal.repository.MemorySiteRepository;
 import codex.fundamentum.api.exception.NotFoundException;
+import codex.fundamentum.api.lifecycle.LifecycleParticipation;
 import codex.fundamentum.api.model.Actor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -224,6 +225,63 @@ class CodexSiteServiceTest {
 
         assertEquals(SiteStatus.ARCHIVED, result.status());
         assertSame(site, result);
+    }
+
+    // --- lifecycle participation ---
+
+    @Test
+    void lifecycle_StartRejectsSystemManagedSite() {
+        siteRepository.save(systemManagedSite(testKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.start(StartSiteCommand.of(testKey), testActor));
+    }
+
+    @Test
+    void lifecycle_SuspendRejectsSystemManagedSite() {
+        siteRepository.save(systemManagedSite(testKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.suspend(SuspendSiteCommand.of(testKey), testActor));
+    }
+
+    @Test
+    void lifecycle_ArchiveRejectsSystemManagedSite() {
+        siteRepository.save(systemManagedSite(testKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.archive(ArchiveSiteCommand.of(testKey), testActor));
+    }
+
+    @Test
+    void lifecycle_UnarchiveRejectsSystemManagedSite() {
+        siteRepository.save(systemManagedSite(testKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.unarchive(UnarchiveSiteCommand.of(testKey), testActor));
+    }
+
+    @Test
+    void lifecycle_RejectionBasedOnParticipationNotKey() {
+        // non-system key but SYSTEM_MANAGED participation — must still be rejected
+        final SiteKey arbitraryKey = SiteKey.of("arbitrary-site");
+        siteRepository.save(systemManagedSite(arbitraryKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.suspend(SuspendSiteCommand.of(arbitraryKey), testActor));
+    }
+
+    @Test
+    void lifecycle_IdempotentOperationOnSystemManagedSiteStillThrows() {
+        // STARTED system site + start (idempotent) must throw, not silently succeed
+        siteRepository.save(systemManagedSite(testKey));
+        assertThrows(InvalidSiteLifecycleOperationException.class,
+                () -> siteService.start(StartSiteCommand.of(testKey), testActor));
+    }
+
+    private Site systemManagedSite(final SiteKey key) {
+        return Site.builder()
+                .id(testId)
+                .key(key)
+                .displayName("System Managed")
+                .status(SiteStatus.STARTED)
+                .lifecycleParticipation(LifecycleParticipation.SYSTEM_MANAGED)
+                .build();
     }
 
     private CreateSiteCommand createSiteCommand(SiteKey key, SiteStatus status) {

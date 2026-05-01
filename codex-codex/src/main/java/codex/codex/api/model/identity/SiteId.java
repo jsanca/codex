@@ -30,4 +30,12 @@ public record SiteId(String value) {
         return new SiteId(value);
     }
 
+    /**
+     * Returns the stable, deterministic identifier for the built-in system site.
+     *
+     * @return the system site id
+     */
+    public static SiteId system() {
+        return new SiteId("siteid:system");
+    }
 }

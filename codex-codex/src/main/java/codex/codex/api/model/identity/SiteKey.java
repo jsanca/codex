@@ -15,6 +15,9 @@ public record SiteKey(String value) {
     private static final int MAX_LENGTH = 100;
     private static final Pattern VALID_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9-_.]*[a-z0-9]$");
 
+    /** Strongly typed key for the built-in platform system site. */
+    public static final SiteKey SYSTEM = new SiteKey("system");
+
     public SiteKey {
         Objects.requireNonNull(value, "site key cannot be null");
 

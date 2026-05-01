@@ -45,6 +45,18 @@ class IdentityTests {
     }
 
     @Test
+    @DisplayName("SiteKey.SYSTEM has value 'system'")
+    void siteKeySystemHasCorrectValue() {
+        assertThat(SiteKey.SYSTEM.value()).isEqualTo("system");
+    }
+
+    @Test
+    @DisplayName("SiteKey.SYSTEM equals SiteKey.of('system')")
+    void siteKeySystemEqualsFactoryMethod() {
+        assertThat(SiteKey.SYSTEM).isEqualTo(SiteKey.of("system"));
+    }
+
+    @Test
     @DisplayName("FieldKey should trim value")
     void fieldKeyTrim() {
         FieldKey key = FieldKey.of("  title  ");
