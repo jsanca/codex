@@ -104,11 +104,12 @@ public final class DeferredEventDispatcher implements CodexEventDispatcher {
 
         private final CodexEventDispatcher delegate;
         private final CodexExecutor asyncExecutor;
+        // EventBuffer assumes event registration happens within the owning transaction execution flow.
         private final List<PendingDispatch> pending = new ArrayList<>();
 
         private EventBuffer(final CodexEventDispatcher delegate, final CodexExecutor asyncExecutor) {
-            this.delegate = delegate;
-            this.asyncExecutor = asyncExecutor;
+            this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
+            this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor must not be null");
         }
 
         void add(final CodexEvent event, final DispatchMode mode) {
@@ -117,13 +118,18 @@ public final class DeferredEventDispatcher implements CodexEventDispatcher {
 
         @Override
         public void onCommit() {
-            pending.forEach(pd -> {
-                if (pd.mode() == DispatchMode.ASYNC) {
-                    asyncExecutor.submit(() -> delegate.dispatch(pd.event()));
-                } else {
-                    delegate.dispatch(pd.event());
-                }
-            });
+            try {
+                pending.forEach(pd -> {
+                    if (pd.mode() == DispatchMode.ASYNC) {
+                        asyncExecutor.submit(() -> delegate.dispatch(pd.event()));
+                    } else {
+                        delegate.dispatch(pd.event());
+                    }
+                });
+            } finally {
+
+                pending.clear();
+            }
         }
 
         @Override

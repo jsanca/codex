@@ -7,7 +7,9 @@ import codex.codex.api.model.event.SiteCreatedEvent;
 import codex.codex.api.model.event.SiteStartedEvent;
 import codex.codex.api.model.event.SiteSuspendedEvent;
 import codex.codex.api.model.event.SiteUnarchivedEvent;
+import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.SiteService;
+import codex.codex.api.model.value.SiteStatus;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 
@@ -16,6 +18,8 @@ import java.util.Objects;
 
 /**
  * A {@link SiteService} decorator that publishes domain events after each mutating operation.
+ * Events are only dispatched when a real state change occurs — idempotent operations
+ * (e.g. suspending an already-suspended site) produce no event.
  * Read-only operations are forwarded transparently via {@link ForwardingSiteService}.
  *
  * @author jsanca
@@ -47,70 +51,51 @@ public class EventPublishingSiteService implements ForwardingSiteService {
     @Override
     public Site create(final CreateSiteCommand createSiteCommand, final Actor actor) {
         final Site site = delegate.create(createSiteCommand, actor);
-
-        eventDispatcher.dispatch(new SiteCreatedEvent(
-                site.id(),
-                site.key(),
-                actor,
-                clock.instant()
-        ));
-
+        eventDispatcher.dispatch(new SiteCreatedEvent(site.id(), site.key(), actor, clock.instant()));
         return site;
     }
 
     @Override
     public Site start(final StartSiteCommand command, final Actor actor) {
+        final SiteStatus before = statusOf(command.key(), actor);
         final Site site = delegate.start(command, actor);
-
-        eventDispatcher.dispatch(new SiteStartedEvent(
-                site.id(),
-                site.key(),
-                actor,
-                clock.instant()
-        ));
-
+        if (before != site.status()) {
+            eventDispatcher.dispatch(new SiteStartedEvent(site.id(), site.key(), actor, clock.instant()));
+        }
         return site;
     }
 
     @Override
     public Site suspend(final SuspendSiteCommand command, final Actor actor) {
+        final SiteStatus before = statusOf(command.key(), actor);
         final Site site = delegate.suspend(command, actor);
-
-        eventDispatcher.dispatch(new SiteSuspendedEvent(
-                site.id(),
-                site.key(),
-                actor,
-                clock.instant()
-        ));
-
+        if (before != site.status()) {
+            eventDispatcher.dispatch(new SiteSuspendedEvent(site.id(), site.key(), actor, clock.instant()));
+        }
         return site;
     }
 
     @Override
     public Site archive(final ArchiveSiteCommand command, final Actor actor) {
+        final SiteStatus before = statusOf(command.key(), actor);
         final Site site = delegate.archive(command, actor);
-
-        eventDispatcher.dispatch(new SiteArchivedEvent(
-                site.id(),
-                site.key(),
-                actor,
-                clock.instant()
-        ));
-
+        if (before != site.status()) {
+            eventDispatcher.dispatch(new SiteArchivedEvent(site.id(), site.key(), actor, clock.instant()));
+        }
         return site;
     }
 
     @Override
     public Site unarchive(final UnarchiveSiteCommand command, final Actor actor) {
+        final SiteStatus before = statusOf(command.key(), actor);
         final Site site = delegate.unarchive(command, actor);
-
-        eventDispatcher.dispatch(new SiteUnarchivedEvent(
-                site.id(),
-                site.key(),
-                actor,
-                clock.instant()
-        ));
-
+        if (before != site.status()) {
+            eventDispatcher.dispatch(new SiteUnarchivedEvent(site.id(), site.key(), actor, clock.instant()));
+        }
         return site;
+    }
+
+    private SiteStatus statusOf(final SiteKey key, final Actor actor) {
+        return delegate.findByKey(key, actor).map(Site::status).orElseThrow();
     }
 }

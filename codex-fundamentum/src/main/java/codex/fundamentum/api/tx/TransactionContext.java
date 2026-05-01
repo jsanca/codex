@@ -10,7 +10,7 @@ import java.util.function.Supplier;
 /**
  * Carries transactional state for the current execution scope using {@link ScopedValue}.
  *
- * <p>A context is established by calling {@link #runInTransaction(Callable)}. Within that
+ * <p>A context is established by calling {@link #runInTransaction(ScopedValue.CallableOp)}. Within that
  * scope, any code can check {@link #isActive()}, register {@link TransactionCallback}s, or
  * attach arbitrary resources via {@link #computeIfAbsent(Class, Supplier)}.</p>
  *
@@ -70,7 +70,11 @@ public final class TransactionContext {
             ctx.notifyCommit();
             return result;
         } catch (final Exception ex) {
-            ctx.notifyRollback();
+            try {
+                ctx.notifyRollback();
+            } catch (final Exception rollbackEx) {
+                ex.addSuppressed(rollbackEx);
+            }
             throw ex;
         }
     }
