@@ -1,11 +1,6 @@
 package codex.codex.api.model.entity;
 
-import codex.codex.api.model.identity.ContentItemId;
-import codex.codex.api.model.identity.ContentItemKey;
-import codex.codex.api.model.identity.ContentTypeKey;
-import codex.codex.api.model.identity.ContentTypeVersionId;
-import codex.codex.api.model.identity.FieldKey;
-import codex.codex.api.model.identity.SiteKey;
+import codex.codex.api.model.identity.*;
 import codex.codex.api.model.value.ContentItemStatus;
 import codex.fundamentum.api.model.ActorId;
 import org.junit.jupiter.api.Test;
@@ -209,45 +204,29 @@ class ContentItemFoundationTest {
     }
 
     @Test
-    void contentItem_defaultsValuesToEmptyMap() {
+    void contentItem_allowsNullCurrentWorkingRevisionId() {
         final ContentItem item = minimalBuilder().build();
-        assertNotNull(item.values());
-        assertTrue(item.values().isEmpty());
+        assertNull(item.currentWorkingRevisionId());
     }
 
     @Test
-    void contentItem_defensivelyCopiesValues() {
-        final Map<FieldKey, Object> mutable = new HashMap<>();
-        mutable.put(FieldKey.of("title"), "Hello");
-        final ContentItem item = minimalBuilder().values(mutable).build();
-
-        mutable.put(FieldKey.of("summary"), "Extra");
-        assertEquals(1, item.values().size());
+    void contentItem_allowsNullCurrentPublishedRevisionId() {
+        final ContentItem item = minimalBuilder().build();
+        assertNull(item.currentPublishedRevisionId());
     }
 
     @Test
-    void contentItem_valuesAccessorIsImmutable() {
+    void contentItem_supportsRevisionPointers() {
+        final ContentRevisionId workingId = ContentRevisionId.of("working");
+        final ContentRevisionId publishedId = ContentRevisionId.of("published");
+        
         final ContentItem item = minimalBuilder()
-                .values(Map.of(FieldKey.of("title"), "Hello"))
+                .currentWorkingRevisionId(workingId)
+                .currentPublishedRevisionId(publishedId)
                 .build();
-        assertThrows(UnsupportedOperationException.class,
-                () -> item.values().put(FieldKey.of("other"), "x"));
-    }
-
-    @Test
-    void contentItem_rejectsNullValueMapKey() {
-        final Map<FieldKey, Object> badValues = new HashMap<>();
-        badValues.put(null, "some-value");
-        assertThrows(NullPointerException.class,
-                () -> minimalBuilder().values(badValues).build());
-    }
-
-    @Test
-    void contentItem_rejectsNullValueMapValue() {
-        final Map<FieldKey, Object> badValues = new HashMap<>();
-        badValues.put(FieldKey.of("title"), null);
-        assertThrows(NullPointerException.class,
-                () -> minimalBuilder().values(badValues).build());
+                
+        assertEquals(workingId, item.currentWorkingRevisionId());
+        assertEquals(publishedId, item.currentPublishedRevisionId());
     }
 
     @Test
@@ -285,6 +264,7 @@ class ContentItemFoundationTest {
     void contentItem_builderSupportsAllFields() {
         final ActorId actorId = ActorId.of("user-1");
         final Instant now = Instant.now();
+        final ContentRevisionId workingId = ContentRevisionId.of("working-1");
         final ContentItem item = ContentItem.builder()
                 .id(sampleId())
                 .siteKey(SiteKey.of("acme"))
@@ -292,7 +272,7 @@ class ContentItemFoundationTest {
                 .contentTypeVersionId(ContentTypeVersionId.of("v1"))
                 .key(ContentItemKey.of("my-post"))
                 .status(ContentItemStatus.PUBLISHED)
-                .values(Map.of(FieldKey.of("title"), "Hello"))
+                .currentWorkingRevisionId(workingId)
                 .owner(actorId)
                 .createdBy(actorId)
                 .updatedBy(actorId)
@@ -301,13 +281,16 @@ class ContentItemFoundationTest {
                 .build();
 
         assertEquals(ContentItemStatus.PUBLISHED, item.status());
-        assertEquals(1, item.values().size());
+        assertEquals(workingId, item.currentWorkingRevisionId());
+        assertNull(item.currentPublishedRevisionId());
     }
 
     @Test
     void contentItem_copyOfPreservesAllFields() {
         final ActorId actorId = ActorId.of("user-1");
         final Instant now = Instant.parse("2025-06-01T10:00:00Z");
+        final ContentRevisionId workingId = ContentRevisionId.of("working-1");
+        final ContentRevisionId publishedId = ContentRevisionId.of("pub-1");
         final ContentItem original = ContentItem.builder()
                 .id(sampleId())
                 .siteKey(SiteKey.of("acme"))
@@ -315,7 +298,8 @@ class ContentItemFoundationTest {
                 .contentTypeVersionId(ContentTypeVersionId.of("v1"))
                 .key(ContentItemKey.of("my-post"))
                 .status(ContentItemStatus.DRAFT)
-                .values(Map.of(FieldKey.of("title"), "Hello World"))
+                .currentWorkingRevisionId(workingId)
+                .currentPublishedRevisionId(publishedId)
                 .owner(actorId)
                 .createdBy(actorId)
                 .updatedBy(actorId)
@@ -331,7 +315,8 @@ class ContentItemFoundationTest {
         assertEquals(original.contentTypeVersionId(), copy.contentTypeVersionId());
         assertEquals(original.key(), copy.key());
         assertEquals(original.status(), copy.status());
-        assertEquals(original.values(), copy.values());
+        assertEquals(original.currentWorkingRevisionId(), copy.currentWorkingRevisionId());
+        assertEquals(original.currentPublishedRevisionId(), copy.currentPublishedRevisionId());
         assertEquals(original.owner(), copy.owner());
         assertEquals(original.createdBy(), copy.createdBy());
         assertEquals(original.updatedBy(), copy.updatedBy());

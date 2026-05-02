@@ -4,6 +4,7 @@ import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
 import codex.codex.internal.repository.MemoryContentItemRepository;
+import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.codex.internal.repository.MemorySiteRepository;
@@ -111,8 +112,9 @@ public final class CodexRuntime implements AutoCloseable {
         final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
 
         final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
+        final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
         final ContentItemService contentItemService = new EventPublishingContentItemService(
-                new CodexContentItemService(contentItemRepository, contentTypeRepository, contentTypeVersionRepository, clock),
+                new CodexContentItemService(contentItemRepository, revisionRepository, contentTypeRepository, contentTypeVersionRepository, clock),
                 deferredDispatcher,
                 clock);
 

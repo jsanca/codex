@@ -76,7 +76,8 @@ class ContentItemRuntimeIntegrationTest {
         assertEquals(siteKey, item.siteKey());
         assertEquals(contentTypeKey, item.contentTypeKey());
         assertNotNull(item.contentTypeVersionId());
-        assertEquals("Welcome to Codex", item.values().get(titleKey));
+        assertNotNull(item.currentWorkingRevisionId());
+        assertNull(item.currentPublishedRevisionId());
         assertEquals(actor.id(), item.owner());
         assertEquals(actor.id(), item.createdBy());
     }

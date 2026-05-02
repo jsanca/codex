@@ -16,6 +16,7 @@ import codex.codex.api.model.value.ContentTypeStatus;
 import codex.codex.api.model.value.ContentTypeVersionStatus;
 import codex.codex.api.model.value.FieldType;
 import codex.codex.internal.repository.MemoryContentItemRepository;
+import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.fundamentum.api.exception.NotFoundException;
@@ -46,6 +47,7 @@ class CodexContentItemServiceTest {
     private static final Actor ACTOR = Actor.system("test");
 
     private MemoryContentItemRepository itemRepository;
+    private MemoryContentRevisionRepository revisionRepository;
     private MemoryContentTypeRepository contentTypeRepository;
     private MemoryContentTypeVersionRepository versionRepository;
     private CodexContentItemService service;
@@ -54,10 +56,11 @@ class CodexContentItemServiceTest {
     @BeforeEach
     void setUp() {
         itemRepository = new MemoryContentItemRepository();
+        revisionRepository = new MemoryContentRevisionRepository();
         contentTypeRepository = new MemoryContentTypeRepository();
         versionRepository = new MemoryContentTypeVersionRepository();
         clock = Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC);
-        service = new CodexContentItemService(itemRepository, contentTypeRepository, versionRepository, clock);
+        service = new CodexContentItemService(itemRepository, revisionRepository, contentTypeRepository, versionRepository, clock);
     }
 
     /**
@@ -192,15 +195,22 @@ class CodexContentItemServiceTest {
     }
 
     @Test
-    void createShouldPreserveProvidedFieldValues() {
+    void createShouldPreserveProvidedFieldValuesInFirstRevision() {
         setupActiveContentType(SITE_ACME, BLOG_POST);
         final ContentItem item = service.create(
                 CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
                         Map.of(TITLE_KEY, "Hello World", BODY_KEY, "Content body here")),
                 ACTOR);
 
-        assertEquals("Hello World", item.values().get(TITLE_KEY));
-        assertEquals("Content body here", item.values().get(BODY_KEY));
+        assertNotNull(item.currentWorkingRevisionId());
+        final codex.codex.api.model.entity.ContentRevision revision = revisionRepository.findById(item.currentWorkingRevisionId()).orElseThrow();
+        assertEquals("Hello World", revision.values().get(TITLE_KEY));
+        assertEquals("Content body here", revision.values().get(BODY_KEY));
+        assertEquals(1, revision.revisionNumber());
+        assertEquals(codex.codex.api.model.value.ContentRevisionStatus.WORKING, revision.status());
+        assertEquals(item.id(), revision.contentItemId());
+        assertEquals(item.contentTypeVersionId(), revision.contentTypeVersionId());
+        assertEquals(ACTOR.id(), revision.createdBy());
     }
 
     @Test

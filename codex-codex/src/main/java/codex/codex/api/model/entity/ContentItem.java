@@ -2,31 +2,31 @@ package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
+import codex.codex.api.model.identity.ContentRevisionId;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
-import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentItemStatus;
 import codex.fundamentum.api.model.ActorId;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Objects;
 
 /**
- * A content entry created from a published {@link ContentTypeVersion}.
+ * The stable logical identity of a content entry in Codex.
  * <p>
  * A {@code ContentItem} belongs to the composite identity: {@code siteKey + contentTypeKey + key}.
- * <p>
  * It references a stable, immutable {@link ContentTypeVersion} via {@link #contentTypeVersionId()},
- * ensuring that field validation happens against a frozen schema snapshot rather than the
- * mutable draft schema in {@link ContentType#fields()}.
+ * ensuring that field validation happened against a frozen schema snapshot at creation time.
  * <p>
- * Values are stored as {@code Map<FieldKey, Object>} and validated on creation against the
- * referenced {@code ContentTypeVersion.fields}. Type validation beyond unknown-field and
- * missing-required-field checks is future work.
+ * Content values are not stored here. They live in {@link ContentRevision}:
+ * <ul>
+ *   <li>{@link #currentWorkingRevisionId()} — points to the current draft/working revision</li>
+ *   <li>{@link #currentPublishedRevisionId()} — points to the live published revision; null for DRAFT items</li>
+ * </ul>
  * <p>
- * Content revisions, workflow, localization, and event publishing are not part of this record.
+ * Creating a content item creates revision {@code 1} as {@code WORKING} and sets
+ * {@link #currentWorkingRevisionId()} to that revision. Publish/unpublish behavior is future work.
  */
 public record ContentItem(
         ContentItemId id,
@@ -35,7 +35,8 @@ public record ContentItem(
         ContentTypeVersionId contentTypeVersionId,
         ContentItemKey key,
         ContentItemStatus status,
-        Map<FieldKey, Object> values,
+        ContentRevisionId currentWorkingRevisionId,
+        ContentRevisionId currentPublishedRevisionId,
         ActorId owner,
         ActorId createdBy,
         ActorId updatedBy,
@@ -46,18 +47,19 @@ public record ContentItem(
     /**
      * Canonical constructor for {@link ContentItem}.
      *
-     * @param id                  unique identifier; must not be null
-     * @param siteKey             the site scope; must not be null
-     * @param contentTypeKey      the content type key; must not be null
-     * @param contentTypeVersionId the schema snapshot version; must not be null
-     * @param key                 the item key within site+contentType scope; must not be null
-     * @param status              defaults to {@link ContentItemStatus#DRAFT} if null
-     * @param values              field values; defaults to empty map if null; defensive copy applied
-     * @param owner               the owning actor; must not be null
-     * @param createdBy           the creating actor; must not be null
-     * @param updatedBy           the last updating actor; must not be null
-     * @param createdAt           creation timestamp; defaults to {@link Instant#now()} if null
-     * @param updatedAt           update timestamp; defaults to {@code createdAt} if null
+     * @param id                       unique identifier; must not be null
+     * @param siteKey                  the site scope; must not be null
+     * @param contentTypeKey           the content type key; must not be null
+     * @param contentTypeVersionId     the schema snapshot version; must not be null
+     * @param key                      the item key within site+contentType scope; must not be null
+     * @param status                   defaults to {@link ContentItemStatus#DRAFT} if null
+     * @param currentWorkingRevisionId pointer to the current working revision; may be null during staged construction
+     * @param currentPublishedRevisionId pointer to the live published revision; null for DRAFT items
+     * @param owner                    the owning actor; must not be null
+     * @param createdBy                the creating actor; must not be null
+     * @param updatedBy                the last updating actor; must not be null
+     * @param createdAt                creation timestamp; defaults to {@link Instant#now()} if null
+     * @param updatedAt                update timestamp; defaults to {@code createdAt} if null
      */
     public ContentItem {
         Objects.requireNonNull(id, "ContentItem id cannot be null");
@@ -68,15 +70,7 @@ public record ContentItem(
         if (status == null) {
             status = ContentItemStatus.DRAFT;
         }
-        if (values == null) {
-            values = Map.of();
-        } else {
-            for (final var entry : values.entrySet()) {
-                Objects.requireNonNull(entry.getKey(), "values map key cannot be null");
-                Objects.requireNonNull(entry.getValue(), "values map value cannot be null");
-            }
-            values = Map.copyOf(values);
-        }
+        // currentWorkingRevisionId and currentPublishedRevisionId are intentionally nullable
         Objects.requireNonNull(owner, "ContentItem owner cannot be null");
         Objects.requireNonNull(createdBy, "ContentItem createdBy cannot be null");
         Objects.requireNonNull(updatedBy, "ContentItem updatedBy cannot be null");
@@ -108,7 +102,8 @@ public record ContentItem(
                 .contentTypeVersionId(item.contentTypeVersionId())
                 .key(item.key())
                 .status(item.status())
-                .values(item.values())
+                .currentWorkingRevisionId(item.currentWorkingRevisionId())
+                .currentPublishedRevisionId(item.currentPublishedRevisionId())
                 .owner(item.owner())
                 .createdBy(item.createdBy())
                 .updatedBy(item.updatedBy())
@@ -125,7 +120,8 @@ public record ContentItem(
                 ", contentTypeVersionId=" + contentTypeVersionId +
                 ", key=" + key +
                 ", status=" + status +
-                ", values=" + values.size() +
+                ", currentWorkingRevisionId=" + currentWorkingRevisionId +
+                ", currentPublishedRevisionId=" + currentPublishedRevisionId +
                 ", owner=" + owner +
                 ", createdBy=" + createdBy +
                 ", updatedBy=" + updatedBy +
@@ -144,7 +140,8 @@ public record ContentItem(
         private ContentTypeVersionId contentTypeVersionId;
         private ContentItemKey key;
         private ContentItemStatus status;
-        private Map<FieldKey, Object> values;
+        private ContentRevisionId currentWorkingRevisionId;
+        private ContentRevisionId currentPublishedRevisionId;
         private ActorId owner;
         private ActorId createdBy;
         private ActorId updatedBy;
@@ -157,7 +154,8 @@ public record ContentItem(
         public Builder contentTypeVersionId(ContentTypeVersionId contentTypeVersionId) { this.contentTypeVersionId = contentTypeVersionId; return this; }
         public Builder key(ContentItemKey key) { this.key = key; return this; }
         public Builder status(ContentItemStatus status) { this.status = status; return this; }
-        public Builder values(Map<FieldKey, Object> values) { this.values = values; return this; }
+        public Builder currentWorkingRevisionId(ContentRevisionId id) { this.currentWorkingRevisionId = id; return this; }
+        public Builder currentPublishedRevisionId(ContentRevisionId id) { this.currentPublishedRevisionId = id; return this; }
         public Builder owner(ActorId owner) { this.owner = owner; return this; }
         public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
         public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
@@ -171,7 +169,8 @@ public record ContentItem(
          */
         public ContentItem build() {
             return new ContentItem(id, siteKey, contentTypeKey, contentTypeVersionId,
-                    key, status, values, owner, createdBy, updatedBy, createdAt, updatedAt);
+                    key, status, currentWorkingRevisionId, currentPublishedRevisionId,
+                    owner, createdBy, updatedBy, createdAt, updatedAt);
         }
     }
 }

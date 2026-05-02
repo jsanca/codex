@@ -2,20 +2,24 @@ package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
+import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.entity.ContentTypeVersion;
 import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
+import codex.codex.api.model.identity.ContentRevisionId;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.value.ContentItemStatus;
+import codex.codex.api.model.value.ContentRevisionStatus;
 import codex.codex.api.model.value.ContentTypeStatus;
 import codex.codex.api.model.value.ContentTypeVersionStatus;
 import codex.codex.internal.repository.ContentItemRepository;
+import codex.codex.internal.repository.ContentRevisionRepository;
 import codex.codex.internal.repository.ContentTypeRepository;
 import codex.codex.internal.repository.ContentTypeVersionRepository;
 import codex.fundamentum.api.exception.NotFoundException;
@@ -24,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,14 +41,16 @@ import java.util.Optional;
  * that field checks happen against an immutable schema snapshot rather than the mutable
  * draft schema in {@link ContentType#fields()}.
  * <p>
- * Current validation: unknown fields and missing required fields.
- * Type validation, constraints, and revisions are future work.
+ * Creating a content item creates revision {@code 1} as {@link ContentRevisionStatus#WORKING}
+ * and sets {@link ContentItem#currentWorkingRevisionId()} to that revision.
+ * {@link ContentItem#currentPublishedRevisionId()} is null until publishing is implemented.
  */
 public final class CodexContentItemService implements ContentItemService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CodexContentItemService.class);
 
     private final ContentItemRepository repository;
+    private final ContentRevisionRepository revisionRepository;
     private final ContentTypeRepository contentTypeRepository;
     private final ContentTypeVersionRepository contentTypeVersionRepository;
     private final Clock clock;
@@ -51,16 +58,19 @@ public final class CodexContentItemService implements ContentItemService {
     /**
      * Creates a new {@link CodexContentItemService}.
      *
-     * @param repository                  the content item repository; must not be null
-     * @param contentTypeRepository       the content type repository; must not be null
+     * @param repository                   the content item repository; must not be null
+     * @param revisionRepository           the content revision repository; must not be null
+     * @param contentTypeRepository        the content type repository; must not be null
      * @param contentTypeVersionRepository the content type version repository; must not be null
-     * @param clock                       the clock for timestamp generation; must not be null
+     * @param clock                        the clock for timestamp generation; must not be null
      */
     public CodexContentItemService(final ContentItemRepository repository,
+                                    final ContentRevisionRepository revisionRepository,
                                     final ContentTypeRepository contentTypeRepository,
                                     final ContentTypeVersionRepository contentTypeVersionRepository,
                                     final Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
+        this.revisionRepository = Objects.requireNonNull(revisionRepository, "revisionRepository must not be null");
         this.contentTypeRepository = Objects.requireNonNull(contentTypeRepository, "contentTypeRepository must not be null");
         this.contentTypeVersionRepository = Objects.requireNonNull(contentTypeVersionRepository, "contentTypeVersionRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -87,25 +97,48 @@ public final class CodexContentItemService implements ContentItemService {
 
         validateValues(command.values(), version, command.contentTypeKey());
 
+        final ContentItemId itemId = ContentItemId.forItem(command.siteKey(), command.contentTypeKey(), command.key());
+        final ContentRevisionId revisionId = ContentRevisionId.forRevision(
+                command.siteKey(), command.contentTypeKey(), command.key(), 1);
+        final Instant now = clock.instant();
+
         final ContentItem item = ContentItem.builder()
-                .id(ContentItemId.forItem(command.siteKey(), command.contentTypeKey(), command.key()))
+                .id(itemId)
                 .siteKey(command.siteKey())
                 .contentTypeKey(command.contentTypeKey())
                 .contentTypeVersionId(versionId)
                 .key(command.key())
                 .status(ContentItemStatus.DRAFT)
-                .values(command.values())
+                .currentWorkingRevisionId(revisionId)
+                .currentPublishedRevisionId(null)
                 .owner(actor.id())
                 .createdBy(actor.id())
                 .updatedBy(actor.id())
-                .createdAt(clock.instant())
-                .updatedAt(clock.instant())
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
 
-        LOGGER.info("Created content item {}/{}/{} by actor: {}",
+        final ContentRevision revision = ContentRevision.builder()
+                .id(revisionId)
+                .contentItemId(itemId)
+                .siteKey(command.siteKey())
+                .contentTypeKey(command.contentTypeKey())
+                .contentTypeVersionId(versionId)
+                .contentItemKey(command.key())
+                .revisionNumber(1)
+                .status(ContentRevisionStatus.WORKING)
+                .values(command.values())
+                .createdBy(actor.id())
+                .createdAt(now)
+                .build();
+
+        revisionRepository.save(revision);
+        final ContentItem saved = repository.save(item);
+
+        LOGGER.info("Created content item {}/{}/{} (revision 1) by actor: {}",
                 command.siteKey(), command.contentTypeKey(), command.key(), actor);
 
-        return repository.save(item);
+        return saved;
     }
 
     @Override
