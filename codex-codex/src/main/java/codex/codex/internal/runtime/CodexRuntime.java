@@ -7,6 +7,7 @@ import codex.codex.internal.repository.MemorySiteRepository;
 import codex.codex.internal.service.CodexContentTypeService;
 import codex.codex.internal.service.CodexSiteService;
 import codex.codex.internal.service.DeferredEventDispatcher;
+import codex.codex.internal.service.EventPublishingContentTypeService;
 import codex.codex.internal.service.EventPublishingSiteService;
 import codex.codex.internal.service.SiteIdentityGenerator;
 import codex.fundamentum.api.concurrent.CodexExecutor;
@@ -73,6 +74,7 @@ public final class CodexRuntime implements AutoCloseable {
      *
      * MemoryContentTypeRepository
      *   ← CodexContentTypeService
+     *     ← EventPublishingContentTypeService
      * </pre>
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
@@ -91,7 +93,8 @@ public final class CodexRuntime implements AutoCloseable {
         final SiteService siteService = new EventPublishingSiteService(coreSiteService, deferredDispatcher, clock);
 
         final MemoryContentTypeRepository contentTypeRepository = new MemoryContentTypeRepository();
-        final ContentTypeService contentTypeService = new CodexContentTypeService(contentTypeRepository, clock);
+        final CodexContentTypeService coreContentTypeService = new CodexContentTypeService(contentTypeRepository, clock);
+        final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
 
         return new CodexRuntime(siteService, contentTypeService, deferredDispatcher, recorder, asyncExecutor, clock);
     }
