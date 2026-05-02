@@ -1,5 +1,6 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
 import codex.codex.internal.runtime.CodexRuntime;
@@ -47,6 +48,15 @@ public final class TestCodexContext {
      */
     public ContentTypeService contentTypeService() {
         return runtime.contentTypeService();
+    }
+
+    /**
+     * Returns the wired {@link ContentItemService} entry point.
+     *
+     * @return the content item service
+     */
+    public ContentItemService contentItemService() {
+        return runtime.contentItemService();
     }
 
     /**

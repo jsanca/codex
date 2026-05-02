@@ -8,6 +8,7 @@ import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.codex.internal.repository.MemorySiteRepository;
 import codex.codex.internal.service.CodexContentItemService;
+import codex.codex.internal.service.EventPublishingContentItemService;
 import codex.codex.internal.service.CodexContentTypeService;
 import codex.codex.internal.service.CodexSiteService;
 import codex.codex.internal.service.DeferredEventDispatcher;
@@ -85,6 +86,7 @@ public final class CodexRuntime implements AutoCloseable {
      *
      * MemoryContentItemRepository
      *   ← CodexContentItemService
+     *     ← EventPublishingContentItemService
      * </pre>
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
@@ -109,8 +111,10 @@ public final class CodexRuntime implements AutoCloseable {
         final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
 
         final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
-        final ContentItemService contentItemService = new CodexContentItemService(
-                contentItemRepository, contentTypeRepository, contentTypeVersionRepository, clock);
+        final ContentItemService contentItemService = new EventPublishingContentItemService(
+                new CodexContentItemService(contentItemRepository, contentTypeRepository, contentTypeVersionRepository, clock),
+                deferredDispatcher,
+                clock);
 
         return new CodexRuntime(siteService, contentTypeService, contentItemService, deferredDispatcher, recorder, asyncExecutor, clock);
     }
