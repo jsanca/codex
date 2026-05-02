@@ -1,82 +1,137 @@
 package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.ContentItemId;
-import codex.codex.api.model.identity.ContentTypeId;
+import codex.codex.api.model.identity.ContentItemKey;
+import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
-import codex.codex.api.model.identity.ContentRevisionId;
-import codex.codex.api.model.identity.SiteId;
-import codex.codex.api.model.identity.VariantGroupId;
 import codex.codex.api.model.identity.FieldKey;
-import codex.codex.api.model.value.Locale;
+import codex.codex.api.model.identity.SiteKey;
+import codex.codex.api.model.value.ContentItemStatus;
+import codex.fundamentum.api.model.ActorId;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Represents a content entry in Codex.
+ * A content entry created from a published {@link ContentTypeVersion}.
  * <p>
- * A content item is specific to a site and a locale, and is linked to a content type.
+ * A {@code ContentItem} belongs to the composite identity: {@code siteKey + contentTypeKey + key}.
+ * <p>
+ * It references a stable, immutable {@link ContentTypeVersion} via {@link #contentTypeVersionId()},
+ * ensuring that field validation happens against a frozen schema snapshot rather than the
+ * mutable draft schema in {@link ContentType#fields()}.
+ * <p>
+ * Values are stored as {@code Map<FieldKey, Object>} and validated on creation against the
+ * referenced {@code ContentTypeVersion.fields}. Type validation beyond unknown-field and
+ * missing-required-field checks is future work.
+ * <p>
+ * Content revisions, workflow, localization, and event publishing are not part of this record.
  */
 public record ContentItem(
-    ContentItemId id,
-    SiteId siteId,
-    ContentTypeId contentTypeId,
-    ContentTypeVersionId contentTypeVersionId,
-    VariantGroupId variantGroupId,
-    Locale locale,
-    ContentRevisionId currentLiveRevisionId,
-    ContentRevisionId currentWorkingRevisionId,
-    Map<FieldKey, Object> attributes,
-    Instant createdAt
+        ContentItemId id,
+        SiteKey siteKey,
+        ContentTypeKey contentTypeKey,
+        ContentTypeVersionId contentTypeVersionId,
+        ContentItemKey key,
+        ContentItemStatus status,
+        Map<FieldKey, Object> values,
+        ActorId owner,
+        ActorId createdBy,
+        ActorId updatedBy,
+        Instant createdAt,
+        Instant updatedAt
 ) {
+
     /**
-     * Canonical constructor for ContentItem.
-     * 
-     * @param id the unique content item identifier, cannot be null
-     * @param siteId the owner site identifier, cannot be null
-     * @param contentTypeId the identifier of the content type, cannot be null
-     * @param contentTypeVersionId the identifier of the current schema version, cannot be null
-     * @param variantGroupId the variant group identifier, cannot be null
-     * @param locale the locale of this item, cannot be null
-     * @param currentLiveRevisionId optional identifier of the live revision
-     * @param currentWorkingRevisionId optional identifier of the current working revision
-     * @param attributes extensible metadata, defaults to empty map if null
-     * @param createdAt the creation timestamp, defaults to now if null
+     * Canonical constructor for {@link ContentItem}.
+     *
+     * @param id                  unique identifier; must not be null
+     * @param siteKey             the site scope; must not be null
+     * @param contentTypeKey      the content type key; must not be null
+     * @param contentTypeVersionId the schema snapshot version; must not be null
+     * @param key                 the item key within site+contentType scope; must not be null
+     * @param status              defaults to {@link ContentItemStatus#DRAFT} if null
+     * @param values              field values; defaults to empty map if null; defensive copy applied
+     * @param owner               the owning actor; must not be null
+     * @param createdBy           the creating actor; must not be null
+     * @param updatedBy           the last updating actor; must not be null
+     * @param createdAt           creation timestamp; defaults to {@link Instant#now()} if null
+     * @param updatedAt           update timestamp; defaults to {@code createdAt} if null
      */
     public ContentItem {
         Objects.requireNonNull(id, "ContentItem id cannot be null");
-        Objects.requireNonNull(siteId, "ContentItem siteId cannot be null");
-        Objects.requireNonNull(contentTypeId, "ContentItem contentTypeId cannot be null");
+        Objects.requireNonNull(siteKey, "ContentItem siteKey cannot be null");
+        Objects.requireNonNull(contentTypeKey, "ContentItem contentTypeKey cannot be null");
         Objects.requireNonNull(contentTypeVersionId, "ContentItem contentTypeVersionId cannot be null");
-        Objects.requireNonNull(variantGroupId, "ContentItem variantGroupId cannot be null");
-        Objects.requireNonNull(locale, "ContentItem locale cannot be null");
-        attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+        Objects.requireNonNull(key, "ContentItem key cannot be null");
+        if (status == null) {
+            status = ContentItemStatus.DRAFT;
+        }
+        if (values == null) {
+            values = Map.of();
+        } else {
+            for (final var entry : values.entrySet()) {
+                Objects.requireNonNull(entry.getKey(), "values map key cannot be null");
+                Objects.requireNonNull(entry.getValue(), "values map value cannot be null");
+            }
+            values = Map.copyOf(values);
+        }
+        Objects.requireNonNull(owner, "ContentItem owner cannot be null");
+        Objects.requireNonNull(createdBy, "ContentItem createdBy cannot be null");
+        Objects.requireNonNull(updatedBy, "ContentItem updatedBy cannot be null");
         createdAt = createdAt == null ? Instant.now() : createdAt;
+        updatedAt = updatedAt == null ? createdAt : updatedAt;
+    }
+
+    /**
+     * Creates a new {@link Builder} for {@link ContentItem}.
+     *
+     * @return a new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Creates a pre-populated {@link Builder} from an existing {@link ContentItem}.
+     *
+     * @param item the source; must not be null
+     * @return a builder pre-populated with all fields from {@code item}
+     */
+    public static Builder copyOf(final ContentItem item) {
+        Objects.requireNonNull(item, "item cannot be null");
+        return builder()
+                .id(item.id())
+                .siteKey(item.siteKey())
+                .contentTypeKey(item.contentTypeKey())
+                .contentTypeVersionId(item.contentTypeVersionId())
+                .key(item.key())
+                .status(item.status())
+                .values(item.values())
+                .owner(item.owner())
+                .createdBy(item.createdBy())
+                .updatedBy(item.updatedBy())
+                .createdAt(item.createdAt())
+                .updatedAt(item.updatedAt());
     }
 
     @Override
     public String toString() {
         return "ContentItem{" +
                 "id=" + id +
-                ", siteId=" + siteId +
-                ", contentTypeId=" + contentTypeId +
+                ", siteKey=" + siteKey +
+                ", contentTypeKey=" + contentTypeKey +
                 ", contentTypeVersionId=" + contentTypeVersionId +
-                ", variantGroupId=" + variantGroupId +
-                ", locale=" + locale +
-                ", currentLiveRevisionId=" + currentLiveRevisionId +
-                ", currentWorkingRevisionId=" + currentWorkingRevisionId +
-                ", attributes=" + attributes +
+                ", key=" + key +
+                ", status=" + status +
+                ", values=" + values.size() +
+                ", owner=" + owner +
+                ", createdBy=" + createdBy +
+                ", updatedBy=" + updatedBy +
                 ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
                 '}';
-    }
-
-    /**
-     * Creates a new builder for ContentItem.
-     * 
-     * @return a new Builder instance
-     */
-    public static Builder builder() {
-        return new Builder();
     }
 
     /**
@@ -84,61 +139,39 @@ public record ContentItem(
      */
     public static class Builder {
         private ContentItemId id;
-        private SiteId siteId;
-        private ContentTypeId contentTypeId;
+        private SiteKey siteKey;
+        private ContentTypeKey contentTypeKey;
         private ContentTypeVersionId contentTypeVersionId;
-        private VariantGroupId variantGroupId;
-        private Locale locale;
-        private ContentRevisionId currentLiveRevisionId;
-        private ContentRevisionId currentWorkingRevisionId;
-        private Map<FieldKey, Object> attributes;
+        private ContentItemKey key;
+        private ContentItemStatus status;
+        private Map<FieldKey, Object> values;
+        private ActorId owner;
+        private ActorId createdBy;
+        private ActorId updatedBy;
         private Instant createdAt;
+        private Instant updatedAt;
 
         public Builder id(ContentItemId id) { this.id = id; return this; }
-        public Builder siteId(SiteId siteId) { this.siteId = siteId; return this; }
-        public Builder contentTypeId(ContentTypeId contentTypeId) { this.contentTypeId = contentTypeId; return this; }
+        public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
+        public Builder contentTypeKey(ContentTypeKey contentTypeKey) { this.contentTypeKey = contentTypeKey; return this; }
         public Builder contentTypeVersionId(ContentTypeVersionId contentTypeVersionId) { this.contentTypeVersionId = contentTypeVersionId; return this; }
-        public Builder variantGroupId(VariantGroupId variantGroupId) { this.variantGroupId = variantGroupId; return this; }
-        public Builder locale(Locale locale) { this.locale = locale; return this; }
-        public Builder currentLiveRevisionId(ContentRevisionId currentLiveRevisionId) { this.currentLiveRevisionId = currentLiveRevisionId; return this; }
-        public Builder currentWorkingRevisionId(ContentRevisionId currentWorkingRevisionId) { this.currentWorkingRevisionId = currentWorkingRevisionId; return this; }
-        public Builder attributes(Map<FieldKey, Object> attributes) { this.attributes = attributes; return this; }
-
-        /**
-         * Sets attributes from a map of raw strings.
-         * 
-         * @param attributes the map of raw attribute strings
-         * @return this builder
-         */
-        public Builder attributesFromStrings(Map<String, Object> attributes) {
-            this.attributes = attributes == null ? null : attributes.entrySet().stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            entry -> FieldKey.of(entry.getKey()),
-                            Map.Entry::getValue
-                    ));
-            return this;
-        }
-
+        public Builder key(ContentItemKey key) { this.key = key; return this; }
+        public Builder status(ContentItemStatus status) { this.status = status; return this; }
+        public Builder values(Map<FieldKey, Object> values) { this.values = values; return this; }
+        public Builder owner(ActorId owner) { this.owner = owner; return this; }
+        public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
+        public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+        public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
 
         /**
-         * Builds a new ContentItem instance.
-         * 
-         * @return a new ContentItem instance
+         * Builds a new {@link ContentItem} instance.
+         *
+         * @return a validated {@code ContentItem}
          */
         public ContentItem build() {
-            return new ContentItem(
-                id,
-                siteId,
-                contentTypeId,
-                contentTypeVersionId,
-                variantGroupId,
-                locale,
-                currentLiveRevisionId,
-                currentWorkingRevisionId,
-                attributes,
-                createdAt
-            );
+            return new ContentItem(id, siteKey, contentTypeKey, contentTypeVersionId,
+                    key, status, values, owner, createdBy, updatedBy, createdAt, updatedAt);
         }
     }
 }

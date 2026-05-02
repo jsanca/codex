@@ -1,0 +1,1585 @@
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+index f365f45..57f3d87 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentType.java
+@@ -2,6 +2,7 @@ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeStatus;
+@@ -35,7 +36,9 @@ public record ContentType(
+         ActorId updatedBy,
+         Instant createdAt,
+         Instant updatedAt,
+-        Map<FieldKey, Field> fields
++        Map<FieldKey, Field> fields,
++        ContentTypeVersionId latestPublishedVersionId,
++        Integer latestPublishedVersion
+ ) {
+ 
+     /**
+@@ -49,9 +52,11 @@ public record ContentType(
+      * @param owner       the actor that owns this content type; must not be null
+      * @param createdBy   the actor that created this content type; must not be null
+      * @param updatedBy   the actor that last updated this content type; must not be null
+-     * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
+-     * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
+-     * @param fields      field schema; defaults to empty map if null; map keys must match field keys
++     * @param createdAt                  creation timestamp; defaults to {@link Instant#now()} if null
++     * @param updatedAt                  last-update timestamp; defaults to {@code createdAt} if null
++     * @param fields                     field schema; defaults to empty map if null; map keys must match field keys
++     * @param latestPublishedVersionId   the id of the latest published version; may be null for unpublished types
++     * @param latestPublishedVersion     the latest published version number (>= 1 if set); may be null for unpublished types
+      */
+     public ContentType {
+         Objects.requireNonNull(id, "ContentType id cannot be null");
+@@ -82,6 +87,9 @@ public record ContentType(
+             }
+             fields = Map.copyOf(fields);
+         }
++        if (latestPublishedVersion != null && latestPublishedVersion < 1) {
++            throw new IllegalArgumentException("latestPublishedVersion must be >= 1 when set");
++        }
+     }
+ 
+     /**
+@@ -113,7 +121,9 @@ public record ContentType(
+                 .updatedBy(contentType.updatedBy())
+                 .createdAt(contentType.createdAt())
+                 .updatedAt(contentType.updatedAt())
+-                .fields(contentType.fields());
++                .fields(contentType.fields())
++                .latestPublishedVersionId(contentType.latestPublishedVersionId())
++                .latestPublishedVersion(contentType.latestPublishedVersion());
+     }
+ 
+     @Override
+@@ -130,6 +140,8 @@ public record ContentType(
+                 ", createdAt=" + createdAt +
+                 ", updatedAt=" + updatedAt +
+                 ", fields=" + fields.size() +
++                ", latestPublishedVersionId=" + latestPublishedVersionId +
++                ", latestPublishedVersion=" + latestPublishedVersion +
+                 '}';
+     }
+ 
+@@ -148,6 +160,8 @@ public record ContentType(
+         private Instant createdAt;
+         private Instant updatedAt;
+         private Map<FieldKey, Field> fields;
++        private ContentTypeVersionId latestPublishedVersionId;
++        private Integer latestPublishedVersion;
+ 
+         public Builder id(ContentTypeId id) { this.id = id; return this; }
+         public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
+@@ -160,6 +174,8 @@ public record ContentType(
+         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
+         public Builder fields(Map<FieldKey, Field> fields) { this.fields = fields; return this; }
++        public Builder latestPublishedVersionId(ContentTypeVersionId id) { this.latestPublishedVersionId = id; return this; }
++        public Builder latestPublishedVersion(Integer version) { this.latestPublishedVersion = version; return this; }
+ 
+         /**
+          * Builds a new {@link ContentType} instance.
+@@ -168,7 +184,8 @@ public record ContentType(
+          */
+         public ContentType build() {
+             return new ContentType(id, siteKey, key, displayName, status,
+-                    owner, createdBy, updatedBy, createdAt, updatedAt, fields);
++                    owner, createdBy, updatedBy, createdAt, updatedAt, fields,
++                    latestPublishedVersionId, latestPublishedVersion);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentTypeVersion.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentTypeVersion.java
+index 96c687b..d4ea0d4 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentTypeVersion.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentTypeVersion.java
+@@ -1,94 +1,158 @@
+ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentTypeId;
++import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
++import codex.codex.api.model.identity.FieldKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeVersionStatus;
++import codex.fundamentum.api.model.ActorId;
++
+ import java.time.Instant;
+-import java.util.List;
++import java.util.Map;
+ import java.util.Objects;
+ 
+ /**
+- * Represents a specific version of a content type schema.
++ * An immutable published schema snapshot of a {@link ContentType} at a specific version.
++ * <p>
++ * {@code ContentTypeVersion} is created when a content type is activated. It captures
++ * the exact field schema at that point in time. Later changes to {@link ContentType#fields()}
++ * do not affect existing versions.
++ * <p>
++ * Draft schema lives in {@link ContentType#fields()}. Only published (activated) content
++ * types produce a version snapshot.
+  * <p>
+- * This record defines the fields that instances of this type must conform to.
++ * Content items will later reference a {@code ContentTypeVersion} to validate their structure
++ * against a stable, immutable schema.
+  */
+ public record ContentTypeVersion(
+-    ContentTypeVersionId id,
+-    ContentTypeId contentTypeId,
+-    int version,
+-    List<Field> fields,
+-    ContentTypeVersionStatus status,
+-    Instant createdAt
++        ContentTypeVersionId id,
++        ContentTypeId contentTypeId,
++        SiteKey siteKey,
++        ContentTypeKey contentTypeKey,
++        int version,
++        Map<FieldKey, Field> fields,
++        ContentTypeVersionStatus status,
++        ActorId createdBy,
++        Instant createdAt
+ ) {
++
+     /**
+-     * Canonical constructor for ContentTypeVersion.
+-     * 
+-     * @param id the unique content type version identifier, cannot be null
+-     * @param contentTypeId the identifier of the parent content type, cannot be null
+-     * @param version the positive version number
+-     * @param fields the list of field definitions, defaults to empty list if null
+-     * @param status the lifecycle status, defaults to DRAFT if null
+-     * @param createdAt the creation timestamp, defaults to now if null
++     * Canonical constructor for {@link ContentTypeVersion}.
++     *
++     * @param id             unique identifier; must not be null
++     * @param contentTypeId  the parent content type identifier; must not be null
++     * @param siteKey        the site scope; must not be null
++     * @param contentTypeKey the content type key; must not be null
++     * @param version        the positive version number; must be >= 1
++     * @param fields         the schema snapshot; defaults to empty map if null; map keys must match field keys
++     * @param status         lifecycle status; defaults to {@link ContentTypeVersionStatus#PUBLISHED} if null
++     * @param createdBy      the actor that created this version; must not be null
++     * @param createdAt      creation timestamp; defaults to {@link Instant#now()} if null
+      */
+     public ContentTypeVersion {
+         Objects.requireNonNull(id, "ContentTypeVersion id cannot be null");
+         Objects.requireNonNull(contentTypeId, "ContentTypeVersion contentTypeId cannot be null");
++        Objects.requireNonNull(siteKey, "ContentTypeVersion siteKey cannot be null");
++        Objects.requireNonNull(contentTypeKey, "ContentTypeVersion contentTypeKey cannot be null");
+         if (version < 1) {
+-            throw new IllegalArgumentException("Version must be >= 1");
++            throw new IllegalArgumentException("version must be >= 1");
++        }
++        if (fields == null) {
++            fields = Map.of();
++        } else {
++            for (final var entry : fields.entrySet()) {
++                if (!entry.getKey().equals(entry.getValue().key())) {
++                    throw new IllegalArgumentException(
++                            "Map key '" + entry.getKey().value() + "' does not match field key '"
++                                    + entry.getValue().key().value() + "'");
++                }
++            }
++            fields = Map.copyOf(fields);
+         }
+-        fields = fields == null ? List.of() : List.copyOf(fields);
+         if (status == null) {
+-            status = ContentTypeVersionStatus.DRAFT;
++            status = ContentTypeVersionStatus.PUBLISHED;
+         }
++        Objects.requireNonNull(createdBy, "ContentTypeVersion createdBy cannot be null");
+         createdAt = createdAt == null ? Instant.now() : createdAt;
+     }
+ 
++    /**
++     * Creates a new {@link Builder} for {@link ContentTypeVersion}.
++     *
++     * @return a new builder instance
++     */
++    public static Builder builder() {
++        return new Builder();
++    }
++
++    /**
++     * Creates a pre-populated {@link Builder} from an existing {@link ContentTypeVersion}.
++     *
++     * @param version the source; must not be null
++     * @return a builder pre-populated with all fields from {@code version}
++     */
++    public static Builder copyOf(final ContentTypeVersion version) {
++        Objects.requireNonNull(version, "version cannot be null");
++        return builder()
++                .id(version.id())
++                .contentTypeId(version.contentTypeId())
++                .siteKey(version.siteKey())
++                .contentTypeKey(version.contentTypeKey())
++                .version(version.version())
++                .fields(version.fields())
++                .status(version.status())
++                .createdBy(version.createdBy())
++                .createdAt(version.createdAt());
++    }
++
+     @Override
+     public String toString() {
+         return "ContentTypeVersion{" +
+                 "id=" + id +
+                 ", contentTypeId=" + contentTypeId +
++                ", siteKey=" + siteKey +
++                ", contentTypeKey=" + contentTypeKey +
+                 ", version=" + version +
+-                ", fieldKeys=" + fields.stream().map(Field::key).toList() +
++                ", fields=" + fields.size() +
+                 ", status=" + status +
++                ", createdBy=" + createdBy +
+                 ", createdAt=" + createdAt +
+                 '}';
+     }
+ 
+-    /**
+-     * Creates a new builder for ContentTypeVersion.
+-     * 
+-     * @return a new Builder instance
+-     */
+-    public static Builder builder() {
+-        return new Builder();
+-    }
+-
+     /**
+      * Builder for {@link ContentTypeVersion}.
+      */
+     public static class Builder {
+         private ContentTypeVersionId id;
+         private ContentTypeId contentTypeId;
++        private SiteKey siteKey;
++        private ContentTypeKey contentTypeKey;
+         private int version;
+-        private List<Field> fields;
++        private Map<FieldKey, Field> fields;
+         private ContentTypeVersionStatus status;
++        private ActorId createdBy;
+         private Instant createdAt;
+ 
+         public Builder id(ContentTypeVersionId id) { this.id = id; return this; }
+         public Builder contentTypeId(ContentTypeId contentTypeId) { this.contentTypeId = contentTypeId; return this; }
++        public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
++        public Builder contentTypeKey(ContentTypeKey contentTypeKey) { this.contentTypeKey = contentTypeKey; return this; }
+         public Builder version(int version) { this.version = version; return this; }
+-        public Builder fields(List<Field> fields) { this.fields = fields; return this; }
++        public Builder fields(Map<FieldKey, Field> fields) { this.fields = fields; return this; }
+         public Builder status(ContentTypeVersionStatus status) { this.status = status; return this; }
++        public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
+         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+ 
+         /**
+-         * Builds a new ContentTypeVersion instance.
+-         * 
+-         * @return a new ContentTypeVersion instance
++         * Builds a new {@link ContentTypeVersion} instance.
++         *
++         * @return a validated {@code ContentTypeVersion}
+          */
+         public ContentTypeVersion build() {
+-            return new ContentTypeVersion(id, contentTypeId, version, fields, status, createdAt);
++            return new ContentTypeVersion(id, contentTypeId, siteKey, contentTypeKey,
++                    version, fields, status, createdBy, createdAt);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/identity/ContentTypeVersionId.java b/codex-codex/src/main/java/codex/codex/api/model/identity/ContentTypeVersionId.java
+index f3d4f52..b7c11b2 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/identity/ContentTypeVersionId.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/identity/ContentTypeVersionId.java
+@@ -32,10 +32,35 @@ public record ContentTypeVersionId(String value) {
+ 
+     /**
+      * Generates a new ContentTypeVersionId using a random UUID.
+-     * 
++     *
+      * @return a new ContentTypeVersionId instance with a random UUID value
+      */
+     public static ContentTypeVersionId generate() {
+         return new ContentTypeVersionId(UUID.randomUUID().toString());
+     }
++
++    /**
++     * Creates a deterministic {@code ContentTypeVersionId} for a given site scope,
++     * content type key, and version number.
++     * <p>
++     * Format: {@code content-type-version:{siteKey}:{contentTypeKey}:v{version}}
++     * <p>
++     * Example: {@code content-type-version:system:blog-post:v1}
++     *
++     * @param siteKey        the raw site key value; must not be null or blank
++     * @param contentTypeKey the raw content type key value; must not be null or blank
++     * @param version        the version number; must be >= 1
++     * @return a deterministic content type version id
++     */
++    public static ContentTypeVersionId forVersion(final String siteKey,
++                                                   final String contentTypeKey,
++                                                   final int version) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
++        Objects.requireNonNull(contentTypeKey, "contentTypeKey must not be null");
++        if (version < 1) {
++            throw new IllegalArgumentException("version must be >= 1");
++        }
++        return new ContentTypeVersionId(
++                "content-type-version:" + siteKey + ":" + contentTypeKey + ":v" + version);
++    }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/value/ContentTypeVersionStatus.java b/codex-codex/src/main/java/codex/codex/api/model/value/ContentTypeVersionStatus.java
+index 4d790cf..e4c1c45 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/value/ContentTypeVersionStatus.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/value/ContentTypeVersionStatus.java
+@@ -1,15 +1,29 @@
+ package codex.codex.api.model.value;
+ 
+ /**
+- * Defines the lifecycle status of a content type version.
++ * Lifecycle status of a {@link codex.codex.api.model.entity.ContentTypeVersion}.
++ * <p>
++ * Draft schema lives in {@link codex.codex.api.model.entity.ContentType#fields()}.
++ * Versions are only created when a content type is published (activated).
+  */
+ public enum ContentTypeVersionStatus {
+-    /** draft status. */
+-    DRAFT,
+-    /** active status. */
+-    ACTIVE,
+-    /** deprecated status. */
++
++    /**
++     * The schema version is published and is the active snapshot.
++     * It can be referenced by new content items and is usually the latest version
++     * for its content type.
++     */
++    PUBLISHED,
++
++    /**
++     * The schema version is retained and may still be referenced by existing content items,
++     * but should not be used for new content item creation.
++     */
+     DEPRECATED,
+-    /** archived status. */
++
++    /**
++     * The schema version is retained for history or compatibility purposes.
++     * It is not used for normal content creation.
++     */
+     ARCHIVED
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+index f68e9d0..76e73d0 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
++++ b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+@@ -3,6 +3,7 @@ package codex.codex.internal.runtime;
+ import codex.codex.api.model.service.ContentTypeService;
+ import codex.codex.api.model.service.SiteService;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
++import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
+ import codex.codex.internal.repository.MemorySiteRepository;
+ import codex.codex.internal.service.CodexContentTypeService;
+ import codex.codex.internal.service.CodexSiteService;
+@@ -93,7 +94,9 @@ public final class CodexRuntime implements AutoCloseable {
+         final SiteService siteService = new EventPublishingSiteService(coreSiteService, deferredDispatcher, clock);
+ 
+         final MemoryContentTypeRepository contentTypeRepository = new MemoryContentTypeRepository();
+-        final CodexContentTypeService coreContentTypeService = new CodexContentTypeService(contentTypeRepository, clock);
++        final MemoryContentTypeVersionRepository contentTypeVersionRepository = new MemoryContentTypeVersionRepository();
++        final CodexContentTypeService coreContentTypeService = new CodexContentTypeService(
++                contentTypeRepository, contentTypeVersionRepository, clock);
+         final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
+ 
+         return new CodexRuntime(siteService, contentTypeService, deferredDispatcher, recorder, asyncExecutor, clock);
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
+index dcd71f5..af96be2 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentTypeService.java
+@@ -6,14 +6,19 @@ import codex.codex.api.model.command.ArchiveContentTypeCommand;
+ import codex.codex.api.model.command.CreateContentTypeCommand;
+ import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
+ import codex.codex.api.model.entity.ContentType;
++import codex.codex.api.model.entity.ContentTypeVersion;
+ import codex.codex.api.model.entity.Field;
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.service.ContentTypeService;
+ import codex.codex.api.model.value.ContentTypeStatus;
++import codex.codex.api.model.value.ContentTypeVersionStatus;
+ import codex.codex.internal.repository.ContentTypeRepository;
++import codex.codex.internal.repository.ContentTypeVersionRepository;
++import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
+ import codex.fundamentum.api.exception.NotFoundException;
+ import codex.fundamentum.api.model.Actor;
+ import codex.fundamentum.api.model.IdentityGenerator;
+@@ -40,17 +45,26 @@ public final class CodexContentTypeService implements ContentTypeService {
+     private static final Logger LOGGER = LoggerFactory.getLogger(CodexContentTypeService.class);
+ 
+     private final ContentTypeRepository repository;
++    private final ContentTypeVersionRepository versionRepository;
+     private final Clock clock;
+     private final IdentityGenerator<CreateContentTypeCommand, ContentTypeId> identityGenerator;
+ 
+     public CodexContentTypeService(final ContentTypeRepository repository, final Clock clock) {
+-        this(repository, clock, new ContentTypeIdentityGenerator());
++        this(repository, new MemoryContentTypeVersionRepository(), clock, new ContentTypeIdentityGenerator());
+     }
+ 
+     public CodexContentTypeService(final ContentTypeRepository repository,
++                                   final ContentTypeVersionRepository versionRepository,
++                                   final Clock clock) {
++        this(repository, versionRepository, clock, new ContentTypeIdentityGenerator());
++    }
++
++    public CodexContentTypeService(final ContentTypeRepository repository,
++                                   final ContentTypeVersionRepository versionRepository,
+                                    final Clock clock,
+                                    final IdentityGenerator<CreateContentTypeCommand, ContentTypeId> identityGenerator) {
+         this.repository = Objects.requireNonNull(repository, "repository must not be null");
++        this.versionRepository = Objects.requireNonNull(versionRepository, "versionRepository must not be null");
+         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+         this.identityGenerator = Objects.requireNonNull(identityGenerator, "identityGenerator must not be null");
+     }
+@@ -101,8 +115,34 @@ public final class CodexContentTypeService implements ContentTypeService {
+                     contentType);
+         }
+ 
++        final int nextVersion = contentType.latestPublishedVersion() == null
++                ? 1
++                : contentType.latestPublishedVersion() + 1;
++
++        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion(
++                command.siteKey().value(), command.key().value(), nextVersion);
++
++        final ContentTypeVersion snapshot = ContentTypeVersion.builder()
++                .id(versionId)
++                .contentTypeId(contentType.id())
++                .siteKey(contentType.siteKey())
++                .contentTypeKey(contentType.key())
++                .version(nextVersion)
++                .fields(contentType.fields())
++                .status(ContentTypeVersionStatus.PUBLISHED)
++                .createdBy(actor.id())
++                .createdAt(clock.instant())
++                .build();
++
++        versionRepository.save(snapshot);
++
++        LOGGER.info("Published ContentTypeVersion {}/{} v{} by actor: {}",
++                command.siteKey(), command.key(), nextVersion, actor);
++
+         return repository.save(ContentType.copyOf(contentType)
+                 .status(ContentTypeStatus.ACTIVE)
++                .latestPublishedVersionId(versionId)
++                .latestPublishedVersion(nextVersion)
+                 .updatedBy(actor.id())
+                 .updatedAt(clock.instant())
+                 .build());
+diff --git a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeSchemaTest.java b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeSchemaTest.java
+index e6a8fee..a4ed1c6 100644
+--- a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeSchemaTest.java
++++ b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeSchemaTest.java
+@@ -4,6 +4,7 @@ import codex.codex.api.model.command.AddContentTypeFieldCommand;
+ import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
+ import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.FieldSettingKey;
+ import codex.codex.api.model.identity.SiteKey;
+@@ -150,6 +151,90 @@ class ContentTypeSchemaTest {
+         assertFalse(str.contains("FieldKey"));
+     }
+ 
++    // --- ContentType latest published version metadata tests ---
++
++    @Test
++    @DisplayName("new content type may have null latestPublishedVersionId")
++    void newContentTypeMayHaveNullLatestPublishedVersionId() {
++        assertNull(buildContentType(null).latestPublishedVersionId());
++    }
++
++    @Test
++    @DisplayName("new content type may have null latestPublishedVersion")
++    void newContentTypeMayHaveNullLatestPublishedVersion() {
++        assertNull(buildContentType(null).latestPublishedVersion());
++    }
++
++    @Test
++    @DisplayName("rejects latestPublishedVersion less than 1")
++    void rejectsLatestPublishedVersionLessThan1() {
++        assertThrows(IllegalArgumentException.class, () ->
++                ContentType.builder()
++                        .id(ContentTypeId.generate())
++                        .siteKey(siteKey)
++                        .key(ctKey)
++                        .displayName("Blog Post")
++                        .owner(actorId)
++                        .createdBy(actorId)
++                        .updatedBy(actorId)
++                        .latestPublishedVersion(0)
++                        .build());
++    }
++
++    @Test
++    @DisplayName("builder supports latestPublishedVersionId")
++    void builderSupportsLatestPublishedVersionId() {
++        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion("acme", "blog-post", 1);
++        final ContentType ct = ContentType.builder()
++                .id(ContentTypeId.generate())
++                .siteKey(siteKey)
++                .key(ctKey)
++                .displayName("Blog Post")
++                .owner(actorId)
++                .createdBy(actorId)
++                .updatedBy(actorId)
++                .latestPublishedVersionId(versionId)
++                .latestPublishedVersion(1)
++                .build();
++        assertEquals(versionId, ct.latestPublishedVersionId());
++    }
++
++    @Test
++    @DisplayName("builder supports latestPublishedVersion")
++    void builderSupportsLatestPublishedVersion() {
++        final ContentType ct = ContentType.builder()
++                .id(ContentTypeId.generate())
++                .siteKey(siteKey)
++                .key(ctKey)
++                .displayName("Blog Post")
++                .owner(actorId)
++                .createdBy(actorId)
++                .updatedBy(actorId)
++                .latestPublishedVersion(1)
++                .build();
++        assertEquals(1, ct.latestPublishedVersion());
++    }
++
++    @Test
++    @DisplayName("copyOf preserves latest published metadata")
++    void copyOfPreservesLatestPublishedMetadata() {
++        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion("acme", "blog-post", 1);
++        final ContentType original = ContentType.builder()
++                .id(ContentTypeId.generate())
++                .siteKey(siteKey)
++                .key(ctKey)
++                .displayName("Blog Post")
++                .owner(actorId)
++                .createdBy(actorId)
++                .updatedBy(actorId)
++                .latestPublishedVersionId(versionId)
++                .latestPublishedVersion(1)
++                .build();
++        final ContentType copy = ContentType.copyOf(original).build();
++        assertEquals(versionId, copy.latestPublishedVersionId());
++        assertEquals(1, copy.latestPublishedVersion());
++    }
++
+     // --- AddContentTypeFieldCommand tests ---
+ 
+     @Test
+diff --git a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeVersionTest.java b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeVersionTest.java
+index 81cf271..7327075 100644
+--- a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeVersionTest.java
++++ b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentTypeVersionTest.java
+@@ -1,51 +1,210 @@
+ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentTypeId;
++import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
++import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeVersionStatus;
+ import codex.codex.api.model.value.FieldType;
++import codex.fundamentum.api.model.ActorId;
+ import org.junit.jupiter.api.DisplayName;
+ import org.junit.jupiter.api.Test;
+ 
+-import java.util.List;
++import java.time.Instant;
++import java.util.HashMap;
++import java.util.Map;
+ 
+-import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assertions.assertThatThrownBy;
++import static org.junit.jupiter.api.Assertions.*;
+ 
+ class ContentTypeVersionTest {
+ 
++    private final ContentTypeVersionId id = ContentTypeVersionId.generate();
++    private final ContentTypeId contentTypeId = ContentTypeId.generate();
++    private final SiteKey siteKey = SiteKey.of("acme");
++    private final ContentTypeKey contentTypeKey = ContentTypeKey.of("blog-post");
++    private final ActorId createdBy = ActorId.of("system:test");
++
++    // --- null checks ---
++
+     @Test
+-    @DisplayName("Should create valid ContentTypeVersion")
+-    void validCreation() {
+-        ContentTypeVersion version = ContentTypeVersion.builder()
+-                .id(ContentTypeVersionId.generate())
+-                .contentTypeId(ContentTypeId.generate())
+-                .version(1)
+-                .fields(List.of(
+-                        Field.builder()
+-                                .key(FieldKey.TITLE)
+-                                .type(FieldType.TEXT)
+-                                .required(true)
+-                                .build()
+-                ))
++    @DisplayName("rejects null id")
++    void rejectsNullId() {
++        assertThrows(NullPointerException.class, () -> builder().id(null).build());
++    }
++
++    @Test
++    @DisplayName("rejects null contentTypeId")
++    void rejectsNullContentTypeId() {
++        assertThrows(NullPointerException.class, () -> builder().contentTypeId(null).build());
++    }
++
++    @Test
++    @DisplayName("rejects null siteKey")
++    void rejectsNullSiteKey() {
++        assertThrows(NullPointerException.class, () -> builder().siteKey(null).build());
++    }
++
++    @Test
++    @DisplayName("rejects null contentTypeKey")
++    void rejectsNullContentTypeKey() {
++        assertThrows(NullPointerException.class, () -> builder().contentTypeKey(null).build());
++    }
++
++    @Test
++    @DisplayName("rejects null createdBy")
++    void rejectsNullCreatedBy() {
++        assertThrows(NullPointerException.class, () -> builder().createdBy(null).build());
++    }
++
++    // --- version number ---
++
++    @Test
++    @DisplayName("rejects version less than 1")
++    void rejectsVersionLessThan1() {
++        assertThrows(IllegalArgumentException.class, () -> builder().version(0).build());
++    }
++
++    @Test
++    @DisplayName("accepts version 1")
++    void acceptsVersion1() {
++        final ContentTypeVersion v = builder().build();
++        assertEquals(1, v.version());
++    }
++
++    // --- fields ---
++
++    @Test
++    @DisplayName("fields default to empty map when null")
++    void fieldsDefaultToEmptyMapWhenNull() {
++        final ContentTypeVersion v = builder().fields(null).build();
++        assertNotNull(v.fields());
++        assertTrue(v.fields().isEmpty());
++    }
++
++    @Test
++    @DisplayName("fields are defensively copied")
++    void fieldsAreDefensivelyCopied() {
++        final FieldKey titleKey = FieldKey.of("title");
++        final Field titleField = Field.builder().key(titleKey).type(FieldType.TEXT).build();
++        final Map<FieldKey, Field> original = new HashMap<>();
++        original.put(titleKey, titleField);
++
++        final ContentTypeVersion v = builder().fields(original).build();
++        original.put(FieldKey.of("body"), Field.builder().key("body").type(FieldType.TEXT).build());
++
++        assertEquals(1, v.fields().size());
++    }
++
++    @Test
++    @DisplayName("fields accessor is immutable")
++    void fieldsAccessorIsImmutable() {
++        final ContentTypeVersion v = builder().build();
++        assertThrows(UnsupportedOperationException.class, () ->
++                v.fields().put(FieldKey.of("x"), Field.builder().key("x").type(FieldType.TEXT).build()));
++    }
++
++    @Test
++    @DisplayName("rejects fields where map key does not match field key")
++    void rejectsFieldsWhereMapKeyDiffersFromFieldKey() {
++        final FieldKey mapKey = FieldKey.of("title");
++        final Field bodyField = Field.builder().key("body").type(FieldType.TEXT).build();
++        assertThrows(IllegalArgumentException.class, () ->
++                builder().fields(Map.of(mapKey, bodyField)).build());
++    }
++
++    // --- status ---
++
++    @Test
++    @DisplayName("status defaults to PUBLISHED")
++    void statusDefaultsToPublished() {
++        assertEquals(ContentTypeVersionStatus.PUBLISHED, builder().build().status());
++    }
++
++    // --- createdAt ---
++
++    @Test
++    @DisplayName("defaults createdAt when null")
++    void defaultsCreatedAtWhenNull() {
++        assertNotNull(builder().createdAt(null).build().createdAt());
++    }
++
++    // --- builder fields ---
++
++    @Test
++    @DisplayName("builder supports siteKey")
++    void builderSupportsSiteKey() {
++        assertEquals(siteKey, builder().build().siteKey());
++    }
++
++    @Test
++    @DisplayName("builder supports contentTypeKey")
++    void builderSupportsContentTypeKey() {
++        assertEquals(contentTypeKey, builder().build().contentTypeKey());
++    }
++
++    @Test
++    @DisplayName("builder supports fields map")
++    void builderSupportsFieldsMap() {
++        final FieldKey titleKey = FieldKey.of("title");
++        final Field field = Field.builder().key(titleKey).type(FieldType.TEXT).build();
++        final ContentTypeVersion v = builder().fields(Map.of(titleKey, field)).build();
++        assertEquals(1, v.fields().size());
++    }
++
++    @Test
++    @DisplayName("builder supports createdBy")
++    void builderSupportsCreatedBy() {
++        assertEquals(createdBy, builder().build().createdBy());
++    }
++
++    // --- copyOf ---
++
++    @Test
++    @DisplayName("copyOf preserves all fields")
++    void copyOfPreservesAllFields() {
++        final FieldKey titleKey = FieldKey.of("title");
++        final Field field = Field.builder().key(titleKey).type(FieldType.TEXT).build();
++        final Instant now = Instant.parse("2026-05-01T00:00:00Z");
++
++        final ContentTypeVersion original = builder()
++                .fields(Map.of(titleKey, field))
++                .status(ContentTypeVersionStatus.DEPRECATED)
++                .createdAt(now)
+                 .build();
+ 
+-        assertThat(version.version()).isEqualTo(1);
+-        assertThat(version.status()).isEqualTo(ContentTypeVersionStatus.DRAFT);
+-        assertThat(version.fields()).hasSize(1);
+-        assertThat(version.fields().get(0).key()).isEqualTo(FieldKey.TITLE);
++        final ContentTypeVersion copy = ContentTypeVersion.copyOf(original).build();
++
++        assertEquals(original.id(), copy.id());
++        assertEquals(original.contentTypeId(), copy.contentTypeId());
++        assertEquals(original.siteKey(), copy.siteKey());
++        assertEquals(original.contentTypeKey(), copy.contentTypeKey());
++        assertEquals(original.version(), copy.version());
++        assertEquals(original.fields(), copy.fields());
++        assertEquals(original.status(), copy.status());
++        assertEquals(original.createdBy(), copy.createdBy());
++        assertEquals(original.createdAt(), copy.createdAt());
+     }
+ 
++    // --- status enum coverage ---
++
+     @Test
+-    @DisplayName("Should throw exception for version < 1")
+-    void invalidVersion() {
+-        assertThatThrownBy(() -> ContentTypeVersion.builder()
+-                .id(ContentTypeVersionId.generate())
+-                .contentTypeId(ContentTypeId.generate())
+-                .version(0)
+-                .build())
+-                .isInstanceOf(IllegalArgumentException.class)
+-                .hasMessageContaining("Version must be >= 1");
++    @DisplayName("ContentTypeVersionStatus has PUBLISHED, DEPRECATED, ARCHIVED")
++    void statusEnumHasCorrectValues() {
++        assertNotNull(ContentTypeVersionStatus.PUBLISHED);
++        assertNotNull(ContentTypeVersionStatus.DEPRECATED);
++        assertNotNull(ContentTypeVersionStatus.ARCHIVED);
++    }
++
++    // --- helpers ---
++
++    private ContentTypeVersion.Builder builder() {
++        return ContentTypeVersion.builder()
++                .id(id)
++                .contentTypeId(contentTypeId)
++                .siteKey(siteKey)
++                .contentTypeKey(contentTypeKey)
++                .version(1)
++                .createdBy(createdBy);
+     }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
+index a17bbab..37c8686 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentTypeServiceTest.java
+@@ -5,14 +5,19 @@ import codex.codex.api.model.command.AddContentTypeFieldCommand;
+ import codex.codex.api.model.command.ArchiveContentTypeCommand;
+ import codex.codex.api.model.command.CreateContentTypeCommand;
+ import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
++import codex.codex.api.model.entity.ContentTypeVersion;
+ import codex.codex.api.model.entity.Field;
+ import codex.codex.api.model.entity.ContentType;
++import codex.codex.api.model.identity.ContentTypeId;
+ import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentTypeStatus;
++import codex.codex.api.model.value.ContentTypeVersionStatus;
+ import codex.codex.api.model.value.FieldType;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
++import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
+ import codex.fundamentum.api.exception.NotFoundException;
+ import codex.fundamentum.api.model.Actor;
+ import org.junit.jupiter.api.BeforeEach;
+@@ -30,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
+ class CodexContentTypeServiceTest {
+ 
+     private MemoryContentTypeRepository repository;
++    private MemoryContentTypeVersionRepository versionRepository;
+     private CodexContentTypeService service;
+ 
+     private final Actor actor = Actor.system("test");
+@@ -40,7 +46,8 @@ class CodexContentTypeServiceTest {
+     @BeforeEach
+     void setUp() {
+         repository = new MemoryContentTypeRepository();
+-        service = new CodexContentTypeService(repository, clock);
++        versionRepository = new MemoryContentTypeVersionRepository();
++        service = new CodexContentTypeService(repository, versionRepository, clock);
+     }
+ 
+     // --- create ---
+@@ -235,6 +242,124 @@ class CodexContentTypeServiceTest {
+         assertThrows(NotFoundException.class, () -> service.archive(archiveCmd(), actor));
+     }
+ 
++    // --- activate + version creation ---
++
++    @Test
++    @DisplayName("activating draft creates version 1")
++    void activatingDraftCreatesVersion1() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        final var versions = versionRepository.findByContentType(
++                repository.findByKey(siteKey, key).orElseThrow().id());
++        assertEquals(1, versions.size());
++        assertEquals(1, versions.getFirst().version());
++    }
++
++    @Test
++    @DisplayName("activating draft sets latestPublishedVersion to 1")
++    void activatingDraftSetsLatestPublishedVersionTo1() {
++        service.create(cmd("Blog Post"), actor);
++        final ContentType result = service.activate(activateCmd(), actor);
++        assertEquals(1, result.latestPublishedVersion());
++    }
++
++    @Test
++    @DisplayName("activating draft sets latestPublishedVersionId")
++    void activatingDraftSetsLatestPublishedVersionId() {
++        service.create(cmd("Blog Post"), actor);
++        final ContentType result = service.activate(activateCmd(), actor);
++        assertNotNull(result.latestPublishedVersionId());
++        assertEquals(ContentTypeVersionId.forVersion("acme", "blog-post", 1),
++                result.latestPublishedVersionId());
++    }
++
++    @Test
++    @DisplayName("activating draft stores version snapshot with content type fields")
++    void activatingDraftStoresVersionSnapshotWithFields() {
++        service.create(cmd("Blog Post"), actor);
++        service.addField(addFieldCmd(titleField()), actor);
++        service.activate(activateCmd(), actor);
++
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        final ContentTypeVersion version = versionRepository
++                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
++        assertEquals(1, version.fields().size());
++        assertTrue(version.fields().containsKey(FieldKey.of("title")));
++    }
++
++    @Test
++    @DisplayName("activating draft stores version with status PUBLISHED")
++    void activatingDraftStoresVersionWithPublishedStatus() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        final ContentTypeVersion version = versionRepository
++                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
++        assertEquals(ContentTypeVersionStatus.PUBLISHED, version.status());
++    }
++
++    @Test
++    @DisplayName("activating draft stores version with createdBy equal to actor id")
++    void activatingDraftStoresVersionWithCreatedByActorId() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        final ContentTypeVersion version = versionRepository
++                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
++        assertEquals(actor.id(), version.createdBy());
++    }
++
++    @Test
++    @DisplayName("activating already active content type does not create another version")
++    void activatingAlreadyActiveDoesNotCreateAnotherVersion() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        service.activate(activateCmd(), actor);
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        assertEquals(1, versionRepository.findByContentType(saved.id()).size());
++    }
++
++    @Test
++    @DisplayName("activating archived content type does not create version")
++    void activatingArchivedDoesNotCreateVersion() {
++        service.create(cmd("Blog Post"), actor);
++        service.archive(archiveCmd(), actor);
++        assertThrows(InvalidContentTypeStatusTransitionException.class, () ->
++                service.activate(activateCmd(), actor));
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        assertTrue(versionRepository.findByContentType(saved.id()).isEmpty());
++    }
++
++    @Test
++    @DisplayName("activating missing content type does not create version")
++    void activatingMissingDoesNotCreateVersion() {
++        assertThrows(NotFoundException.class, () -> service.activate(activateCmd(), actor));
++        assertEquals(0, versionRepository.findByContentType(ContentTypeId.generate()).size());
++    }
++
++    @Test
++    @DisplayName("archive preserves latest published version metadata")
++    void archivePreservesLatestPublishedVersionMetadata() {
++        service.create(cmd("Blog Post"), actor);
++        final ContentType activated = service.activate(activateCmd(), actor);
++        final ContentTypeVersionId versionId = activated.latestPublishedVersionId();
++
++        service.archive(archiveCmd(), actor);
++        final ContentType archived = repository.findByKey(siteKey, key).orElseThrow();
++        assertEquals(versionId, archived.latestPublishedVersionId());
++        assertEquals(1, archived.latestPublishedVersion());
++    }
++
++    @Test
++    @DisplayName("archive does not delete versions")
++    void archiveDoesNotDeleteVersions() {
++        service.create(cmd("Blog Post"), actor);
++        service.activate(activateCmd(), actor);
++        service.archive(archiveCmd(), actor);
++        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
++        assertEquals(1, versionRepository.findByContentType(saved.id()).size());
++    }
++
+     // --- addField ---
+ 
+     @Test
+diff --git a/codex-docs/tasks/Task12-ContentType-Version-Foundation.md b/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
+index e69de29..dc81ca6 100644
+--- a/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
++++ b/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
+@@ -0,0 +1,578 @@
++# Task12: ContentType Version Foundation
++
++## Objective
++
++Align and implement the `ContentTypeVersion` foundation so content type versions become immutable published schema snapshots.
++
++A `ContentType` owns the editable draft/current schema through its `fields` map.
++
++A `ContentTypeVersion` represents a published snapshot of that schema at a specific version number.
++
++This task prepares Codex for future `ContentItem` support, where content items should reference a stable content type version instead of a mutable content type schema.
++
++## Architectural direction
++
++Keep these concepts separate:
++
++`ContentType`
++- aggregate root
++- scoped by `SiteKey`
++- owns lifecycle: `DRAFT`, `ACTIVE`, `ARCHIVED`
++- owns editable draft/current fields
++- tracks latest published version metadata
++
++`ContentTypeVersion`
++- immutable schema snapshot
++- scoped by the same `SiteKey` and `ContentTypeKey`
++- references the parent `ContentTypeId`
++- stores fields as `Map<FieldKey, Field>`
++- is created when a content type is activated/published
++- can later be referenced by `ContentItem`
++
++Do not model draft versions in `ContentTypeVersion`.
++
++Draft schema lives in `ContentType.fields`.
++
++## Scope
++
++Implement:
++
++- align `ContentTypeVersionStatus`
++- align `ContentTypeVersion`
++- add or update `ContentTypeVersionId`
++- add `ContentTypeVersionRepository`
++- add `MemoryContentTypeVersionRepository`
++- update `CodexContentTypeService.activate(...)` to create a version snapshot
++- update `ContentType` with latest published version metadata if not already present
++- update `CodexRuntime` wiring if needed
++- tests
++
++Do not implement:
++
++- ContentItem
++- ContentRevision
++- schema migrations
++- version diffing
++- compatibility rules
++- reopen draft workflow
++- version events
++- field events
++- audit
++- cache invalidation
++- permission service
++- Custos
++- Spring integration
++- persistence
++- TreeableResource
++- CodexResourcePath
++
++## Location
++
++Use existing packages where possible.
++
++Suggested locations:
++
++- `codex.codex.api.model.entity.ContentType`
++- `codex.codex.api.model.entity.ContentTypeVersion`
++- `codex.codex.api.model.identity.ContentTypeVersionId`
++- `codex.codex.api.model.value.ContentTypeVersionStatus`
++- `codex.codex.internal.repository.ContentTypeVersionRepository`
++- `codex.codex.internal.repository.MemoryContentTypeVersionRepository`
++- `codex.codex.internal.service.CodexContentTypeService`
++- existing content type tests
++
++## 1. Update ContentTypeVersionStatus
++
++Update `ContentTypeVersionStatus`.
++
++Replace the old version status model:
++
++`DRAFT`
++`ACTIVE`
++`DEPRECATED`
++`ARCHIVED`
++
++with:
++
++`PUBLISHED`
++`DEPRECATED`
++`ARCHIVED`
++
++Semantics:
++
++`PUBLISHED`
++- the schema version is published
++- it can be referenced by new content items
++- usually the latest published version for a content type
++
++`DEPRECATED`
++- the schema version is retained and may still be referenced by existing content items
++- it should not be used for new content items
++
++`ARCHIVED`
++- the schema version is retained for history or compatibility
++- it is not used for normal content creation
++
++Do not keep `DRAFT` in `ContentTypeVersionStatus`.
++
++Draft schema belongs to `ContentType.fields`.
++
++Add JavaDoc to the enum and each value.
++
++## 2. Update ContentTypeVersion
++
++Update `ContentTypeVersion` to align with the current `ContentType` model.
++
++The final record shape should be equivalent to:
++
++`ContentTypeVersionId id`
++`ContentTypeId contentTypeId`
++`SiteKey siteKey`
++`ContentTypeKey contentTypeKey`
++`int version`
++`Map<FieldKey, Field> fields`
++`ContentTypeVersionStatus status`
++`ActorId createdBy`
++`Instant createdAt`
++
++Requirements:
++
++- `id` must not be null
++- `contentTypeId` must not be null
++- `siteKey` must not be null
++- `contentTypeKey` must not be null
++- `version` must be >= 1
++- `fields` defaults to `Map.of()` if null
++- `fields` must be defensively copied with `Map.copyOf(...)`
++- map key must match `field.key()`
++- `status` defaults to `ContentTypeVersionStatus.PUBLISHED` if null
++- `createdBy` must not be null
++- `createdAt` defaults to `Instant.now()` if null
++- builder must support all fields
++- `copyOf(...)` should exist and preserve all fields
++- `toString()` should include:
++    - id
++    - contentTypeId
++    - siteKey
++    - contentTypeKey
++    - version
++    - field count or field keys
++    - status
++    - createdBy
++    - createdAt
++
++Do not use `List<Field>`.
++
++Use `Map<FieldKey, Field>`.
++
++## 3. ContentTypeVersionId
++
++Review `ContentTypeVersionId`.
++
++Requirements:
++
++- use a Java record if consistent with existing identity style
++- wrap a `String value`
++- validate non-null
++- validate non-blank
++- provide `of(String value)`
++- provide deterministic factory if consistent with current identity style
++
++Suggested deterministic id format:
++
++`content-type-version:{siteKey}:{contentTypeKey}:v{version}`
++
++Example:
++
++`content-type-version:system:blog-post:v1`
++
++Do not use random UUIDs if the project is already using deterministic ids for similar identities.
++
++## 4. Update ContentType with latest published version metadata
++
++Update `ContentType` to track the latest published version.
++
++Add fields if they do not already exist:
++
++`ContentTypeVersionId latestPublishedVersionId`
++`Integer latestPublishedVersion`
++
++Requirements:
++
++- both may be null while the content type is still `DRAFT` and has never been activated
++- when set, `latestPublishedVersion` must be >= 1
++- builder must support both fields
++- `copyOf(...)` must preserve both fields
++- `toString()` should include them
++- creating a new content type should leave them null
++- activating a content type should set both
++
++Do not require a published version for `DRAFT`.
++
++Do not require a published version for newly created content types.
++
++## 5. Create ContentTypeVersionRepository
++
++Create:
++
++`codex.codex.internal.repository.ContentTypeVersionRepository`
++
++Contract should be equivalent to:
++
++`ContentTypeVersion save(ContentTypeVersion version)`
++
++`Optional<ContentTypeVersion> findById(ContentTypeVersionId id)`
++
++`Optional<ContentTypeVersion> findByContentTypeAndVersion(ContentTypeId contentTypeId, int version)`
++
++`Optional<ContentTypeVersion> findLatestPublished(ContentTypeId contentTypeId)`
++
++`List<ContentTypeVersion> findByContentType(ContentTypeId contentTypeId)`
++
++Optional, only if simple and useful:
++
++`List<ContentTypeVersion> findBySiteKeyAndContentTypeKey(SiteKey siteKey, ContentTypeKey contentTypeKey)`
++
++Requirements:
++
++- validate null arguments
++- validate version number >= 1
++- no Spring
++- no persistence framework
++- no generic query API
++
++## 6. Create MemoryContentTypeVersionRepository
++
++Create:
++
++`codex.codex.internal.repository.MemoryContentTypeVersionRepository`
++
++Requirements:
++
++- implements `ContentTypeVersionRepository`
++- stores versions in memory
++- key by `ContentTypeVersionId`
++- support lookup by `ContentTypeId + version`
++- support latest published lookup
++- `save(...)` returns saved version
++- `findById(...)` returns optional
++- `findByContentTypeAndVersion(...)` returns optional
++- `findByContentType(...)` returns immutable snapshot
++- `findLatestPublished(...)` returns the highest version with status `PUBLISHED`
++- validate null arguments
++- use simple collections
++- no Spring
++- no external infrastructure
++
++If multiple versions are `PUBLISHED`, `findLatestPublished(...)` should return the highest version number.
++
++Do not implement deprecation of previous versions automatically unless explicitly needed by service logic.
++
++## 7. Update CodexContentTypeService constructor
++
++Update `CodexContentTypeService` so it can create version snapshots.
++
++Constructor should receive:
++
++- `ContentTypeRepository`
++- `ContentTypeVersionRepository`
++- `Clock`
++- identity generator for `ContentType` if already present
++- identity generator or factory for `ContentTypeVersion` if needed
++
++Validate all dependencies with `Objects.requireNonNull`.
++
++If there is an existing constructor used by tests, keep a convenience constructor if useful, but ensure the main constructor accepts the version repository.
++
++No Spring annotations.
++
++## 8. Update activate behavior
++
++Update `CodexContentTypeService.activate(...)`.
++
++Current behavior likely changes `ContentTypeStatus.DRAFT` to `ACTIVE`.
++
++New behavior:
++
++When activating a `DRAFT` content type:
++
++1. load content type by `siteKey + key`
++2. validate it exists
++3. validate it can be activated
++4. compute next version number
++5. create `ContentTypeVersion` snapshot from current `ContentType.fields`
++6. save the version snapshot as `PUBLISHED`
++7. save the content type as `ACTIVE`
++8. update:
++    - `latestPublishedVersionId`
++    - `latestPublishedVersion`
++    - `updatedBy = actor.id()`
++    - `updatedAt = clock.instant()`
++9. return updated content type
++
++When activating an already `ACTIVE` content type:
++
++- return existing content type
++- do not create a new version
++- do not update `updatedAt`
++- do not update `updatedBy`
++
++When activating an `ARCHIVED` content type:
++
++- throw `InvalidContentTypeStatusTransitionException`
++- do not create a version
++
++## 9. Version number rule
++
++For this task, version numbers are sequential per content type.
++
++Rules:
++
++- first activation creates version `1`
++- next future activation after draft edits should create version `latestPublishedVersion + 1`
++- if `latestPublishedVersion` is null, create version `1`
++- if repository contains higher versions, prefer repository latest version + 1 if implemented safely
++
++For this task, because reopen draft workflow is not implemented yet, the most important behavior is:
++
++- first activation creates version `1`
++- idempotent activation does not create version `2`
++
++Do not implement reopen draft in this task.
++
++## 10. ContentTypeVersion snapshot rule
++
++The version snapshot must copy fields from `ContentType.fields`.
++
++Requirements:
++
++- use `Map.copyOf(...)` through `ContentTypeVersion`
++- do not keep a mutable reference to the content type fields
++- later changes to `ContentType.fields` must not mutate existing versions
++- validate map key equals `field.key()`
++
++This is critical because versions must be immutable schema snapshots.
++
++## 11. Deprecation behavior
++
++Do not automatically deprecate previous versions in this task unless the service already supports multiple published versions.
++
++For now:
++
++- version `1` is `PUBLISHED`
++- idempotent activation does not create another version
++- future version deprecation policy will be handled later
++
++Future policy may be:
++
++- when publishing v2, mark v1 as `DEPRECATED`
++- keep old versions referencable by existing content items
++- latest published version is used for new content items
++
++Do not implement this policy yet.
++
++## 12. Archive behavior
++
++Do not change archive behavior unless necessary to keep latest published metadata consistent.
++
++When archiving a content type:
++
++- do not delete versions
++- do not remove latest published version metadata
++- do not archive content type versions automatically in this task
++
++Future policy may decide whether archiving a content type should also archive or deprecate versions.
++
++For now, versions remain historical snapshots.
++
++## 13. Events
++
++Do not add version-specific events in this task.
++
++Do not modify `EventPublishingContentTypeService` unless compilation requires adapting to new constructor/service behavior.
++
++Future events may include:
++
++- `ContentTypeVersionPublishedEvent`
++- `ContentTypeVersionDeprecatedEvent`
++- `ContentTypeVersionArchivedEvent`
++
++Existing `ContentTypeActivatedEvent` may later include version metadata, but do not require that in this task.
++
++## 14. Runtime
++
++Update `CodexRuntime` if it already wires `CodexContentTypeService`.
++
++Add:
++
++- `MemoryContentTypeVersionRepository`
++- pass it into `CodexContentTypeService`
++
++Do not create a separate runtime for versions.
++
++Do not create a separate event dispatcher.
++
++Do not create a separate executor.
++
++## 15. Tests
++
++Add or update plain JUnit 5 tests.
++
++No Spring.
++
++No Mockito unless absolutely necessary.
++
++Prefer real in-memory repositories and real services.
++
++### ContentTypeVersionStatus tests
++
++Add tests or compile-level coverage ensuring:
++
++- `PUBLISHED`
++- `DEPRECATED`
++- `ARCHIVED`
++
++exist.
++
++Remove expectations for:
++
++- `DRAFT`
++- `ACTIVE`
++
++in version status tests.
++
++### ContentTypeVersion tests
++
++Add or update tests for:
++
++- rejects null id
++- rejects null contentTypeId
++- rejects null siteKey
++- rejects null contentTypeKey
++- rejects version less than 1
++- defaults fields to empty map
++- defensively copies fields
++- fields accessor is immutable
++- rejects field map where key does not match `field.key()`
++- defaults status to `PUBLISHED`
++- rejects null createdBy
++- defaults createdAt when null
++- builder supports siteKey
++- builder supports contentTypeKey
++- builder supports fields map
++- builder supports createdBy
++- `copyOf(...)` preserves all fields
++
++### ContentType tests
++
++Add or update tests for:
++
++- new content type may have null latestPublishedVersionId
++- new content type may have null latestPublishedVersion
++- rejects latestPublishedVersion less than 1 if set
++- builder supports latestPublishedVersionId
++- builder supports latestPublishedVersion
++- `copyOf(...)` preserves latest published metadata
++
++### MemoryContentTypeVersionRepository tests
++
++Add tests for:
++
++- save returns saved version
++- findById returns saved version
++- findById returns empty when missing
++- findByContentTypeAndVersion returns saved version
++- findByContentTypeAndVersion returns empty when missing
++- findByContentType returns all versions for that content type
++- findByContentType does not return versions for other content types
++- findLatestPublished returns highest published version
++- findLatestPublished ignores deprecated and archived versions
++- required arguments reject null
++- version less than 1 rejects where applicable
++
++### CodexContentTypeService tests
++
++Update service tests for activation:
++
++- activating draft creates version 1
++- activating draft sets latestPublishedVersion to 1
++- activating draft sets latestPublishedVersionId
++- activating draft stores version snapshot with content type fields
++- activating draft stores version with status `PUBLISHED`
++- activating draft stores version with createdBy equal to actor id
++- activating already active content type does not create another version
++- activating archived content type does not create version
++- activating missing content type does not create version
++- archive does not delete versions
++- archive preserves latest published version metadata
++
++### Snapshot immutability test
++
++Add a test proving version fields are a snapshot.
++
++Suggested scenario:
++
++1. create content type
++2. add field `title`
++3. activate content type
++4. retrieve version `1`
++5. verify version has `title`
++6. mutate content type draft fields later if possible within current rules, or directly construct a changed copy for repository-level test
++7. verify version `1` fields did not change
++
++If current service rules prevent modifying active content types, do this as a `ContentTypeVersion` constructor/repository test by mutating the original map after construction and verifying the version does not change.
++
++### Runtime tests
++
++If `CodexRuntime` wires content type service:
++
++- create runtime
++- create content type
++- add field
++- activate content type
++- assert no wiring errors
++- optionally verify version repository only if accessible
++
++Do not expose version repository publicly only for this test unless already planned.
++
++## 16. Documentation
++
++Add or update a short note explaining:
++
++- `ContentType.fields` is the editable draft/current schema
++- `ContentTypeVersion.fields` is an immutable published schema snapshot
++- `ContentTypeVersionStatus` uses `PUBLISHED`, `DEPRECATED`, `ARCHIVED`
++- draft versions are not modeled in this task
++- first activation creates version `1`
++- idempotent activation does not create a new version
++- old versions remain for future content item compatibility
++- reopen draft and publish v2 are future work
++- content items will later reference a content type version
++
++## Constraints
++
++- Follow CLAUDE.md conventions.
++- Follow the style of the existing ContentType implementation.
++- Use `Map<FieldKey, Field>`, not `List<Field>`.
++- No Spring annotations.
++- No JPA.
++- No persistence framework.
++- No REST controllers.
++- No JavaScript extension system.
++- No permission service.
++- No Custos implementation.
++- No ContentItem implementation.
++- No ContentRevision implementation.
++- No reopen draft workflow.
++- No version events.
++- No field events.
++- No audit.
++- No cache invalidation.
++- No TreeableResource implementation.
++- No CodexResourcePath implementation.
++- No broad refactors.
++- Do not modify unrelated files.
++- Do not modify `.idea`, `target`, `build`, or generated files.
++- Keep comments and JavaDoc in English.
++- Prefer small, explicit, testable classes.
++- Run the smallest relevant Maven test or compile command after implementation.
+\ No newline at end of file

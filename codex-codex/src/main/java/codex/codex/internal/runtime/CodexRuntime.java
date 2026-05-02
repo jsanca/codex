@@ -1,10 +1,13 @@
 package codex.codex.internal.runtime;
 
+import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
+import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.codex.internal.repository.MemorySiteRepository;
+import codex.codex.internal.service.CodexContentItemService;
 import codex.codex.internal.service.CodexContentTypeService;
 import codex.codex.internal.service.CodexSiteService;
 import codex.codex.internal.service.DeferredEventDispatcher;
@@ -42,6 +45,7 @@ public final class CodexRuntime implements AutoCloseable {
 
     private final SiteService siteService;
     private final ContentTypeService contentTypeService;
+    private final ContentItemService contentItemService;
     private final CodexEventDispatcher eventDispatcher;
     private final EventRecorder eventRecorder;
     private final CodexExecutor asyncExecutor;
@@ -50,12 +54,14 @@ public final class CodexRuntime implements AutoCloseable {
 
     private CodexRuntime(final SiteService siteService,
                          final ContentTypeService contentTypeService,
+                         final ContentItemService contentItemService,
                          final CodexEventDispatcher eventDispatcher,
                          final EventRecorder eventRecorder,
                          final CodexExecutor asyncExecutor,
                          final Clock clock) {
         this.siteService = Objects.requireNonNull(siteService);
         this.contentTypeService = Objects.requireNonNull(contentTypeService);
+        this.contentItemService = Objects.requireNonNull(contentItemService);
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher);
         this.eventRecorder = Objects.requireNonNull(eventRecorder);
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor);
@@ -73,9 +79,12 @@ public final class CodexRuntime implements AutoCloseable {
      *         ← DeferredEventDispatcher
      *             ← EventRecorder (inner recording delegate)
      *
-     * MemoryContentTypeRepository
+     * MemoryContentTypeRepository + MemoryContentTypeVersionRepository
      *   ← CodexContentTypeService
      *     ← EventPublishingContentTypeService
+     *
+     * MemoryContentItemRepository
+     *   ← CodexContentItemService
      * </pre>
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
@@ -99,7 +108,11 @@ public final class CodexRuntime implements AutoCloseable {
                 contentTypeRepository, contentTypeVersionRepository, clock);
         final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
 
-        return new CodexRuntime(siteService, contentTypeService, deferredDispatcher, recorder, asyncExecutor, clock);
+        final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
+        final ContentItemService contentItemService = new CodexContentItemService(
+                contentItemRepository, contentTypeRepository, contentTypeVersionRepository, clock);
+
+        return new CodexRuntime(siteService, contentTypeService, contentItemService, deferredDispatcher, recorder, asyncExecutor, clock);
     }
 
     /**
@@ -119,6 +132,15 @@ public final class CodexRuntime implements AutoCloseable {
      */
     public ContentTypeService contentTypeService() {
         return contentTypeService;
+    }
+
+    /**
+     * Returns the {@link ContentItemService} — the entry point for content item operations.
+     *
+     * @return the content item service; never null
+     */
+    public ContentItemService contentItemService() {
+        return contentItemService;
     }
 
     /**
