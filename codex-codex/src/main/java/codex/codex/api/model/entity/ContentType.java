@@ -2,6 +2,7 @@ package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentTypeStatus;
@@ -35,7 +36,9 @@ public record ContentType(
         ActorId updatedBy,
         Instant createdAt,
         Instant updatedAt,
-        Map<FieldKey, Field> fields
+        Map<FieldKey, Field> fields,
+        ContentTypeVersionId latestPublishedVersionId,
+        Integer latestPublishedVersion
 ) {
 
     /**
@@ -49,9 +52,11 @@ public record ContentType(
      * @param owner       the actor that owns this content type; must not be null
      * @param createdBy   the actor that created this content type; must not be null
      * @param updatedBy   the actor that last updated this content type; must not be null
-     * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
-     * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
-     * @param fields      field schema; defaults to empty map if null; map keys must match field keys
+     * @param createdAt                  creation timestamp; defaults to {@link Instant#now()} if null
+     * @param updatedAt                  last-update timestamp; defaults to {@code createdAt} if null
+     * @param fields                     field schema; defaults to empty map if null; map keys must match field keys
+     * @param latestPublishedVersionId   the id of the latest published version; may be null for unpublished types
+     * @param latestPublishedVersion     the latest published version number (>= 1 if set); may be null for unpublished types
      */
     public ContentType {
         Objects.requireNonNull(id, "ContentType id cannot be null");
@@ -81,6 +86,9 @@ public record ContentType(
                 }
             }
             fields = Map.copyOf(fields);
+        }
+        if (latestPublishedVersion != null && latestPublishedVersion < 1) {
+            throw new IllegalArgumentException("latestPublishedVersion must be >= 1 when set");
         }
     }
 
@@ -113,7 +121,9 @@ public record ContentType(
                 .updatedBy(contentType.updatedBy())
                 .createdAt(contentType.createdAt())
                 .updatedAt(contentType.updatedAt())
-                .fields(contentType.fields());
+                .fields(contentType.fields())
+                .latestPublishedVersionId(contentType.latestPublishedVersionId())
+                .latestPublishedVersion(contentType.latestPublishedVersion());
     }
 
     @Override
@@ -130,6 +140,8 @@ public record ContentType(
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 ", fields=" + fields.size() +
+                ", latestPublishedVersionId=" + latestPublishedVersionId +
+                ", latestPublishedVersion=" + latestPublishedVersion +
                 '}';
     }
 
@@ -148,6 +160,8 @@ public record ContentType(
         private Instant createdAt;
         private Instant updatedAt;
         private Map<FieldKey, Field> fields;
+        private ContentTypeVersionId latestPublishedVersionId;
+        private Integer latestPublishedVersion;
 
         public Builder id(ContentTypeId id) { this.id = id; return this; }
         public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
@@ -160,6 +174,8 @@ public record ContentType(
         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
         public Builder fields(Map<FieldKey, Field> fields) { this.fields = fields; return this; }
+        public Builder latestPublishedVersionId(ContentTypeVersionId id) { this.latestPublishedVersionId = id; return this; }
+        public Builder latestPublishedVersion(Integer version) { this.latestPublishedVersion = version; return this; }
 
         /**
          * Builds a new {@link ContentType} instance.
@@ -168,7 +184,8 @@ public record ContentType(
          */
         public ContentType build() {
             return new ContentType(id, siteKey, key, displayName, status,
-                    owner, createdBy, updatedBy, createdAt, updatedAt, fields);
+                    owner, createdBy, updatedBy, createdAt, updatedAt, fields,
+                    latestPublishedVersionId, latestPublishedVersion);
         }
     }
 }

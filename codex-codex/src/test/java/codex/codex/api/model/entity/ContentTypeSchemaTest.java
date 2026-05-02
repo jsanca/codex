@@ -4,6 +4,7 @@ import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.FieldSettingKey;
 import codex.codex.api.model.identity.SiteKey;
@@ -148,6 +149,90 @@ class ContentTypeSchemaTest {
         final String str = ct.toString();
         assertTrue(str.contains("fields=1"));
         assertFalse(str.contains("FieldKey"));
+    }
+
+    // --- ContentType latest published version metadata tests ---
+
+    @Test
+    @DisplayName("new content type may have null latestPublishedVersionId")
+    void newContentTypeMayHaveNullLatestPublishedVersionId() {
+        assertNull(buildContentType(null).latestPublishedVersionId());
+    }
+
+    @Test
+    @DisplayName("new content type may have null latestPublishedVersion")
+    void newContentTypeMayHaveNullLatestPublishedVersion() {
+        assertNull(buildContentType(null).latestPublishedVersion());
+    }
+
+    @Test
+    @DisplayName("rejects latestPublishedVersion less than 1")
+    void rejectsLatestPublishedVersionLessThan1() {
+        assertThrows(IllegalArgumentException.class, () ->
+                ContentType.builder()
+                        .id(ContentTypeId.generate())
+                        .siteKey(siteKey)
+                        .key(ctKey)
+                        .displayName("Blog Post")
+                        .owner(actorId)
+                        .createdBy(actorId)
+                        .updatedBy(actorId)
+                        .latestPublishedVersion(0)
+                        .build());
+    }
+
+    @Test
+    @DisplayName("builder supports latestPublishedVersionId")
+    void builderSupportsLatestPublishedVersionId() {
+        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion("acme", "blog-post", 1);
+        final ContentType ct = ContentType.builder()
+                .id(ContentTypeId.generate())
+                .siteKey(siteKey)
+                .key(ctKey)
+                .displayName("Blog Post")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .latestPublishedVersionId(versionId)
+                .latestPublishedVersion(1)
+                .build();
+        assertEquals(versionId, ct.latestPublishedVersionId());
+    }
+
+    @Test
+    @DisplayName("builder supports latestPublishedVersion")
+    void builderSupportsLatestPublishedVersion() {
+        final ContentType ct = ContentType.builder()
+                .id(ContentTypeId.generate())
+                .siteKey(siteKey)
+                .key(ctKey)
+                .displayName("Blog Post")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .latestPublishedVersion(1)
+                .build();
+        assertEquals(1, ct.latestPublishedVersion());
+    }
+
+    @Test
+    @DisplayName("copyOf preserves latest published metadata")
+    void copyOfPreservesLatestPublishedMetadata() {
+        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion("acme", "blog-post", 1);
+        final ContentType original = ContentType.builder()
+                .id(ContentTypeId.generate())
+                .siteKey(siteKey)
+                .key(ctKey)
+                .displayName("Blog Post")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .latestPublishedVersionId(versionId)
+                .latestPublishedVersion(1)
+                .build();
+        final ContentType copy = ContentType.copyOf(original).build();
+        assertEquals(versionId, copy.latestPublishedVersionId());
+        assertEquals(1, copy.latestPublishedVersion());
     }
 
     // --- AddContentTypeFieldCommand tests ---

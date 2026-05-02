@@ -5,14 +5,19 @@ import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
 import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
+import codex.codex.api.model.entity.ContentTypeVersion;
 import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.entity.ContentType;
+import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentTypeStatus;
+import codex.codex.api.model.value.ContentTypeVersionStatus;
 import codex.codex.api.model.value.FieldType;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
+import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.fundamentum.api.exception.NotFoundException;
 import codex.fundamentum.api.model.Actor;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CodexContentTypeServiceTest {
 
     private MemoryContentTypeRepository repository;
+    private MemoryContentTypeVersionRepository versionRepository;
     private CodexContentTypeService service;
 
     private final Actor actor = Actor.system("test");
@@ -40,7 +46,8 @@ class CodexContentTypeServiceTest {
     @BeforeEach
     void setUp() {
         repository = new MemoryContentTypeRepository();
-        service = new CodexContentTypeService(repository, clock);
+        versionRepository = new MemoryContentTypeVersionRepository();
+        service = new CodexContentTypeService(repository, versionRepository, clock);
     }
 
     // --- create ---
@@ -233,6 +240,124 @@ class CodexContentTypeServiceTest {
     @DisplayName("missing content type should throw NotFoundException for archive")
     void missingContentTypeShouldThrowNotFoundExceptionForArchive() {
         assertThrows(NotFoundException.class, () -> service.archive(archiveCmd(), actor));
+    }
+
+    // --- activate + version creation ---
+
+    @Test
+    @DisplayName("activating draft creates version 1")
+    void activatingDraftCreatesVersion1() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        final var versions = versionRepository.findByContentType(
+                repository.findByKey(siteKey, key).orElseThrow().id());
+        assertEquals(1, versions.size());
+        assertEquals(1, versions.getFirst().version());
+    }
+
+    @Test
+    @DisplayName("activating draft sets latestPublishedVersion to 1")
+    void activatingDraftSetsLatestPublishedVersionTo1() {
+        service.create(cmd("Blog Post"), actor);
+        final ContentType result = service.activate(activateCmd(), actor);
+        assertEquals(1, result.latestPublishedVersion());
+    }
+
+    @Test
+    @DisplayName("activating draft sets latestPublishedVersionId")
+    void activatingDraftSetsLatestPublishedVersionId() {
+        service.create(cmd("Blog Post"), actor);
+        final ContentType result = service.activate(activateCmd(), actor);
+        assertNotNull(result.latestPublishedVersionId());
+        assertEquals(ContentTypeVersionId.forVersion("acme", "blog-post", 1),
+                result.latestPublishedVersionId());
+    }
+
+    @Test
+    @DisplayName("activating draft stores version snapshot with content type fields")
+    void activatingDraftStoresVersionSnapshotWithFields() {
+        service.create(cmd("Blog Post"), actor);
+        service.addField(addFieldCmd(titleField()), actor);
+        service.activate(activateCmd(), actor);
+
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        final ContentTypeVersion version = versionRepository
+                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
+        assertEquals(1, version.fields().size());
+        assertTrue(version.fields().containsKey(FieldKey.of("title")));
+    }
+
+    @Test
+    @DisplayName("activating draft stores version with status PUBLISHED")
+    void activatingDraftStoresVersionWithPublishedStatus() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        final ContentTypeVersion version = versionRepository
+                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
+        assertEquals(ContentTypeVersionStatus.PUBLISHED, version.status());
+    }
+
+    @Test
+    @DisplayName("activating draft stores version with createdBy equal to actor id")
+    void activatingDraftStoresVersionWithCreatedByActorId() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        final ContentTypeVersion version = versionRepository
+                .findByContentTypeAndVersion(saved.id(), 1).orElseThrow();
+        assertEquals(actor.id(), version.createdBy());
+    }
+
+    @Test
+    @DisplayName("activating already active content type does not create another version")
+    void activatingAlreadyActiveDoesNotCreateAnotherVersion() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        service.activate(activateCmd(), actor);
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        assertEquals(1, versionRepository.findByContentType(saved.id()).size());
+    }
+
+    @Test
+    @DisplayName("activating archived content type does not create version")
+    void activatingArchivedDoesNotCreateVersion() {
+        service.create(cmd("Blog Post"), actor);
+        service.archive(archiveCmd(), actor);
+        assertThrows(InvalidContentTypeStatusTransitionException.class, () ->
+                service.activate(activateCmd(), actor));
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        assertTrue(versionRepository.findByContentType(saved.id()).isEmpty());
+    }
+
+    @Test
+    @DisplayName("activating missing content type does not create version")
+    void activatingMissingDoesNotCreateVersion() {
+        assertThrows(NotFoundException.class, () -> service.activate(activateCmd(), actor));
+        assertEquals(0, versionRepository.findByContentType(ContentTypeId.generate()).size());
+    }
+
+    @Test
+    @DisplayName("archive preserves latest published version metadata")
+    void archivePreservesLatestPublishedVersionMetadata() {
+        service.create(cmd("Blog Post"), actor);
+        final ContentType activated = service.activate(activateCmd(), actor);
+        final ContentTypeVersionId versionId = activated.latestPublishedVersionId();
+
+        service.archive(archiveCmd(), actor);
+        final ContentType archived = repository.findByKey(siteKey, key).orElseThrow();
+        assertEquals(versionId, archived.latestPublishedVersionId());
+        assertEquals(1, archived.latestPublishedVersion());
+    }
+
+    @Test
+    @DisplayName("archive does not delete versions")
+    void archiveDoesNotDeleteVersions() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        service.archive(archiveCmd(), actor);
+        final ContentType saved = repository.findByKey(siteKey, key).orElseThrow();
+        assertEquals(1, versionRepository.findByContentType(saved.id()).size());
     }
 
     // --- addField ---

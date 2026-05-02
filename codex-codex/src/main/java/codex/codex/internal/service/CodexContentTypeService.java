@@ -6,14 +6,19 @@ import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
 import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.entity.ContentType;
+import codex.codex.api.model.entity.ContentTypeVersion;
 import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.value.ContentTypeStatus;
+import codex.codex.api.model.value.ContentTypeVersionStatus;
 import codex.codex.internal.repository.ContentTypeRepository;
+import codex.codex.internal.repository.ContentTypeVersionRepository;
+import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.fundamentum.api.exception.NotFoundException;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.IdentityGenerator;
@@ -40,17 +45,28 @@ public final class CodexContentTypeService implements ContentTypeService {
     private static final Logger LOGGER = LoggerFactory.getLogger(CodexContentTypeService.class);
 
     private final ContentTypeRepository repository;
+    private final ContentTypeVersionRepository versionRepository;
     private final Clock clock;
     private final IdentityGenerator<CreateContentTypeCommand, ContentTypeId> identityGenerator;
 
-    public CodexContentTypeService(final ContentTypeRepository repository, final Clock clock) {
-        this(repository, clock, new ContentTypeIdentityGenerator());
+
+    // Visible for testing
+    CodexContentTypeService(final ContentTypeRepository repository, final Clock clock) {
+        this(repository, new MemoryContentTypeVersionRepository(), clock, new ContentTypeIdentityGenerator());
     }
 
     public CodexContentTypeService(final ContentTypeRepository repository,
+                                   final ContentTypeVersionRepository versionRepository,
+                                   final Clock clock) {
+        this(repository, versionRepository, clock, new ContentTypeIdentityGenerator());
+    }
+
+    public CodexContentTypeService(final ContentTypeRepository repository,
+                                   final ContentTypeVersionRepository versionRepository,
                                    final Clock clock,
                                    final IdentityGenerator<CreateContentTypeCommand, ContentTypeId> identityGenerator) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
+        this.versionRepository = Objects.requireNonNull(versionRepository, "versionRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.identityGenerator = Objects.requireNonNull(identityGenerator, "identityGenerator must not be null");
     }
@@ -101,8 +117,34 @@ public final class CodexContentTypeService implements ContentTypeService {
                     contentType);
         }
 
+        final int nextVersion = contentType.latestPublishedVersion() == null
+                ? 1
+                : contentType.latestPublishedVersion() + 1;
+
+        final ContentTypeVersionId versionId = ContentTypeVersionId.forVersion(
+                command.siteKey(), command.key(), nextVersion);
+
+        final ContentTypeVersion snapshot = ContentTypeVersion.builder()
+                .id(versionId)
+                .contentTypeId(contentType.id())
+                .siteKey(contentType.siteKey())
+                .contentTypeKey(contentType.key())
+                .version(nextVersion)
+                .fields(contentType.fields())
+                .status(ContentTypeVersionStatus.PUBLISHED)
+                .createdBy(actor.id())
+                .createdAt(clock.instant())
+                .build();
+
+        versionRepository.save(snapshot);
+
+        LOGGER.info("Published ContentTypeVersion {}/{} v{} by actor: {}",
+                command.siteKey(), command.key(), nextVersion, actor);
+
         return repository.save(ContentType.copyOf(contentType)
                 .status(ContentTypeStatus.ACTIVE)
+                .latestPublishedVersionId(versionId)
+                .latestPublishedVersion(nextVersion)
                 .updatedBy(actor.id())
                 .updatedAt(clock.instant())
                 .build());
