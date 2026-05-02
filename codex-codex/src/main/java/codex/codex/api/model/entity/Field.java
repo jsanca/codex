@@ -42,12 +42,13 @@ public record Field(
      * @param localized whether the field value is locale-dependent
      */
     public Field {
+        Objects.requireNonNull(type, "Field type cannot be null");
         Objects.requireNonNull(key, "Field key cannot be null");
 
         if (displayName != null) {
             displayName = displayName.trim();
             if (displayName.isBlank()) {
-                displayName = null;
+                displayName = key.value();
             }
         }
 

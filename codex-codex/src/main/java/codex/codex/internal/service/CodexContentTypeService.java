@@ -1,11 +1,15 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.entity.ContentType;
+import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.value.ContentTypeStatus;
@@ -17,7 +21,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -149,8 +155,73 @@ public final class CodexContentTypeService implements ContentTypeService {
         return repository.findAll();
     }
 
+    @Override
+    public ContentType addField(final AddContentTypeFieldCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Adding field {} to content type {}/{} by actor: {}",
+                command.field().key(), command.siteKey(), command.contentTypeKey(), actor);
+
+        final ContentType contentType = loadOrThrow(command.siteKey(), command.contentTypeKey());
+        validateSchemaCanBeModified(contentType);
+        validateFieldDoesNotExist(contentType, command.field().key());
+
+        final Map<FieldKey, Field> updatedFields = new HashMap<>(contentType.fields());
+        updatedFields.put(command.field().key(), command.field());
+
+        return repository.save(ContentType.copyOf(contentType)
+                .fields(updatedFields)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build());
+    }
+
+    @Override
+    public ContentType removeField(final RemoveContentTypeFieldCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Removing field {} from content type {}/{} by actor: {}",
+                command.fieldKey(), command.siteKey(), command.contentTypeKey(), actor);
+
+        final ContentType contentType = loadOrThrow(command.siteKey(), command.contentTypeKey());
+        validateSchemaCanBeModified(contentType);
+        validateFieldExists(contentType, command.fieldKey());
+
+        final Map<FieldKey, Field> updatedFields = new HashMap<>(contentType.fields());
+        updatedFields.remove(command.fieldKey());
+
+        return repository.save(ContentType.copyOf(contentType)
+                .fields(updatedFields)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build());
+    }
+
     private ContentType loadOrThrow(final SiteKey siteKey, final ContentTypeKey key) {
         return repository.findByKey(siteKey, key)
                 .orElseThrow(() -> new NotFoundException("ContentType not found: " + siteKey + "/" + key));
+    }
+
+    private void validateSchemaCanBeModified(final ContentType contentType) {
+        if (contentType.status() != ContentTypeStatus.DRAFT) {
+            throw new InvalidContentTypeSchemaModificationException(
+                    "Cannot modify fields for content type " + contentType.key().value()
+                            + " while status is " + contentType.status(),
+                    contentType);
+        }
+    }
+
+    private void validateFieldDoesNotExist(final ContentType contentType, final FieldKey fieldKey) {
+        if (contentType.fields().containsKey(fieldKey)) {
+            throw new ContentTypeFieldAlreadyExistsException(fieldKey, contentType.key());
+        }
+    }
+
+    private void validateFieldExists(final ContentType contentType, final FieldKey fieldKey) {
+        if (!contentType.fields().containsKey(fieldKey)) {
+            throw new ContentTypeFieldNotFoundException(fieldKey, contentType.key());
+        }
     }
 }

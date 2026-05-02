@@ -1,12 +1,17 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
+import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentTypeStatus;
+import codex.codex.api.model.value.FieldType;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.fundamentum.api.exception.NotFoundException;
 import codex.fundamentum.api.model.Actor;
@@ -230,6 +235,147 @@ class CodexContentTypeServiceTest {
         assertThrows(NotFoundException.class, () -> service.archive(archiveCmd(), actor));
     }
 
+    // --- addField ---
+
+    @Test
+    @DisplayName("addField should add field to draft content type")
+    void addFieldShouldAddFieldToDraft() {
+        service.create(cmd("Blog Post"), actor);
+        final Field field = titleField();
+        final ContentType result = service.addField(addFieldCmd(field), actor);
+        assertEquals(1, result.fields().size());
+        assertEquals(field, result.fields().get(FieldKey.of("title")));
+    }
+
+    @Test
+    @DisplayName("addField should update updatedBy from actor id")
+    void addFieldShouldUpdateUpdatedBy() {
+        service.create(cmd("Blog Post"), actor);
+        final Actor other = Actor.system("editor");
+        final ContentType result = service.addField(addFieldCmd(titleField()), other);
+        assertEquals(other.id(), result.updatedBy());
+    }
+
+    @Test
+    @DisplayName("addField should update updatedAt")
+    void addFieldShouldUpdateUpdatedAt() {
+        service.create(cmd("Blog Post"), actor);
+        final ContentType result = service.addField(addFieldCmd(titleField()), actor);
+        assertEquals(clock.instant(), result.updatedAt());
+    }
+
+    @Test
+    @DisplayName("addField should reject duplicate field key")
+    void addFieldShouldRejectDuplicateFieldKey() {
+        service.create(cmd("Blog Post"), actor);
+        service.addField(addFieldCmd(titleField()), actor);
+        assertThrows(ContentTypeFieldAlreadyExistsException.class, () ->
+                service.addField(addFieldCmd(titleField()), actor));
+    }
+
+    @Test
+    @DisplayName("addField should throw NotFoundException when content type is missing")
+    void addFieldShouldThrowNotFoundWhenMissing() {
+        assertThrows(codex.fundamentum.api.exception.NotFoundException.class, () ->
+                service.addField(addFieldCmd(titleField()), actor));
+    }
+
+    @Test
+    @DisplayName("addField should reject ACTIVE content type")
+    void addFieldShouldRejectActiveContentType() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        assertThrows(InvalidContentTypeSchemaModificationException.class, () ->
+                service.addField(addFieldCmd(titleField()), actor));
+    }
+
+    @Test
+    @DisplayName("addField should reject ARCHIVED content type")
+    void addFieldShouldRejectArchivedContentType() {
+        service.create(cmd("Blog Post"), actor);
+        service.archive(archiveCmd(), actor);
+        assertThrows(InvalidContentTypeSchemaModificationException.class, () ->
+                service.addField(addFieldCmd(titleField()), actor));
+    }
+
+    @Test
+    @DisplayName("addField should reject null arguments")
+    void addFieldShouldRejectNullArguments() {
+        assertThrows(NullPointerException.class, () -> service.addField(null, actor));
+        assertThrows(NullPointerException.class, () -> service.addField(addFieldCmd(titleField()), null));
+    }
+
+    // --- removeField ---
+
+    @Test
+    @DisplayName("removeField should remove field from draft content type")
+    void removeFieldShouldRemoveFieldFromDraft() {
+        service.create(cmd("Blog Post"), actor);
+        service.addField(addFieldCmd(titleField()), actor);
+        final ContentType result = service.removeField(removeFieldCmd(FieldKey.of("title")), actor);
+        assertTrue(result.fields().isEmpty());
+    }
+
+    @Test
+    @DisplayName("removeField should update updatedBy from actor id")
+    void removeFieldShouldUpdateUpdatedBy() {
+        service.create(cmd("Blog Post"), actor);
+        service.addField(addFieldCmd(titleField()), actor);
+        final Actor other = Actor.system("editor");
+        final ContentType result = service.removeField(removeFieldCmd(FieldKey.of("title")), other);
+        assertEquals(other.id(), result.updatedBy());
+    }
+
+    @Test
+    @DisplayName("removeField should update updatedAt")
+    void removeFieldShouldUpdateUpdatedAt() {
+        service.create(cmd("Blog Post"), actor);
+        service.addField(addFieldCmd(titleField()), actor);
+        final ContentType result = service.removeField(removeFieldCmd(FieldKey.of("title")), actor);
+        assertEquals(clock.instant(), result.updatedAt());
+    }
+
+    @Test
+    @DisplayName("removeField should throw ContentTypeFieldNotFoundException for missing field key")
+    void removeFieldShouldThrowNotFoundForMissingField() {
+        service.create(cmd("Blog Post"), actor);
+        assertThrows(ContentTypeFieldNotFoundException.class, () ->
+                service.removeField(removeFieldCmd(FieldKey.of("title")), actor));
+    }
+
+    @Test
+    @DisplayName("removeField should throw NotFoundException when content type is missing")
+    void removeFieldShouldThrowNotFoundWhenContentTypeMissing() {
+        assertThrows(codex.fundamentum.api.exception.NotFoundException.class, () ->
+                service.removeField(removeFieldCmd(FieldKey.of("title")), actor));
+    }
+
+    @Test
+    @DisplayName("removeField should reject ACTIVE content type")
+    void removeFieldShouldRejectActiveContentType() {
+        service.create(cmd("Blog Post"), actor);
+        service.activate(activateCmd(), actor);
+        assertThrows(InvalidContentTypeSchemaModificationException.class, () ->
+                service.removeField(removeFieldCmd(FieldKey.of("title")), actor));
+    }
+
+    @Test
+    @DisplayName("removeField should reject ARCHIVED content type")
+    void removeFieldShouldRejectArchivedContentType() {
+        service.create(cmd("Blog Post"), actor);
+        service.archive(archiveCmd(), actor);
+        assertThrows(InvalidContentTypeSchemaModificationException.class, () ->
+                service.removeField(removeFieldCmd(FieldKey.of("title")), actor));
+    }
+
+    @Test
+    @DisplayName("removeField should reject null arguments")
+    void removeFieldShouldRejectNullArguments() {
+        assertThrows(NullPointerException.class, () -> service.removeField(null, actor));
+        assertThrows(NullPointerException.class, () ->
+                service.removeField(removeFieldCmd(FieldKey.of("title")), null));
+    }
+
     // --- null checks ---
 
     @Test
@@ -261,5 +407,17 @@ class CodexContentTypeServiceTest {
 
     private ArchiveContentTypeCommand archiveCmd() {
         return ArchiveContentTypeCommand.of(siteKey, key);
+    }
+
+    private Field titleField() {
+        return Field.builder().key("title").type(FieldType.TEXT).displayName("Title").build();
+    }
+
+    private AddContentTypeFieldCommand addFieldCmd(final Field field) {
+        return AddContentTypeFieldCommand.of(siteKey, key, field);
+    }
+
+    private RemoveContentTypeFieldCommand removeFieldCmd(final FieldKey fieldKey) {
+        return RemoveContentTypeFieldCommand.of(siteKey, key, fieldKey);
     }
 }

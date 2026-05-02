@@ -1,9 +1,12 @@
 package codex.codex.internal.repository;
 
 import codex.codex.api.model.entity.ContentType;
+import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
+import codex.codex.api.model.value.FieldType;
 import codex.fundamentum.api.model.ActorId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -112,6 +115,47 @@ class MemoryContentTypeRepositoryTest {
         repository.save(build(siteKey, key));
         repository.save(build(SiteKey.SYSTEM, ContentTypeKey.of("global-type")));
         assertEquals(2, repository.findAll().size());
+    }
+
+    @Test
+    @DisplayName("saving a content type with fields preserves fields")
+    void savingContentTypeWithFieldsPreservesFields() {
+        final FieldKey titleKey = FieldKey.of("title");
+        final Field titleField = Field.builder().key(titleKey).type(FieldType.TEXT).build();
+        final ContentType ct = ContentType.builder()
+                .id(ContentTypeId.generate())
+                .siteKey(siteKey)
+                .key(key)
+                .displayName("Blog Post")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .fields(java.util.Map.of(titleKey, titleField))
+                .build();
+        final ContentType saved = repository.save(ct);
+        assertEquals(1, saved.fields().size());
+        assertEquals(titleField, saved.fields().get(titleKey));
+    }
+
+    @Test
+    @DisplayName("finding a content type with fields returns fields")
+    void findingContentTypeWithFieldsReturnsFields() {
+        final FieldKey titleKey = FieldKey.of("title");
+        final Field titleField = Field.builder().key(titleKey).type(FieldType.TEXT).build();
+        final ContentType ct = ContentType.builder()
+                .id(ContentTypeId.generate())
+                .siteKey(siteKey)
+                .key(key)
+                .displayName("Blog Post")
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .fields(java.util.Map.of(titleKey, titleField))
+                .build();
+        repository.save(ct);
+        final ContentType found = repository.findByKey(siteKey, key).orElseThrow();
+        assertEquals(1, found.fields().size());
+        assertEquals(titleField, found.fields().get(titleKey));
     }
 
     @Test

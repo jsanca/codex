@@ -1,8 +1,10 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.SiteKey;
@@ -56,5 +58,15 @@ public interface ForwardingContentTypeService extends ContentTypeService {
     @Override
     default List<ContentType> findAll(final Actor actor) {
         return getDelegate().findAll(actor);
+    }
+
+    @Override
+    default ContentType addField(final AddContentTypeFieldCommand command, final Actor actor) {
+        return getDelegate().addField(command, actor);
+    }
+
+    @Override
+    default ContentType removeField(final RemoveContentTypeFieldCommand command, final Actor actor) {
+        return getDelegate().removeField(command, actor);
     }
 }

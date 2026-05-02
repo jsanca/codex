@@ -1,8 +1,10 @@
 package codex.codex.api.model.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.SiteKey;
@@ -76,4 +78,26 @@ public interface ContentTypeService {
      * @return immutable list of all content types
      */
     List<ContentType> findAll(Actor actor);
+
+    /**
+     * Adds a field to the draft schema of an existing content type.
+     * Only permitted while the content type is in {@code DRAFT} status.
+     * Throws if the field key already exists.
+     *
+     * @param command the add-field command containing site scope, content type key, and field; must not be null
+     * @param actor   the acting principal; must not be null
+     * @return the updated content type with the new field included
+     */
+    ContentType addField(AddContentTypeFieldCommand command, Actor actor);
+
+    /**
+     * Removes a field by key from the draft schema of an existing content type.
+     * Only permitted while the content type is in {@code DRAFT} status.
+     * Throws if the field key does not exist.
+     *
+     * @param command the remove-field command containing site scope, content type key, and field key; must not be null
+     * @param actor   the acting principal; must not be null
+     * @return the updated content type with the field removed
+     */
+    ContentType removeField(RemoveContentTypeFieldCommand command, Actor actor);
 }

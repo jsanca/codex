@@ -1,8 +1,10 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.event.ContentTypeActivatedEvent;
 import codex.codex.api.model.event.ContentTypeArchivedEvent;
@@ -364,6 +366,16 @@ class EventPublishingContentTypeServiceTest {
         @Override
         public List<ContentType> findAll(final Actor actor) {
             return nextFindAllResult;
+        }
+
+        @Override
+        public ContentType addField(final AddContentTypeFieldCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in unit tests");
+        }
+
+        @Override
+        public ContentType removeField(final RemoveContentTypeFieldCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in unit tests");
         }
     }
 }

@@ -1,8 +1,13 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.ArchiveContentTypeCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.RemoveContentTypeFieldCommand;
+import codex.codex.api.model.entity.Field;
+import codex.codex.api.model.identity.FieldKey;
+import codex.codex.api.model.value.FieldType;
 import codex.codex.api.model.event.ContentTypeActivatedEvent;
 import codex.codex.api.model.event.ContentTypeArchivedEvent;
 import codex.codex.api.model.event.ContentTypeCreatedEvent;
@@ -227,5 +232,28 @@ class ContentTypeEventPipelineIntegrationTest {
     void outsideTransactionDispatchesImmediately() {
         ctx.contentTypeService().create(CreateContentTypeCommand.of(SITE_KEY, CT_KEY, "Blog Post"), ACTOR);
         ctx.assertSingleEvent(ContentTypeCreatedEvent.class);
+    }
+
+    // --- field operations ---
+
+    @Test
+    @DisplayName("create, add field, and remove field work end-to-end")
+    void createAddFieldAndRemoveFieldWorkEndToEnd() throws Exception {
+        TransactionContext.runInTransaction(() -> {
+            ctx.contentTypeService().create(CreateContentTypeCommand.of(SITE_KEY, CT_KEY, "Blog Post"), ACTOR);
+            return null;
+        });
+
+        final FieldKey titleKey = FieldKey.of("title");
+        final Field titleField = Field.builder().key(titleKey).type(FieldType.TEXT).displayName("Title").build();
+
+        final codex.codex.api.model.entity.ContentType withField = ctx.contentTypeService()
+                .addField(AddContentTypeFieldCommand.of(SITE_KEY, CT_KEY, titleField), ACTOR);
+        assertEquals(1, withField.fields().size());
+        assertEquals(titleField, withField.fields().get(titleKey));
+
+        final codex.codex.api.model.entity.ContentType withoutField = ctx.contentTypeService()
+                .removeField(RemoveContentTypeFieldCommand.of(SITE_KEY, CT_KEY, titleKey), ACTOR);
+        assertTrue(withoutField.fields().isEmpty());
     }
 }

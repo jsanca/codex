@@ -2,11 +2,13 @@ package codex.codex.api.model.entity;
 
 import codex.codex.api.model.identity.ContentTypeId;
 import codex.codex.api.model.identity.ContentTypeKey;
+import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentTypeStatus;
 import codex.fundamentum.api.model.ActorId;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -18,6 +20,9 @@ import java.util.Objects;
  * <p>
  * Its lifecycle follows the {@link ContentTypeStatus} state machine:
  * {@code DRAFT → ACTIVE}, {@code DRAFT → ARCHIVED}, {@code ACTIVE → ARCHIVED}.
+ * <p>
+ * Fields are stored as {@code Map<FieldKey, Field>} representing the current draft schema.
+ * Field modification is only allowed while the status is {@link ContentTypeStatus#DRAFT}.
  */
 public record ContentType(
         ContentTypeId id,
@@ -29,7 +34,8 @@ public record ContentType(
         ActorId createdBy,
         ActorId updatedBy,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Map<FieldKey, Field> fields
 ) {
 
     /**
@@ -45,6 +51,7 @@ public record ContentType(
      * @param updatedBy   the actor that last updated this content type; must not be null
      * @param createdAt   creation timestamp; defaults to {@link Instant#now()} if null
      * @param updatedAt   last-update timestamp; defaults to {@code createdAt} if null
+     * @param fields      field schema; defaults to empty map if null; map keys must match field keys
      */
     public ContentType {
         Objects.requireNonNull(id, "ContentType id cannot be null");
@@ -63,6 +70,18 @@ public record ContentType(
         Objects.requireNonNull(updatedBy, "ContentType updatedBy cannot be null");
         createdAt = createdAt == null ? Instant.now() : createdAt;
         updatedAt = updatedAt == null ? createdAt : updatedAt;
+        if (fields == null) {
+            fields = Map.of();
+        } else {
+            for (final var entry : fields.entrySet()) {
+                if (!entry.getKey().equals(entry.getValue().key())) {
+                    throw new IllegalArgumentException(
+                            "Map key '" + entry.getKey().value() + "' does not match field key '"
+                                    + entry.getValue().key().value() + "'");
+                }
+            }
+            fields = Map.copyOf(fields);
+        }
     }
 
     /**
@@ -93,7 +112,8 @@ public record ContentType(
                 .createdBy(contentType.createdBy())
                 .updatedBy(contentType.updatedBy())
                 .createdAt(contentType.createdAt())
-                .updatedAt(contentType.updatedAt());
+                .updatedAt(contentType.updatedAt())
+                .fields(contentType.fields());
     }
 
     @Override
@@ -109,6 +129,7 @@ public record ContentType(
                 ", updatedBy=" + updatedBy +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
+                ", fields=" + fields.size() +
                 '}';
     }
 
@@ -126,6 +147,7 @@ public record ContentType(
         private ActorId updatedBy;
         private Instant createdAt;
         private Instant updatedAt;
+        private Map<FieldKey, Field> fields;
 
         public Builder id(ContentTypeId id) { this.id = id; return this; }
         public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
@@ -137,6 +159,7 @@ public record ContentType(
         public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
+        public Builder fields(Map<FieldKey, Field> fields) { this.fields = fields; return this; }
 
         /**
          * Builds a new {@link ContentType} instance.
@@ -145,7 +168,7 @@ public record ContentType(
          */
         public ContentType build() {
             return new ContentType(id, siteKey, key, displayName, status,
-                    owner, createdBy, updatedBy, createdAt, updatedAt);
+                    owner, createdBy, updatedBy, createdAt, updatedAt, fields);
         }
     }
 }
