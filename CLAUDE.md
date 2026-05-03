@@ -394,5 +394,16 @@ Spring Boot annotations (`@Transactional`, `@Component`, `@Autowired`) must neve
 - Keep changes small and focused
 - Ask before making architectural decisions that affect module boundaries
 
+## Exception style
+
+- Prefer unchecked exceptions for Codex domain/application errors.
+- Custom Codex exceptions should extend `RuntimeException` unless a task explicitly says otherwise.
+- Do not add `throws` declarations for domain validation errors.
+- Preserve causes when wrapping infrastructure errors.
+- Use semantic exception types instead of generic `RuntimeException` when the error belongs to the domain.
+
+## Author's agent feedback
+See @codex-docs/agents/AGENT-CALIBRATION.md for extra feedback.
+
 ## Author's Coding Identity
 See [CODING_IDENTITY.md](link) for the broader design fingerprint that informs all decisions in this project.
