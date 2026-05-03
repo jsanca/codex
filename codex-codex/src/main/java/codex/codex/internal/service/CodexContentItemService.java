@@ -1,6 +1,7 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.entity.ContentType;
@@ -43,7 +44,13 @@ import java.util.Optional;
  * <p>
  * Creating a content item creates revision {@code 1} as {@link ContentRevisionStatus#WORKING}
  * and sets {@link ContentItem#currentWorkingRevisionId()} to that revision.
- * {@link ContentItem#currentPublishedRevisionId()} is null until publishing is implemented.
+ * <p>
+ * Publishing is pointer-based: values remain in {@link codex.codex.api.model.entity.ContentRevision}.
+ * The first publish transitions the working revision to {@link ContentRevisionStatus#PUBLISHED} and
+ * sets both {@link ContentItem#currentWorkingRevisionId()} and
+ * {@link ContentItem#currentPublishedRevisionId()} to the same revision.
+ * Future edit support will create a new working revision that diverges from the published one.
+ * Publish events and transaction management are future work.
  */
 public final class CodexContentItemService implements ContentItemService {
 
@@ -173,6 +180,68 @@ public final class CodexContentItemService implements ContentItemService {
 
         LOGGER.debug("Finding all content items by actor: {}", actor);
         return repository.findAll();
+    }
+
+    @Override
+    public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
+
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Publishing content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        if (item.status() == ContentItemStatus.ARCHIVED) {
+            throw new InvalidContentItemPublishException(item.key(),
+                    "item is ARCHIVED");
+        }
+
+        if (item.currentWorkingRevisionId() == null) {
+            throw new InvalidContentItemPublishException(item.key(),
+                    "it has no working revision");
+        }
+
+        final ContentRevision working = revisionRepository.findById(item.currentWorkingRevisionId())
+                .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
+                        + item.currentWorkingRevisionId().value()));
+
+        if (working.status() == ContentRevisionStatus.ARCHIVED) {
+            throw new InvalidContentItemPublishException(item.key(),
+                    "the working revision is ARCHIVED");
+        }
+
+        if (item.status() == ContentItemStatus.PUBLISHED
+                && item.currentPublishedRevisionId() != null
+                && item.currentPublishedRevisionId().equals(item.currentWorkingRevisionId())
+                && working.status() == ContentRevisionStatus.PUBLISHED) {
+            LOGGER.debug("Content item {}/{}/{} is already published (idempotent)",
+                    command.siteKey(), command.contentTypeKey(), command.key());
+            return item;
+        }
+
+        final ContentRevision published = ContentRevision.copyOf(working)
+                .status(ContentRevisionStatus.PUBLISHED)
+                .build();
+        revisionRepository.save(published);
+
+        final ContentItem updated = ContentItem.copyOf(item)
+                .status(ContentItemStatus.PUBLISHED)
+                .currentPublishedRevisionId(published.id())
+                .currentWorkingRevisionId(published.id())
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build();
+        final ContentItem saved = repository.save(updated);
+
+        LOGGER.info("Published content item {}/{}/{} (revision {}) by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(),
+                published.revisionNumber(), actor);
+
+        return saved;
     }
 
     private ContentType findContentTypeRequired(final SiteKey siteKey, final ContentTypeKey contentTypeKey) {

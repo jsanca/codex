@@ -2,6 +2,7 @@ package codex.codex.api.model.event;
 
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
+import codex.codex.api.model.identity.ContentRevisionId;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.SiteKey;
@@ -13,7 +14,7 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for {@link ContentItemCreatedEvent}.
+ * Tests for {@link ContentItemCreatedEvent} and {@link ContentItemPublishedEvent}.
  */
 class ContentItemEventTest {
 
@@ -71,6 +72,68 @@ class ContentItemEventTest {
     void occurredAtReturnedFromCodexEvent() {
         final ContentItemCreatedEvent event =
                 new ContentItemCreatedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, ACTOR, NOW);
+        assertEquals(NOW, event.occurredAt());
+    }
+
+    // -------------------------------------------------------------------------
+    // ContentItemPublishedEvent
+    // -------------------------------------------------------------------------
+
+    private static final ContentRevisionId REVISION_ID =
+            ContentRevisionId.of("content-revision:acme:blog-post:my-post:r1");
+
+    @Test
+    void publishedRejectsNullId() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(null, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullSiteKey() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, null, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullContentTypeKey() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, null, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullContentTypeVersionId() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, null, ITEM_KEY, REVISION_ID, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullKey() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, null, REVISION_ID, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullPublishedRevisionId() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, null, ACTOR, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullActor() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, null, NOW));
+    }
+
+    @Test
+    void publishedRejectsNullOccurredAt() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, null));
+    }
+
+    @Test
+    void publishedOccurredAtReturnedFromCodexEvent() {
+        final ContentItemPublishedEvent event =
+                new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW);
         assertEquals(NOW, event.occurredAt());
     }
 }

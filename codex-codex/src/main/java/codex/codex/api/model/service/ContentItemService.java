@@ -1,6 +1,7 @@
 package codex.codex.api.model.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeKey;
@@ -59,4 +60,27 @@ public interface ContentItemService {
      * @return immutable list of all content items; never null
      */
     List<ContentItem> findAll(Actor actor);
+
+    /**
+     * Publishes the current working revision of a content item.
+     * <p>
+     * Publishing is pointer-based: content values remain in {@link codex.codex.api.model.entity.ContentRevision}.
+     * The working revision is transitioned to {@code PUBLISHED} status and the item's
+     * {@code currentPublishedRevisionId} is updated to point to it.
+     * <p>
+     * For this first foundation, publishing sets both {@code currentWorkingRevisionId} and
+     * {@code currentPublishedRevisionId} to the same revision. Future edit operations will
+     * create a new {@code WORKING} revision that diverges from the published one.
+     * <p>
+     * Idempotent: publishing an already-published item whose pointers already match returns
+     * the existing item without mutation.
+     * <p>
+     * Publish events and workflow are future work.
+     * This operation should be executed inside a transaction boundary by a future wrapper.
+     *
+     * @param command the publish command; must not be null
+     * @param actor   the acting user; must not be null
+     * @return the updated content item with {@code PUBLISHED} status
+     */
+    ContentItem publish(PublishContentItemCommand command, Actor actor);
 }

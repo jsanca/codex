@@ -1,6 +1,9 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.entity.ContentRevision;
+import codex.codex.api.model.value.ContentRevisionStatus;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.entity.ContentTypeVersion;
@@ -516,5 +519,228 @@ class CodexContentItemServiceTest {
     @Test
     void findAllRejectsNullActor() {
         assertThrows(NullPointerException.class, () -> service.findAll(null));
+    }
+
+    // -------------------------------------------------------------------------
+    // publish
+    // -------------------------------------------------------------------------
+
+    private ContentItem createDraftItem() {
+        setupActiveContentType(SITE_ACME, BLOG_POST);
+        return service.create(
+                CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
+                        Map.of(TITLE_KEY, "Hello World", BODY_KEY, "Body text")),
+                ACTOR);
+    }
+
+    @Test
+    void publishShouldUpdateItemStatusToPublished() {
+        final ContentItem draft = createDraftItem();
+        final ContentItem published = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(ContentItemStatus.PUBLISHED, published.status());
+    }
+
+    @Test
+    void publishShouldSetCurrentPublishedRevisionId() {
+        createDraftItem();
+        final ContentItem published = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertNotNull(published.currentPublishedRevisionId());
+    }
+
+    @Test
+    void publishShouldKeepWorkingRevisionIdEqualToPublishedRevisionId() {
+        createDraftItem();
+        final ContentItem published = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(published.currentPublishedRevisionId(), published.currentWorkingRevisionId());
+    }
+
+    @Test
+    void publishShouldUpdateUpdatedBy() {
+        createDraftItem();
+        final Actor publisher = Actor.system("publisher");
+        final ContentItem published = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                publisher);
+
+        assertEquals(publisher.id(), published.updatedBy());
+    }
+
+    @Test
+    void publishShouldUpdateUpdatedAt() {
+        createDraftItem();
+        final Instant before = clock.instant();
+        final Clock advancedClock = Clock.fixed(Instant.parse("2025-12-01T00:00:00Z"), ZoneOffset.UTC);
+        service = new CodexContentItemService(itemRepository, revisionRepository, contentTypeRepository, versionRepository, advancedClock);
+
+        final ContentItem published = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(advancedClock.instant(), published.updatedAt());
+    }
+
+    @Test
+    void publishShouldMarkWorkingRevisionAsPublished() {
+        final ContentItem draft = createDraftItem();
+        service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
+                .orElseThrow();
+        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
+                .orElseThrow();
+
+        assertEquals(ContentRevisionStatus.PUBLISHED, revision.status());
+    }
+
+    @Test
+    void publishShouldPreserveRevisionValues() {
+        createDraftItem();
+        service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
+                .orElseThrow();
+        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
+                .orElseThrow();
+
+        assertEquals("Hello World", revision.values().get(TITLE_KEY));
+        assertEquals("Body text", revision.values().get(BODY_KEY));
+    }
+
+    @Test
+    void publishShouldPreserveRevisionNumber() {
+        createDraftItem();
+        service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
+                .orElseThrow();
+        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
+                .orElseThrow();
+
+        assertEquals(1, revision.revisionNumber());
+    }
+
+    @Test
+    void publishShouldPreserveRevisionCreatedBy() {
+        createDraftItem();
+        service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
+                .orElseThrow();
+        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
+                .orElseThrow();
+
+        assertEquals(ACTOR.id(), revision.createdBy());
+    }
+
+    @Test
+    void publishShouldPreserveRevisionCreatedAt() {
+        createDraftItem();
+        final Instant expectedCreatedAt = clock.instant();
+        service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
+                .orElseThrow();
+        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
+                .orElseThrow();
+
+        assertEquals(expectedCreatedAt, revision.createdAt());
+    }
+
+    @Test
+    void publishShouldReturnExistingItemWhenAlreadyPublishedAndPointersMatch() {
+        createDraftItem();
+        final ContentItem firstPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem secondPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(firstPublish, secondPublish);
+    }
+
+    @Test
+    void idempotentPublishShouldNotUpdateUpdatedAt() {
+        createDraftItem();
+        final ContentItem firstPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem secondPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(firstPublish.updatedAt(), secondPublish.updatedAt());
+    }
+
+    @Test
+    void idempotentPublishShouldNotUpdateUpdatedBy() {
+        createDraftItem();
+        final ContentItem firstPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final Actor secondActor = Actor.system("second-publisher");
+        final ContentItem secondPublish = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                secondActor);
+
+        assertEquals(firstPublish.updatedBy(), secondPublish.updatedBy());
+    }
+
+    @Test
+    void publishShouldThrowNotFoundExceptionWhenItemMissing() {
+        assertThrows(NotFoundException.class,
+                () -> service.publish(
+                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("ghost")),
+                        ACTOR));
+    }
+
+    @Test
+    void publishShouldThrowInvalidPublishExceptionWhenItemIsArchived() {
+        createDraftItem();
+        // force the item into ARCHIVED status by saving directly to repository
+        final ContentItem draft = itemRepository.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"))
+                .orElseThrow();
+        itemRepository.save(ContentItem.copyOf(draft).status(ContentItemStatus.ARCHIVED).build());
+
+        assertThrows(InvalidContentItemPublishException.class,
+                () -> service.publish(
+                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void publishShouldThrowInvalidPublishExceptionWhenWorkingRevisionIsArchived() {
+        final ContentItem draft = createDraftItem();
+        // force the working revision into ARCHIVED status
+        final ContentRevision working = revisionRepository.findById(draft.currentWorkingRevisionId())
+                .orElseThrow();
+        revisionRepository.save(ContentRevision.copyOf(working).status(ContentRevisionStatus.ARCHIVED).build());
+
+        assertThrows(InvalidContentItemPublishException.class,
+                () -> service.publish(
+                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void publishRejectsNullCommand() {
+        assertThrows(NullPointerException.class, () -> service.publish(null, ACTOR));
+    }
+
+    @Test
+    void publishRejectsNullActor() {
+        createDraftItem();
+        assertThrows(NullPointerException.class,
+                () -> service.publish(
+                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        null));
     }
 }

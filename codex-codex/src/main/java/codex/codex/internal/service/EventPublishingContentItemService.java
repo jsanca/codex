@@ -1,14 +1,18 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.event.ContentItemCreatedEvent;
+import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.service.ContentItemService;
+import codex.codex.api.model.value.ContentItemStatus;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A {@link ContentItemService} decorator that publishes domain events after each mutating operation.
@@ -20,8 +24,9 @@ import java.util.Objects;
  * {@link DeferredEventDispatcher} that buffers events inside a transaction and dispatches
  * them on commit. Rollbacks discard all buffered events.</p>
  *
- * <p>Content values are intentionally excluded from {@link ContentItemCreatedEvent}.
- * Values may be large or sensitive; downstream subscribers can load the item by id if needed.</p>
+ * <p>Content values are intentionally excluded from {@link ContentItemCreatedEvent} and
+ * {@link ContentItemPublishedEvent}. Values may be large or sensitive; downstream subscribers
+ * can load the revision by id if needed.</p>
  */
 public final class EventPublishingContentItemService implements ForwardingContentItemService {
 
@@ -63,4 +68,53 @@ public final class EventPublishingContentItemService implements ForwardingConten
                 clock.instant()));
         return result;
     }
+
+    @Override
+    public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final Optional<ContentItem> previous = delegate.findByKey(
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem result = delegate.publish(command, actor);
+
+        if (result.status() == ContentItemStatus.PUBLISHED && result.currentPublishedRevisionId() == null) {
+            throw new IllegalStateException(
+                    "Delegate returned published item with null currentPublishedRevisionId for "
+                            + result.key().value());
+        }
+
+        if (shouldPublishEvent(previous, result)) {
+
+            eventDispatcher.dispatch(new ContentItemPublishedEvent(
+                    result.id(),
+                    result.siteKey(),
+                    result.contentTypeKey(),
+                    result.contentTypeVersionId(),
+                    result.key(),
+                    result.currentPublishedRevisionId(),
+                    actor,
+                    clock.instant()));
+        }
+        return result;
+    }
+
+    private boolean shouldPublishEvent(final Optional<ContentItem> previous, final ContentItem result) {
+        if (previous.isEmpty()) {
+            return false;
+        }
+        if (result.status() != ContentItemStatus.PUBLISHED) {
+            return false;
+        }
+        if (result.currentPublishedRevisionId() == null) {
+            return false;
+        }
+
+        final ContentItem prev = previous.get();
+        return !(prev.status() == ContentItemStatus.PUBLISHED
+                && Objects.equals(prev.currentPublishedRevisionId(), result.currentPublishedRevisionId()));
+    }
+
+
 }

@@ -4,8 +4,10 @@ import codex.codex.api.model.command.ActivateContentTypeCommand;
 import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.Field;
 import codex.codex.api.model.event.ContentItemCreatedEvent;
+import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.FieldKey;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -185,5 +188,95 @@ class ContentItemEventPipelineIntegrationTest {
                         ACTOR));
 
         ctx.assertNoEvents();
+    }
+
+    // -------------------------------------------------------------------------
+    // Publish event pipeline
+    // -------------------------------------------------------------------------
+
+    private void createDraftItem() {
+        ctx.contentItemService().create(
+                CreateContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post"),
+                        Map.of(TITLE_KEY, "Hello")),
+                ACTOR);
+        ctx.clearEvents();
+    }
+
+    @Test
+    @DisplayName("publish inside transaction does not dispatch before commit; dispatches ContentItemPublishedEvent after")
+    void publishInsideTransactionDispatchesEventAfterCommit() throws Exception {
+        createDraftItem();
+
+        TransactionContext.runInTransaction(() -> {
+            ctx.contentItemService().publish(
+                    PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
+                    ACTOR);
+            ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
+            return null;
+        });
+
+        final ContentItemPublishedEvent event = ctx.assertSingleEventOfType(ContentItemPublishedEvent.class);
+        assertEquals(SITE_KEY, event.siteKey());
+        assertEquals(CT_KEY, event.contentTypeKey());
+        assertEquals(ContentItemKey.of("my-post"), event.key());
+        assertEquals(ACTOR, event.actor());
+        assertNotNull(event.publishedRevisionId());
+        assertNotNull(event.occurredAt());
+    }
+
+    @Test
+    @DisplayName("publish rollback does not dispatch ContentItemPublishedEvent")
+    void publishRollbackDoesNotDispatchEvent() {
+        createDraftItem();
+
+        assertThrows(RuntimeException.class, () ->
+                TransactionContext.runInTransaction(() -> {
+                    ctx.contentItemService().publish(
+                            PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
+                            ACTOR);
+                    throw new RuntimeException("forced rollback");
+                })
+        );
+
+        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
+    }
+
+    @Test
+    @DisplayName("publish outside transaction dispatches ContentItemPublishedEvent immediately")
+    void publishOutsideTransactionDispatchesImmediately() {
+        createDraftItem();
+
+        ctx.contentItemService().publish(
+                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
+                ACTOR);
+
+        ctx.assertSingleEventOfType(ContentItemPublishedEvent.class);
+    }
+
+    @Test
+    @DisplayName("idempotent publish does not dispatch ContentItemPublishedEvent")
+    void idempotentPublishDoesNotDispatchEvent() {
+        createDraftItem();
+        ctx.contentItemService().publish(
+                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
+                ACTOR);
+        ctx.clearEvents();
+
+        ctx.contentItemService().publish(
+                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
+                ACTOR);
+
+        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
+    }
+
+    @Test
+    @DisplayName("publish missing content item does not dispatch ContentItemPublishedEvent")
+    void publishMissingItemDoesNotDispatchEvent() {
+        assertThrows(Exception.class, () ->
+                ctx.contentItemService().publish(
+                        PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("ghost-post")),
+                        ACTOR));
+
+        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
     }
 }

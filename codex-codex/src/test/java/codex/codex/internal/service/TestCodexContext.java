@@ -97,4 +97,47 @@ public final class TestCodexContext {
     public void clearEvents() {
         runtime.clearRecordedEvents();
     }
+
+    /**
+     * Returns all recorded events of the given type.
+     *
+     * @param <E>  the event type
+     * @param type the event class to filter by
+     * @return immutable list of matching events; never null
+     */
+    public <E extends CodexEvent> List<E> eventsOfType(final Class<E> type) {
+        return runtime.recordedEvents().stream()
+                .filter(type::isInstance)
+                .map(type::cast)
+                .toList();
+    }
+
+    /**
+     * Asserts that exactly one event of the given type has been dispatched and returns it.
+     * Unlike {@link #assertSingleEvent(Class)}, this does not require the event to be the only
+     * recorded event — it only checks that exactly one event of the specified type exists.
+     *
+     * @param <E>  the event type
+     * @param type the expected event class
+     * @return the single dispatched event of {@code type}
+     */
+    public <E extends CodexEvent> E assertSingleEventOfType(final Class<E> type) {
+        final List<E> found = eventsOfType(type);
+        assertEquals(1, found.size(),
+                "Expected exactly one " + type.getSimpleName() + " but found " + found.size()
+                        + " in: " + runtime.recordedEvents());
+        return found.getFirst();
+    }
+
+    /**
+     * Asserts that no event of the given type has been dispatched.
+     *
+     * @param <E>  the event type
+     * @param type the event class to check for
+     */
+    public <E extends CodexEvent> void assertNoEventsOfType(final Class<E> type) {
+        final List<E> found = eventsOfType(type);
+        assertTrue(found.isEmpty(),
+                "Expected no " + type.getSimpleName() + " but found: " + found);
+    }
 }

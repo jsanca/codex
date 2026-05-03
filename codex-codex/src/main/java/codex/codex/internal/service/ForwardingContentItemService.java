@@ -1,6 +1,7 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeKey;
@@ -50,5 +51,10 @@ public interface ForwardingContentItemService extends ContentItemService {
     @Override
     default List<ContentItem> findAll(final Actor actor) {
         return getDelegate().findAll(actor);
+    }
+
+    @Override
+    default ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
+        return getDelegate().publish(command, actor);
     }
 }

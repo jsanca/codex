@@ -1,0 +1,910 @@
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/service/ContentItemService.java b/codex-codex/src/main/java/codex/codex/api/model/service/ContentItemService.java
+index 123eeeb..4c66d3a 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/service/ContentItemService.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/service/ContentItemService.java
+@@ -1,6 +1,7 @@
+ package codex.codex.api.model.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.identity.ContentItemKey;
+ import codex.codex.api.model.identity.ContentTypeKey;
+@@ -59,4 +60,27 @@ public interface ContentItemService {
+      * @return immutable list of all content items; never null
+      */
+     List<ContentItem> findAll(Actor actor);
++
++    /**
++     * Publishes the current working revision of a content item.
++     * <p>
++     * Publishing is pointer-based: content values remain in {@link codex.codex.api.model.entity.ContentRevision}.
++     * The working revision is transitioned to {@code PUBLISHED} status and the item's
++     * {@code currentPublishedRevisionId} is updated to point to it.
++     * <p>
++     * For this first foundation, publishing sets both {@code currentWorkingRevisionId} and
++     * {@code currentPublishedRevisionId} to the same revision. Future edit operations will
++     * create a new {@code WORKING} revision that diverges from the published one.
++     * <p>
++     * Idempotent: publishing an already-published item whose pointers already match returns
++     * the existing item without mutation.
++     * <p>
++     * Publish events and workflow are future work.
++     * This operation should be executed inside a transaction boundary by a future wrapper.
++     *
++     * @param command the publish command; must not be null
++     * @param actor   the acting user; must not be null
++     * @return the updated content item with {@code PUBLISHED} status
++     */
++    ContentItem publish(PublishContentItemCommand command, Actor actor);
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
+index 08fe0a0..14e184f 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
+@@ -1,6 +1,7 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.entity.ContentRevision;
+ import codex.codex.api.model.entity.ContentType;
+@@ -43,7 +44,13 @@ import java.util.Optional;
+  * <p>
+  * Creating a content item creates revision {@code 1} as {@link ContentRevisionStatus#WORKING}
+  * and sets {@link ContentItem#currentWorkingRevisionId()} to that revision.
+- * {@link ContentItem#currentPublishedRevisionId()} is null until publishing is implemented.
++ * <p>
++ * Publishing is pointer-based: values remain in {@link codex.codex.api.model.entity.ContentRevision}.
++ * The first publish transitions the working revision to {@link ContentRevisionStatus#PUBLISHED} and
++ * sets both {@link ContentItem#currentWorkingRevisionId()} and
++ * {@link ContentItem#currentPublishedRevisionId()} to the same revision.
++ * Future edit support will create a new working revision that diverges from the published one.
++ * Publish events and transaction management are future work.
+  */
+ public final class CodexContentItemService implements ContentItemService {
+ 
+@@ -175,6 +182,68 @@ public final class CodexContentItemService implements ContentItemService {
+         return repository.findAll();
+     }
+ 
++    @Override
++    public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
++
++        Objects.requireNonNull(command, "command must not be null");
++        Objects.requireNonNull(actor, "actor must not be null");
++
++        LOGGER.debug("Publishing content item {}/{}/{} by actor: {}",
++                command.siteKey(), command.contentTypeKey(), command.key(), actor);
++
++        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
++                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
++                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
++
++        if (item.status() == ContentItemStatus.ARCHIVED) {
++            throw new InvalidContentItemPublishException(item.key(),
++                    "item is ARCHIVED");
++        }
++
++        if (item.currentWorkingRevisionId() == null) {
++            throw new InvalidContentItemPublishException(item.key(),
++                    "it has no working revision");
++        }
++
++        final ContentRevision working = revisionRepository.findById(item.currentWorkingRevisionId())
++                .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
++                        + item.currentWorkingRevisionId().value()));
++
++        if (working.status() == ContentRevisionStatus.ARCHIVED) {
++            throw new InvalidContentItemPublishException(item.key(),
++                    "the working revision is ARCHIVED");
++        }
++
++        if (item.status() == ContentItemStatus.PUBLISHED
++                && item.currentPublishedRevisionId() != null
++                && item.currentPublishedRevisionId().equals(item.currentWorkingRevisionId())
++                && working.status() == ContentRevisionStatus.PUBLISHED) {
++            LOGGER.debug("Content item {}/{}/{} is already published (idempotent)",
++                    command.siteKey(), command.contentTypeKey(), command.key());
++            return item;
++        }
++
++        final ContentRevision published = ContentRevision.copyOf(working)
++                .status(ContentRevisionStatus.PUBLISHED)
++                .build();
++        revisionRepository.save(published);
++
++        final ContentItem updated = ContentItem.copyOf(item)
++                .status(ContentItemStatus.PUBLISHED)
++                .currentPublishedRevisionId(published.id())
++                .currentWorkingRevisionId(published.id())
++                .updatedBy(actor.id())
++                .updatedAt(clock.instant())
++                .build();
++        final ContentItem saved = repository.save(updated);
++
++        LOGGER.info("Published content item {}/{}/{} (revision {}) by actor: {}",
++                command.siteKey(), command.contentTypeKey(), command.key(),
++                published.revisionNumber(), actor);
++
++        return saved;
++    }
++
+     private ContentType findContentTypeRequired(final SiteKey siteKey, final ContentTypeKey contentTypeKey) {
+         return contentTypeRepository.findByKey(siteKey, contentTypeKey)
+                 .orElseThrow(() -> new NotFoundException("ContentType not found: " + siteKey + "/" + contentTypeKey));
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/EventPublishingContentItemService.java b/codex-codex/src/main/java/codex/codex/internal/service/EventPublishingContentItemService.java
+index 047d51e..d61fccd 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/EventPublishingContentItemService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/EventPublishingContentItemService.java
+@@ -1,14 +1,18 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.event.ContentItemCreatedEvent;
++import codex.codex.api.model.event.ContentItemPublishedEvent;
+ import codex.codex.api.model.service.ContentItemService;
++import codex.codex.api.model.value.ContentItemStatus;
+ import codex.fundamentum.api.event.CodexEventDispatcher;
+ import codex.fundamentum.api.model.Actor;
+ 
+ import java.time.Clock;
+ import java.util.Objects;
++import java.util.Optional;
+ 
+ /**
+  * A {@link ContentItemService} decorator that publishes domain events after each mutating operation.
+@@ -20,8 +24,9 @@ import java.util.Objects;
+  * {@link DeferredEventDispatcher} that buffers events inside a transaction and dispatches
+  * them on commit. Rollbacks discard all buffered events.</p>
+  *
+- * <p>Content values are intentionally excluded from {@link ContentItemCreatedEvent}.
+- * Values may be large or sensitive; downstream subscribers can load the item by id if needed.</p>
++ * <p>Content values are intentionally excluded from {@link ContentItemCreatedEvent} and
++ * {@link ContentItemPublishedEvent}. Values may be large or sensitive; downstream subscribers
++ * can load the revision by id if needed.</p>
+  */
+ public final class EventPublishingContentItemService implements ForwardingContentItemService {
+ 
+@@ -63,4 +68,46 @@ public final class EventPublishingContentItemService implements ForwardingConten
+                 clock.instant()));
+         return result;
+     }
++
++    @Override
++    public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
++        Objects.requireNonNull(command, "command must not be null");
++        Objects.requireNonNull(actor, "actor must not be null");
++
++        final Optional<ContentItem> previous = delegate.findByKey(
++                command.siteKey(), command.contentTypeKey(), command.key(), actor);
++
++        final ContentItem result = delegate.publish(command, actor);
++
++        if (shouldPublishEvent(previous, result)) {
++            if (result.currentPublishedRevisionId() == null) {
++                throw new IllegalStateException(
++                        "Delegate returned published item with null currentPublishedRevisionId for "
++                                + result.key().value());
++            }
++            eventDispatcher.dispatch(new ContentItemPublishedEvent(
++                    result.id(),
++                    result.siteKey(),
++                    result.contentTypeKey(),
++                    result.contentTypeVersionId(),
++                    result.key(),
++                    result.currentPublishedRevisionId(),
++                    actor,
++                    clock.instant()));
++        }
++        return result;
++    }
++
++    private boolean shouldPublishEvent(final Optional<ContentItem> previous, final ContentItem result) {
++        if (previous.isEmpty()) return false;
++        if (result.status() != ContentItemStatus.PUBLISHED) return false;
++        if (result.currentPublishedRevisionId() == null) return false;
++
++        final ContentItem prev = previous.get();
++        if (prev.status() == ContentItemStatus.PUBLISHED
++                && result.currentPublishedRevisionId().equals(prev.currentPublishedRevisionId())) {
++            return false;
++        }
++        return true;
++    }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/ForwardingContentItemService.java b/codex-codex/src/main/java/codex/codex/internal/service/ForwardingContentItemService.java
+index 751dd24..098b14e 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/ForwardingContentItemService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/ForwardingContentItemService.java
+@@ -1,6 +1,7 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.identity.ContentItemKey;
+ import codex.codex.api.model.identity.ContentTypeKey;
+@@ -51,4 +52,9 @@ public interface ForwardingContentItemService extends ContentItemService {
+     default List<ContentItem> findAll(final Actor actor) {
+         return getDelegate().findAll(actor);
+     }
++
++    @Override
++    default ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
++        return getDelegate().publish(command, actor);
++    }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/api/model/event/ContentItemEventTest.java b/codex-codex/src/test/java/codex/codex/api/model/event/ContentItemEventTest.java
+index ea640d5..8028d3d 100644
+--- a/codex-codex/src/test/java/codex/codex/api/model/event/ContentItemEventTest.java
++++ b/codex-codex/src/test/java/codex/codex/api/model/event/ContentItemEventTest.java
+@@ -2,6 +2,7 @@ package codex.codex.api.model.event;
+ 
+ import codex.codex.api.model.identity.ContentItemId;
+ import codex.codex.api.model.identity.ContentItemKey;
++import codex.codex.api.model.identity.ContentRevisionId;
+ import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.SiteKey;
+@@ -13,7 +14,7 @@ import java.time.Instant;
+ import static org.junit.jupiter.api.Assertions.*;
+ 
+ /**
+- * Tests for {@link ContentItemCreatedEvent}.
++ * Tests for {@link ContentItemCreatedEvent} and {@link ContentItemPublishedEvent}.
+  */
+ class ContentItemEventTest {
+ 
+@@ -73,4 +74,66 @@ class ContentItemEventTest {
+                 new ContentItemCreatedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, ACTOR, NOW);
+         assertEquals(NOW, event.occurredAt());
+     }
++
++    // -------------------------------------------------------------------------
++    // ContentItemPublishedEvent
++    // -------------------------------------------------------------------------
++
++    private static final ContentRevisionId REVISION_ID =
++            ContentRevisionId.of("content-revision:acme:blog-post:my-post:r1");
++
++    @Test
++    void publishedRejectsNullId() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(null, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullSiteKey() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, null, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullContentTypeKey() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, null, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullContentTypeVersionId() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, null, ITEM_KEY, REVISION_ID, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullKey() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, null, REVISION_ID, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullPublishedRevisionId() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, null, ACTOR, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullActor() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, null, NOW));
++    }
++
++    @Test
++    void publishedRejectsNullOccurredAt() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, null));
++    }
++
++    @Test
++    void publishedOccurredAtReturnedFromCodexEvent() {
++        final ContentItemPublishedEvent event =
++                new ContentItemPublishedEvent(ID, SITE_KEY, CT_KEY, VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW);
++        assertEquals(NOW, event.occurredAt());
++    }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
+index 97d7fae..6123404 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
+@@ -1,6 +1,9 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
++import codex.codex.api.model.entity.ContentRevision;
++import codex.codex.api.model.value.ContentRevisionStatus;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.entity.ContentTypeVersion;
+@@ -517,4 +520,227 @@ class CodexContentItemServiceTest {
+     void findAllRejectsNullActor() {
+         assertThrows(NullPointerException.class, () -> service.findAll(null));
+     }
++
++    // -------------------------------------------------------------------------
++    // publish
++    // -------------------------------------------------------------------------
++
++    private ContentItem createDraftItem() {
++        setupActiveContentType(SITE_ACME, BLOG_POST);
++        return service.create(
++                CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
++                        Map.of(TITLE_KEY, "Hello World", BODY_KEY, "Body text")),
++                ACTOR);
++    }
++
++    @Test
++    void publishShouldUpdateItemStatusToPublished() {
++        final ContentItem draft = createDraftItem();
++        final ContentItem published = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertEquals(ContentItemStatus.PUBLISHED, published.status());
++    }
++
++    @Test
++    void publishShouldSetCurrentPublishedRevisionId() {
++        createDraftItem();
++        final ContentItem published = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertNotNull(published.currentPublishedRevisionId());
++    }
++
++    @Test
++    void publishShouldKeepWorkingRevisionIdEqualToPublishedRevisionId() {
++        createDraftItem();
++        final ContentItem published = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertEquals(published.currentPublishedRevisionId(), published.currentWorkingRevisionId());
++    }
++
++    @Test
++    void publishShouldUpdateUpdatedBy() {
++        createDraftItem();
++        final Actor publisher = Actor.system("publisher");
++        final ContentItem published = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
++                publisher);
++
++        assertEquals(publisher.id(), published.updatedBy());
++    }
++
++    @Test
++    void publishShouldUpdateUpdatedAt() {
++        createDraftItem();
++        final Instant before = clock.instant();
++        final Clock advancedClock = Clock.fixed(Instant.parse("2025-12-01T00:00:00Z"), ZoneOffset.UTC);
++        service = new CodexContentItemService(itemRepository, revisionRepository, contentTypeRepository, versionRepository, advancedClock);
++
++        final ContentItem published = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertEquals(advancedClock.instant(), published.updatedAt());
++    }
++
++    @Test
++    void publishShouldMarkWorkingRevisionAsPublished() {
++        final ContentItem draft = createDraftItem();
++        service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
++                .orElseThrow();
++        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
++                .orElseThrow();
++
++        assertEquals(ContentRevisionStatus.PUBLISHED, revision.status());
++    }
++
++    @Test
++    void publishShouldPreserveRevisionValues() {
++        createDraftItem();
++        service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
++                .orElseThrow();
++        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
++                .orElseThrow();
++
++        assertEquals("Hello World", revision.values().get(TITLE_KEY));
++        assertEquals("Body text", revision.values().get(BODY_KEY));
++    }
++
++    @Test
++    void publishShouldPreserveRevisionNumber() {
++        createDraftItem();
++        service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
++                .orElseThrow();
++        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
++                .orElseThrow();
++
++        assertEquals(1, revision.revisionNumber());
++    }
++
++    @Test
++    void publishShouldPreserveRevisionCreatedBy() {
++        createDraftItem();
++        service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
++                .orElseThrow();
++        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
++                .orElseThrow();
++
++        assertEquals(ACTOR.id(), revision.createdBy());
++    }
++
++    @Test
++    void publishShouldPreserveRevisionCreatedAt() {
++        createDraftItem();
++        final Instant expectedCreatedAt = clock.instant();
++        service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem refreshed = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR)
++                .orElseThrow();
++        final ContentRevision revision = revisionRepository.findById(refreshed.currentPublishedRevisionId())
++                .orElseThrow();
++
++        assertEquals(expectedCreatedAt, revision.createdAt());
++    }
++
++    @Test
++    void publishShouldReturnExistingItemWhenAlreadyPublishedAndPointersMatch() {
++        createDraftItem();
++        final ContentItem firstPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem secondPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertEquals(firstPublish, secondPublish);
++    }
++
++    @Test
++    void idempotentPublishShouldNotUpdateUpdatedAt() {
++        createDraftItem();
++        final ContentItem firstPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final ContentItem secondPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        assertEquals(firstPublish.updatedAt(), secondPublish.updatedAt());
++    }
++
++    @Test
++    void idempotentPublishShouldNotUpdateUpdatedBy() {
++        createDraftItem();
++        final ContentItem firstPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
++
++        final Actor secondActor = Actor.system("second-publisher");
++        final ContentItem secondPublish = service.publish(
++                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
++                secondActor);
++
++        assertEquals(firstPublish.updatedBy(), secondPublish.updatedBy());
++    }
++
++    @Test
++    void publishShouldThrowNotFoundExceptionWhenItemMissing() {
++        assertThrows(NotFoundException.class,
++                () -> service.publish(
++                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("ghost")),
++                        ACTOR));
++    }
++
++    @Test
++    void publishShouldThrowInvalidPublishExceptionWhenItemIsArchived() {
++        createDraftItem();
++        // force the item into ARCHIVED status by saving directly to repository
++        final ContentItem draft = itemRepository.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"))
++                .orElseThrow();
++        itemRepository.save(ContentItem.copyOf(draft).status(ContentItemStatus.ARCHIVED).build());
++
++        assertThrows(InvalidContentItemPublishException.class,
++                () -> service.publish(
++                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
++                        ACTOR));
++    }
++
++    @Test
++    void publishShouldThrowInvalidPublishExceptionWhenWorkingRevisionIsArchived() {
++        final ContentItem draft = createDraftItem();
++        // force the working revision into ARCHIVED status
++        final ContentRevision working = revisionRepository.findById(draft.currentWorkingRevisionId())
++                .orElseThrow();
++        revisionRepository.save(ContentRevision.copyOf(working).status(ContentRevisionStatus.ARCHIVED).build());
++
++        assertThrows(InvalidContentItemPublishException.class,
++                () -> service.publish(
++                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
++                        ACTOR));
++    }
++
++    @Test
++    void publishRejectsNullCommand() {
++        assertThrows(NullPointerException.class, () -> service.publish(null, ACTOR));
++    }
++
++    @Test
++    void publishRejectsNullActor() {
++        createDraftItem();
++        assertThrows(NullPointerException.class,
++                () -> service.publish(
++                        PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
++                        null));
++    }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/ContentItemEventPipelineIntegrationTest.java b/codex-codex/src/test/java/codex/codex/internal/service/ContentItemEventPipelineIntegrationTest.java
+index 075180f..88a5699 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/ContentItemEventPipelineIntegrationTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/ContentItemEventPipelineIntegrationTest.java
+@@ -4,8 +4,10 @@ import codex.codex.api.model.command.ActivateContentTypeCommand;
+ import codex.codex.api.model.command.AddContentTypeFieldCommand;
+ import codex.codex.api.model.command.CreateContentItemCommand;
+ import codex.codex.api.model.command.CreateContentTypeCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.Field;
+ import codex.codex.api.model.event.ContentItemCreatedEvent;
++import codex.codex.api.model.event.ContentItemPublishedEvent;
+ import codex.codex.api.model.identity.ContentItemKey;
+ import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.FieldKey;
+@@ -17,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
+ import org.junit.jupiter.api.DisplayName;
+ import org.junit.jupiter.api.Test;
+ 
++import java.util.List;
+ import java.util.Map;
+ 
+ import static org.junit.jupiter.api.Assertions.*;
+@@ -186,4 +189,94 @@ class ContentItemEventPipelineIntegrationTest {
+ 
+         ctx.assertNoEvents();
+     }
++
++    // -------------------------------------------------------------------------
++    // Publish event pipeline
++    // -------------------------------------------------------------------------
++
++    private void createDraftItem() {
++        ctx.contentItemService().create(
++                CreateContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post"),
++                        Map.of(TITLE_KEY, "Hello")),
++                ACTOR);
++        ctx.clearEvents();
++    }
++
++    @Test
++    @DisplayName("publish inside transaction does not dispatch before commit; dispatches ContentItemPublishedEvent after")
++    void publishInsideTransactionDispatchesEventAfterCommit() throws Exception {
++        createDraftItem();
++
++        TransactionContext.runInTransaction(() -> {
++            ctx.contentItemService().publish(
++                    PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
++                    ACTOR);
++            ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
++            return null;
++        });
++
++        final ContentItemPublishedEvent event = ctx.assertSingleEventOfType(ContentItemPublishedEvent.class);
++        assertEquals(SITE_KEY, event.siteKey());
++        assertEquals(CT_KEY, event.contentTypeKey());
++        assertEquals(ContentItemKey.of("my-post"), event.key());
++        assertEquals(ACTOR, event.actor());
++        assertNotNull(event.publishedRevisionId());
++        assertNotNull(event.occurredAt());
++    }
++
++    @Test
++    @DisplayName("publish rollback does not dispatch ContentItemPublishedEvent")
++    void publishRollbackDoesNotDispatchEvent() {
++        createDraftItem();
++
++        assertThrows(RuntimeException.class, () ->
++                TransactionContext.runInTransaction(() -> {
++                    ctx.contentItemService().publish(
++                            PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
++                            ACTOR);
++                    throw new RuntimeException("forced rollback");
++                })
++        );
++
++        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
++    }
++
++    @Test
++    @DisplayName("publish outside transaction dispatches ContentItemPublishedEvent immediately")
++    void publishOutsideTransactionDispatchesImmediately() {
++        createDraftItem();
++
++        ctx.contentItemService().publish(
++                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
++                ACTOR);
++
++        ctx.assertSingleEventOfType(ContentItemPublishedEvent.class);
++    }
++
++    @Test
++    @DisplayName("idempotent publish does not dispatch ContentItemPublishedEvent")
++    void idempotentPublishDoesNotDispatchEvent() {
++        createDraftItem();
++        ctx.contentItemService().publish(
++                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
++                ACTOR);
++        ctx.clearEvents();
++
++        ctx.contentItemService().publish(
++                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("my-post")),
++                ACTOR);
++
++        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
++    }
++
++    @Test
++    @DisplayName("publish missing content item does not dispatch ContentItemPublishedEvent")
++    void publishMissingItemDoesNotDispatchEvent() {
++        assertThrows(Exception.class, () ->
++                ctx.contentItemService().publish(
++                        PublishContentItemCommand.of(SITE_KEY, CT_KEY, ContentItemKey.of("ghost-post")),
++                        ACTOR));
++
++        ctx.assertNoEventsOfType(ContentItemPublishedEvent.class);
++    }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingContentItemServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingContentItemServiceTest.java
+index b7266e0..aaf4341 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingContentItemServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/EventPublishingContentItemServiceTest.java
+@@ -1,10 +1,13 @@
+ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
++import codex.codex.api.model.command.PublishContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.event.ContentItemCreatedEvent;
++import codex.codex.api.model.event.ContentItemPublishedEvent;
+ import codex.codex.api.model.identity.ContentItemId;
+ import codex.codex.api.model.identity.ContentItemKey;
++import codex.codex.api.model.identity.ContentRevisionId;
+ import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+@@ -24,6 +27,7 @@ import java.time.ZoneOffset;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Objects;
+ import java.util.Optional;
+ 
+ import static org.junit.jupiter.api.Assertions.*;
+@@ -41,6 +45,7 @@ class EventPublishingContentItemServiceTest {
+     private static final ContentTypeKey CT_KEY = ContentTypeKey.of("blog-post");
+     private static final ContentItemKey ITEM_KEY = ContentItemKey.of("my-post");
+     private static final ContentTypeVersionId VERSION_ID = ContentTypeVersionId.of("content-type-version:acme:blog-post:v1");
++    private static final ContentRevisionId REVISION_ID = ContentRevisionId.forRevision(SITE_KEY, CT_KEY, ITEM_KEY, 1);
+ 
+     @BeforeEach
+     void setUp() {
+@@ -154,6 +159,69 @@ class EventPublishingContentItemServiceTest {
+         assertTrue(eventDispatcher.events.isEmpty());
+     }
+ 
++    // --- publish: event publishing ---
++
++    @Test
++    void publishDelegatesAndPublishesContentItemPublishedEvent() {
++        final ContentItem draft = buildItem();
++        final ContentItem published = buildPublishedItem();
++        delegate.nextFindByKeyResult = Optional.of(draft);
++        delegate.nextPublishResult = published;
++        final PublishContentItemCommand command = PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY);
++
++        final ContentItem result = service.publish(command, ACTOR);
++
++        assertEquals(published, result);
++        assertSame(command, delegate.lastPublishCommand);
++
++        final ContentItemPublishedEvent event = eventDispatcher.singleEvent(ContentItemPublishedEvent.class);
++        assertEquals(published.id(), event.id());
++        assertEquals(SITE_KEY, event.siteKey());
++        assertEquals(CT_KEY, event.contentTypeKey());
++        assertEquals(VERSION_ID, event.contentTypeVersionId());
++        assertEquals(ITEM_KEY, event.key());
++        assertEquals(REVISION_ID, event.publishedRevisionId());
++        assertEquals(ACTOR, event.actor());
++        assertEquals(FIXED, event.occurredAt());
++    }
++
++    @Test
++    void publishDoesNotPublishEventWhenDelegateThrows() {
++        final ContentItem draft = buildItem();
++        delegate.nextFindByKeyResult = Optional.of(draft);
++        delegate.throwOnPublish = new InvalidContentItemPublishException("forced failure");
++
++        assertThrows(InvalidContentItemPublishException.class, () ->
++                service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR));
++
++        assertTrue(eventDispatcher.events.isEmpty());
++    }
++
++    @Test
++    void idempotentPublishDoesNotPublishEvent() {
++        final ContentItem alreadyPublished = buildPublishedItem();
++        delegate.nextFindByKeyResult = Optional.of(alreadyPublished);
++        delegate.nextPublishResult = alreadyPublished;
++
++        service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR);
++
++        assertTrue(eventDispatcher.events.isEmpty(),
++                "Idempotent publish must not dispatch a ContentItemPublishedEvent");
++    }
++
++    @Test
++    void publishRejectsNullCommand() {
++        assertThrows(NullPointerException.class, () -> service.publish(null, ACTOR));
++        assertTrue(eventDispatcher.events.isEmpty());
++    }
++
++    @Test
++    void publishRejectsNullActor() {
++        assertThrows(NullPointerException.class, () ->
++                service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), null));
++        assertTrue(eventDispatcher.events.isEmpty());
++    }
++
+     // --- helpers ---
+ 
+     private ContentItem buildItem() {
+@@ -165,6 +233,7 @@ class EventPublishingContentItemServiceTest {
+                 .contentTypeVersionId(VERSION_ID)
+                 .key(ITEM_KEY)
+                 .status(ContentItemStatus.DRAFT)
++                .currentWorkingRevisionId(REVISION_ID)
+                 .owner(actorId)
+                 .createdBy(actorId)
+                 .updatedBy(actorId)
+@@ -172,6 +241,25 @@ class EventPublishingContentItemServiceTest {
+                 .build();
+     }
+ 
++    private ContentItem buildPublishedItem() {
++        final ActorId actorId = ACTOR.id();
++        return ContentItem.builder()
++                .id(ContentItemId.forItem(SITE_KEY, CT_KEY, ITEM_KEY))
++                .siteKey(SITE_KEY)
++                .contentTypeKey(CT_KEY)
++                .contentTypeVersionId(VERSION_ID)
++                .key(ITEM_KEY)
++                .status(ContentItemStatus.PUBLISHED)
++                .currentWorkingRevisionId(REVISION_ID)
++                .currentPublishedRevisionId(REVISION_ID)
++                .owner(actorId)
++                .createdBy(actorId)
++                .updatedBy(actorId)
++                .createdAt(FIXED)
++                .updatedAt(FIXED)
++                .build();
++    }
++
+     // --- fakes ---
+ 
+     private static final class RecordingEventDispatcher implements CodexEventDispatcher {
+@@ -193,12 +281,15 @@ class EventPublishingContentItemServiceTest {
+     private static final class FakeContentItemService implements ContentItemService {
+ 
+         ContentItem nextCreateResult;
++        ContentItem nextPublishResult;
+         Optional<ContentItem> nextFindByKeyResult = Optional.empty();
+         List<ContentItem> nextFindByContentTypeResult = List.of();
+         List<ContentItem> nextFindAllResult = List.of();
+ 
+         CreateContentItemCommand lastCreateCommand;
++        PublishContentItemCommand lastPublishCommand;
+         RuntimeException throwOnCreate;
++        RuntimeException throwOnPublish;
+ 
+         @Override
+         public ContentItem create(final CreateContentItemCommand command, final Actor actor) {
+@@ -207,6 +298,15 @@ class EventPublishingContentItemServiceTest {
+             return nextCreateResult;
+         }
+ 
++        @Override
++        public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
++            Objects.requireNonNull(command, "command must not be null");
++            Objects.requireNonNull(actor, "actor must not be null");
++            lastPublishCommand = command;
++            if (throwOnPublish != null) throw throwOnPublish;
++            return nextPublishResult;
++        }
++
+         @Override
+         public Optional<ContentItem> findByKey(final SiteKey siteKey, final ContentTypeKey contentTypeKey,
+                                                 final ContentItemKey key, final Actor actor) {
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java b/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
+index 6d4ad76..a1f50eb 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/TestCodexContext.java
+@@ -97,4 +97,47 @@ public final class TestCodexContext {
+     public void clearEvents() {
+         runtime.clearRecordedEvents();
+     }
++
++    /**
++     * Returns all recorded events of the given type.
++     *
++     * @param <E>  the event type
++     * @param type the event class to filter by
++     * @return immutable list of matching events; never null
++     */
++    public <E extends CodexEvent> List<E> eventsOfType(final Class<E> type) {
++        return runtime.recordedEvents().stream()
++                .filter(type::isInstance)
++                .map(type::cast)
++                .toList();
++    }
++
++    /**
++     * Asserts that exactly one event of the given type has been dispatched and returns it.
++     * Unlike {@link #assertSingleEvent(Class)}, this does not require the event to be the only
++     * recorded event — it only checks that exactly one event of the specified type exists.
++     *
++     * @param <E>  the event type
++     * @param type the expected event class
++     * @return the single dispatched event of {@code type}
++     */
++    public <E extends CodexEvent> E assertSingleEventOfType(final Class<E> type) {
++        final List<E> found = eventsOfType(type);
++        assertEquals(1, found.size(),
++                "Expected exactly one " + type.getSimpleName() + " but found " + found.size()
++                        + " in: " + runtime.recordedEvents());
++        return found.getFirst();
++    }
++
++    /**
++     * Asserts that no event of the given type has been dispatched.
++     *
++     * @param <E>  the event type
++     * @param type the event class to check for
++     */
++    public <E extends CodexEvent> void assertNoEventsOfType(final Class<E> type) {
++        final List<E> found = eventsOfType(type);
++        assertTrue(found.isEmpty(),
++                "Expected no " + type.getSimpleName() + " but found: " + found);
++    }
+ }

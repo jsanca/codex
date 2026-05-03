@@ -1,10 +1,13 @@
 package codex.codex.internal.service;
 
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.PublishContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.event.ContentItemCreatedEvent;
+import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
+import codex.codex.api.model.identity.ContentRevisionId;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
@@ -24,6 +27,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,6 +45,7 @@ class EventPublishingContentItemServiceTest {
     private static final ContentTypeKey CT_KEY = ContentTypeKey.of("blog-post");
     private static final ContentItemKey ITEM_KEY = ContentItemKey.of("my-post");
     private static final ContentTypeVersionId VERSION_ID = ContentTypeVersionId.of("content-type-version:acme:blog-post:v1");
+    private static final ContentRevisionId REVISION_ID = ContentRevisionId.forRevision(SITE_KEY, CT_KEY, ITEM_KEY, 1);
 
     @BeforeEach
     void setUp() {
@@ -154,6 +159,69 @@ class EventPublishingContentItemServiceTest {
         assertTrue(eventDispatcher.events.isEmpty());
     }
 
+    // --- publish: event publishing ---
+
+    @Test
+    void publishDelegatesAndPublishesContentItemPublishedEvent() {
+        final ContentItem draft = buildItem();
+        final ContentItem published = buildPublishedItem();
+        delegate.nextFindByKeyResult = Optional.of(draft);
+        delegate.nextPublishResult = published;
+        final PublishContentItemCommand command = PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY);
+
+        final ContentItem result = service.publish(command, ACTOR);
+
+        assertEquals(published, result);
+        assertSame(command, delegate.lastPublishCommand);
+
+        final ContentItemPublishedEvent event = eventDispatcher.singleEvent(ContentItemPublishedEvent.class);
+        assertEquals(published.id(), event.id());
+        assertEquals(SITE_KEY, event.siteKey());
+        assertEquals(CT_KEY, event.contentTypeKey());
+        assertEquals(VERSION_ID, event.contentTypeVersionId());
+        assertEquals(ITEM_KEY, event.key());
+        assertEquals(REVISION_ID, event.publishedRevisionId());
+        assertEquals(ACTOR, event.actor());
+        assertEquals(FIXED, event.occurredAt());
+    }
+
+    @Test
+    void publishDoesNotPublishEventWhenDelegateThrows() {
+        final ContentItem draft = buildItem();
+        delegate.nextFindByKeyResult = Optional.of(draft);
+        delegate.throwOnPublish = new InvalidContentItemPublishException("forced failure");
+
+        assertThrows(InvalidContentItemPublishException.class, () ->
+                service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR));
+
+        assertTrue(eventDispatcher.events.isEmpty());
+    }
+
+    @Test
+    void idempotentPublishDoesNotPublishEvent() {
+        final ContentItem alreadyPublished = buildPublishedItem();
+        delegate.nextFindByKeyResult = Optional.of(alreadyPublished);
+        delegate.nextPublishResult = alreadyPublished;
+
+        service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR);
+
+        assertTrue(eventDispatcher.events.isEmpty(),
+                "Idempotent publish must not dispatch a ContentItemPublishedEvent");
+    }
+
+    @Test
+    void publishRejectsNullCommand() {
+        assertThrows(NullPointerException.class, () -> service.publish(null, ACTOR));
+        assertTrue(eventDispatcher.events.isEmpty());
+    }
+
+    @Test
+    void publishRejectsNullActor() {
+        assertThrows(NullPointerException.class, () ->
+                service.publish(PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), null));
+        assertTrue(eventDispatcher.events.isEmpty());
+    }
+
     // --- helpers ---
 
     private ContentItem buildItem() {
@@ -165,10 +233,30 @@ class EventPublishingContentItemServiceTest {
                 .contentTypeVersionId(VERSION_ID)
                 .key(ITEM_KEY)
                 .status(ContentItemStatus.DRAFT)
+                .currentWorkingRevisionId(REVISION_ID)
                 .owner(actorId)
                 .createdBy(actorId)
                 .updatedBy(actorId)
                 .createdAt(FIXED)
+                .build();
+    }
+
+    private ContentItem buildPublishedItem() {
+        final ActorId actorId = ACTOR.id();
+        return ContentItem.builder()
+                .id(ContentItemId.forItem(SITE_KEY, CT_KEY, ITEM_KEY))
+                .siteKey(SITE_KEY)
+                .contentTypeKey(CT_KEY)
+                .contentTypeVersionId(VERSION_ID)
+                .key(ITEM_KEY)
+                .status(ContentItemStatus.PUBLISHED)
+                .currentWorkingRevisionId(REVISION_ID)
+                .currentPublishedRevisionId(REVISION_ID)
+                .owner(actorId)
+                .createdBy(actorId)
+                .updatedBy(actorId)
+                .createdAt(FIXED)
+                .updatedAt(FIXED)
                 .build();
     }
 
@@ -193,18 +281,30 @@ class EventPublishingContentItemServiceTest {
     private static final class FakeContentItemService implements ContentItemService {
 
         ContentItem nextCreateResult;
+        ContentItem nextPublishResult;
         Optional<ContentItem> nextFindByKeyResult = Optional.empty();
         List<ContentItem> nextFindByContentTypeResult = List.of();
         List<ContentItem> nextFindAllResult = List.of();
 
         CreateContentItemCommand lastCreateCommand;
+        PublishContentItemCommand lastPublishCommand;
         RuntimeException throwOnCreate;
+        RuntimeException throwOnPublish;
 
         @Override
         public ContentItem create(final CreateContentItemCommand command, final Actor actor) {
             lastCreateCommand = command;
             if (throwOnCreate != null) throw throwOnCreate;
             return nextCreateResult;
+        }
+
+        @Override
+        public ContentItem publish(final PublishContentItemCommand command, final Actor actor) {
+            Objects.requireNonNull(command, "command must not be null");
+            Objects.requireNonNull(actor, "actor must not be null");
+            lastPublishCommand = command;
+            if (throwOnPublish != null) throw throwOnPublish;
+            return nextPublishResult;
         }
 
         @Override
