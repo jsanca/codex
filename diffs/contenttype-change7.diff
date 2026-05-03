@@ -1,0 +1,1120 @@
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentItem.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentItem.java
+index a91406d..2e30408 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentItem.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentItem.java
+@@ -2,31 +2,31 @@ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentItemId;
+ import codex.codex.api.model.identity.ContentItemKey;
++import codex.codex.api.model.identity.ContentRevisionId;
+ import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
+-import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.value.ContentItemStatus;
+ import codex.fundamentum.api.model.ActorId;
+ 
+ import java.time.Instant;
+-import java.util.Map;
+ import java.util.Objects;
+ 
+ /**
+- * A content entry created from a published {@link ContentTypeVersion}.
++ * The stable logical identity of a content entry in Codex.
+  * <p>
+  * A {@code ContentItem} belongs to the composite identity: {@code siteKey + contentTypeKey + key}.
+- * <p>
+  * It references a stable, immutable {@link ContentTypeVersion} via {@link #contentTypeVersionId()},
+- * ensuring that field validation happens against a frozen schema snapshot rather than the
+- * mutable draft schema in {@link ContentType#fields()}.
++ * ensuring that field validation happened against a frozen schema snapshot at creation time.
+  * <p>
+- * Values are stored as {@code Map<FieldKey, Object>} and validated on creation against the
+- * referenced {@code ContentTypeVersion.fields}. Type validation beyond unknown-field and
+- * missing-required-field checks is future work.
++ * Content values are not stored here. They live in {@link ContentRevision}:
++ * <ul>
++ *   <li>{@link #currentWorkingRevisionId()} — points to the current draft/working revision</li>
++ *   <li>{@link #currentPublishedRevisionId()} — points to the live published revision; null for DRAFT items</li>
++ * </ul>
+  * <p>
+- * Content revisions, workflow, localization, and event publishing are not part of this record.
++ * Creating a content item creates revision {@code 1} as {@code WORKING} and sets
++ * {@link #currentWorkingRevisionId()} to that revision. Publish/unpublish behavior is future work.
+  */
+ public record ContentItem(
+         ContentItemId id,
+@@ -35,7 +35,8 @@ public record ContentItem(
+         ContentTypeVersionId contentTypeVersionId,
+         ContentItemKey key,
+         ContentItemStatus status,
+-        Map<FieldKey, Object> values,
++        ContentRevisionId currentWorkingRevisionId,
++        ContentRevisionId currentPublishedRevisionId,
+         ActorId owner,
+         ActorId createdBy,
+         ActorId updatedBy,
+@@ -46,18 +47,19 @@ public record ContentItem(
+     /**
+      * Canonical constructor for {@link ContentItem}.
+      *
+-     * @param id                  unique identifier; must not be null
+-     * @param siteKey             the site scope; must not be null
+-     * @param contentTypeKey      the content type key; must not be null
+-     * @param contentTypeVersionId the schema snapshot version; must not be null
+-     * @param key                 the item key within site+contentType scope; must not be null
+-     * @param status              defaults to {@link ContentItemStatus#DRAFT} if null
+-     * @param values              field values; defaults to empty map if null; defensive copy applied
+-     * @param owner               the owning actor; must not be null
+-     * @param createdBy           the creating actor; must not be null
+-     * @param updatedBy           the last updating actor; must not be null
+-     * @param createdAt           creation timestamp; defaults to {@link Instant#now()} if null
+-     * @param updatedAt           update timestamp; defaults to {@code createdAt} if null
++     * @param id                       unique identifier; must not be null
++     * @param siteKey                  the site scope; must not be null
++     * @param contentTypeKey           the content type key; must not be null
++     * @param contentTypeVersionId     the schema snapshot version; must not be null
++     * @param key                      the item key within site+contentType scope; must not be null
++     * @param status                   defaults to {@link ContentItemStatus#DRAFT} if null
++     * @param currentWorkingRevisionId pointer to the current working revision; may be null during staged construction
++     * @param currentPublishedRevisionId pointer to the live published revision; null for DRAFT items
++     * @param owner                    the owning actor; must not be null
++     * @param createdBy                the creating actor; must not be null
++     * @param updatedBy                the last updating actor; must not be null
++     * @param createdAt                creation timestamp; defaults to {@link Instant#now()} if null
++     * @param updatedAt                update timestamp; defaults to {@code createdAt} if null
+      */
+     public ContentItem {
+         Objects.requireNonNull(id, "ContentItem id cannot be null");
+@@ -68,15 +70,7 @@ public record ContentItem(
+         if (status == null) {
+             status = ContentItemStatus.DRAFT;
+         }
+-        if (values == null) {
+-            values = Map.of();
+-        } else {
+-            for (final var entry : values.entrySet()) {
+-                Objects.requireNonNull(entry.getKey(), "values map key cannot be null");
+-                Objects.requireNonNull(entry.getValue(), "values map value cannot be null");
+-            }
+-            values = Map.copyOf(values);
+-        }
++        // currentWorkingRevisionId and currentPublishedRevisionId are intentionally nullable
+         Objects.requireNonNull(owner, "ContentItem owner cannot be null");
+         Objects.requireNonNull(createdBy, "ContentItem createdBy cannot be null");
+         Objects.requireNonNull(updatedBy, "ContentItem updatedBy cannot be null");
+@@ -108,7 +102,8 @@ public record ContentItem(
+                 .contentTypeVersionId(item.contentTypeVersionId())
+                 .key(item.key())
+                 .status(item.status())
+-                .values(item.values())
++                .currentWorkingRevisionId(item.currentWorkingRevisionId())
++                .currentPublishedRevisionId(item.currentPublishedRevisionId())
+                 .owner(item.owner())
+                 .createdBy(item.createdBy())
+                 .updatedBy(item.updatedBy())
+@@ -125,7 +120,8 @@ public record ContentItem(
+                 ", contentTypeVersionId=" + contentTypeVersionId +
+                 ", key=" + key +
+                 ", status=" + status +
+-                ", values=" + values.size() +
++                ", currentWorkingRevisionId=" + currentWorkingRevisionId +
++                ", currentPublishedRevisionId=" + currentPublishedRevisionId +
+                 ", owner=" + owner +
+                 ", createdBy=" + createdBy +
+                 ", updatedBy=" + updatedBy +
+@@ -144,7 +140,8 @@ public record ContentItem(
+         private ContentTypeVersionId contentTypeVersionId;
+         private ContentItemKey key;
+         private ContentItemStatus status;
+-        private Map<FieldKey, Object> values;
++        private ContentRevisionId currentWorkingRevisionId;
++        private ContentRevisionId currentPublishedRevisionId;
+         private ActorId owner;
+         private ActorId createdBy;
+         private ActorId updatedBy;
+@@ -157,7 +154,8 @@ public record ContentItem(
+         public Builder contentTypeVersionId(ContentTypeVersionId contentTypeVersionId) { this.contentTypeVersionId = contentTypeVersionId; return this; }
+         public Builder key(ContentItemKey key) { this.key = key; return this; }
+         public Builder status(ContentItemStatus status) { this.status = status; return this; }
+-        public Builder values(Map<FieldKey, Object> values) { this.values = values; return this; }
++        public Builder currentWorkingRevisionId(ContentRevisionId id) { this.currentWorkingRevisionId = id; return this; }
++        public Builder currentPublishedRevisionId(ContentRevisionId id) { this.currentPublishedRevisionId = id; return this; }
+         public Builder owner(ActorId owner) { this.owner = owner; return this; }
+         public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
+         public Builder updatedBy(ActorId updatedBy) { this.updatedBy = updatedBy; return this; }
+@@ -171,7 +169,8 @@ public record ContentItem(
+          */
+         public ContentItem build() {
+             return new ContentItem(id, siteKey, contentTypeKey, contentTypeVersionId,
+-                    key, status, values, owner, createdBy, updatedBy, createdAt, updatedAt);
++                    key, status, currentWorkingRevisionId, currentPublishedRevisionId,
++                    owner, createdBy, updatedBy, createdAt, updatedAt);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentRevision.java b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentRevision.java
+index 525f64b..ea36188 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/entity/ContentRevision.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/entity/ContentRevision.java
+@@ -1,78 +1,116 @@
+ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentItemId;
++import codex.codex.api.model.identity.ContentItemKey;
+ import codex.codex.api.model.identity.ContentRevisionId;
++import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+-import codex.codex.api.model.value.EditorialState;
++import codex.codex.api.model.identity.SiteKey;
++import codex.codex.api.model.value.ContentRevisionStatus;
+ import codex.fundamentum.api.model.ActorId;
++
+ import java.time.Instant;
+-import java.util.Collections;
+-import java.util.LinkedHashSet;
+ import java.util.Map;
+ import java.util.Objects;
+-import java.util.Set;
+ 
+ /**
+- * Represents a specific revision of a content item.
++ * An immutable snapshot of a {@link ContentItem}'s field values at a specific point in time.
++ * <p>
++ * {@code ContentRevision} separates the stable identity of content ({@link ContentItem}) from
++ * the historical value snapshots. Every edit to a content item creates a new revision; revisions
++ * are append-only and never mutated once saved.
+  * <p>
+- * A revision captures the snapshot of data, editorial state, and audit information.
++ * Values are validated on creation against the referenced {@link ContentTypeVersion}'s fields.
++ * The first revision created for a new content item has {@link #revisionNumber()} {@code 1} and
++ * status {@link ContentRevisionStatus#WORKING}.
++ * <p>
++ * Publish/unpublish transitions and revision history operations are future work.
+  */
+ public record ContentRevision(
+-    ContentRevisionId id,
+-    ContentItemId contentItemId,
+-    int revisionNumber,
+-    String title,
+-    Set<String> tags,
+-    Map<FieldKey, Object> data,
+-    EditorialState state,
+-    ActorId createdBy,
+-    Instant createdAt,
+-    ContentRevisionId sourceRevisionId,
+-    String changeSummary,
+-    String comment
++        ContentRevisionId id,
++        ContentItemId contentItemId,
++        SiteKey siteKey,
++        ContentTypeKey contentTypeKey,
++        ContentTypeVersionId contentTypeVersionId,
++        ContentItemKey contentItemKey,
++        int revisionNumber,
++        ContentRevisionStatus status,
++        Map<FieldKey, Object> values,
++        ActorId createdBy,
++        Instant createdAt
+ ) {
++
+     /**
+-     * Canonical constructor for ContentRevision.
+-     * 
+-     * @param id the unique revision identifier, cannot be null
+-     * @param contentItemId the identifier of the parent content item, cannot be null
+-     * @param revisionNumber the positive revision number
+-     * @param title optional title for this revision
+-     * @param tags optional set of tags
+-     * @param data the snapshot of field data, defaults to empty map if null
+-     * @param state the editorial state, defaults to DRAFT if null
+-     * @param createdBy the identifier of the actor who created this revision
+-     * @param createdAt the creation timestamp, defaults to now if null
+-     * @param sourceRevisionId optional identifier of the source revision this was based on
+-     * @param changeSummary optional summary of changes
+-     * @param comment optional internal comment
++     * Canonical constructor for {@link ContentRevision}.
++     *
++     * @param id                   unique identifier; must not be null
++     * @param contentItemId        the parent content item; must not be null
++     * @param siteKey              the site scope; must not be null
++     * @param contentTypeKey       the content type key; must not be null
++     * @param contentTypeVersionId the schema snapshot the values were validated against; must not be null
++     * @param contentItemKey       the content item key; must not be null
++     * @param revisionNumber       the revision sequence number; must be >= 1
++     * @param status               defaults to {@link ContentRevisionStatus#WORKING} if null
++     * @param values               field values; defaults to empty map if null; null keys/values rejected
++     * @param createdBy            the creating actor; must not be null
++     * @param createdAt            creation timestamp; defaults to {@link Instant#now()} if null
+      */
+     public ContentRevision {
+         Objects.requireNonNull(id, "ContentRevision id cannot be null");
+         Objects.requireNonNull(contentItemId, "ContentRevision contentItemId cannot be null");
++        Objects.requireNonNull(siteKey, "ContentRevision siteKey cannot be null");
++        Objects.requireNonNull(contentTypeKey, "ContentRevision contentTypeKey cannot be null");
++        Objects.requireNonNull(contentTypeVersionId, "ContentRevision contentTypeVersionId cannot be null");
++        Objects.requireNonNull(contentItemKey, "ContentRevision contentItemKey cannot be null");
+         if (revisionNumber < 1) {
+-            throw new IllegalArgumentException("Revision number must be >= 1");
++            throw new IllegalArgumentException("revisionNumber must be >= 1");
+         }
+-
+-        if (title != null) {
+-            title = title.trim();
+-            if (title.isBlank()) {
+-                title = null;
++        if (status == null) {
++            status = ContentRevisionStatus.WORKING;
++        }
++        if (values == null) {
++            values = Map.of();
++        } else {
++            for (final var entry : values.entrySet()) {
++                Objects.requireNonNull(entry.getKey(), "values map key cannot be null");
++                Objects.requireNonNull(entry.getValue(), "values map value cannot be null");
+             }
++            values = Map.copyOf(values);
+         }
+-
+-        tags = tags == null ? Set.of() : Collections.unmodifiableSet(new LinkedHashSet<>(tags));
+-        data = data == null ? Map.of() : Map.copyOf(data);
++        Objects.requireNonNull(createdBy, "ContentRevision createdBy cannot be null");
+         createdAt = createdAt == null ? Instant.now() : createdAt;
+-        if (state == null) {
+-            state = EditorialState.DRAFT;
+-        }
+-        if (changeSummary != null) {
+-            changeSummary = changeSummary.trim();
+-        }
+-        if (comment != null) {
+-            comment = comment.trim();
+-        }
++    }
++
++    /**
++     * Creates a new {@link Builder} for {@link ContentRevision}.
++     *
++     * @return a new builder instance
++     */
++    public static Builder builder() {
++        return new Builder();
++    }
++
++    /**
++     * Creates a pre-populated {@link Builder} from an existing {@link ContentRevision}.
++     *
++     * @param revision the source; must not be null
++     * @return a builder pre-populated with all fields from {@code revision}
++     */
++    public static Builder copyOf(final ContentRevision revision) {
++        Objects.requireNonNull(revision, "revision cannot be null");
++        return builder()
++                .id(revision.id())
++                .contentItemId(revision.contentItemId())
++                .siteKey(revision.siteKey())
++                .contentTypeKey(revision.contentTypeKey())
++                .contentTypeVersionId(revision.contentTypeVersionId())
++                .contentItemKey(revision.contentItemKey())
++                .revisionNumber(revision.revisionNumber())
++                .status(revision.status())
++                .values(revision.values())
++                .createdBy(revision.createdBy())
++                .createdAt(revision.createdAt());
+     }
+ 
+     @Override
+@@ -80,80 +118,55 @@ public record ContentRevision(
+         return "ContentRevision{" +
+                 "id=" + id +
+                 ", contentItemId=" + contentItemId +
++                ", siteKey=" + siteKey +
++                ", contentTypeKey=" + contentTypeKey +
++                ", contentTypeVersionId=" + contentTypeVersionId +
++                ", contentItemKey=" + contentItemKey +
+                 ", revisionNumber=" + revisionNumber +
+-                ", title='" + title + '\'' +
+-                ", tags=" + tags +
+-                ", data=" + data +
+-                ", state=" + state +
++                ", status=" + status +
++                ", values=" + values.size() +
+                 ", createdBy=" + createdBy +
+                 ", createdAt=" + createdAt +
+-                ", sourceRevisionId=" + sourceRevisionId +
+-                ", changeSummary='" + changeSummary + '\'' +
+                 '}';
+     }
+ 
+-    /**
+-     * Creates a new builder for ContentRevision.
+-     * 
+-     * @return a new Builder instance
+-     */
+-    public static Builder builder() {
+-        return new Builder();
+-    }
+-
+     /**
+      * Builder for {@link ContentRevision}.
+      */
+     public static class Builder {
+         private ContentRevisionId id;
+         private ContentItemId contentItemId;
++        private SiteKey siteKey;
++        private ContentTypeKey contentTypeKey;
++        private ContentTypeVersionId contentTypeVersionId;
++        private ContentItemKey contentItemKey;
+         private int revisionNumber;
+-        private String title;
+-        private Set<String> tags;
+-        private Map<FieldKey, Object> data;
+-        private EditorialState state;
++        private ContentRevisionStatus status;
++        private Map<FieldKey, Object> values;
+         private ActorId createdBy;
+         private Instant createdAt;
+-        private ContentRevisionId sourceRevisionId;
+-        private String changeSummary;
+-        private String comment;
+ 
+         public Builder id(ContentRevisionId id) { this.id = id; return this; }
+         public Builder contentItemId(ContentItemId contentItemId) { this.contentItemId = contentItemId; return this; }
++        public Builder siteKey(SiteKey siteKey) { this.siteKey = siteKey; return this; }
++        public Builder contentTypeKey(ContentTypeKey contentTypeKey) { this.contentTypeKey = contentTypeKey; return this; }
++        public Builder contentTypeVersionId(ContentTypeVersionId contentTypeVersionId) { this.contentTypeVersionId = contentTypeVersionId; return this; }
++        public Builder contentItemKey(ContentItemKey contentItemKey) { this.contentItemKey = contentItemKey; return this; }
+         public Builder revisionNumber(int revisionNumber) { this.revisionNumber = revisionNumber; return this; }
+-        public Builder title(String title) { this.title = title; return this; }
+-        public Builder tags(Set<String> tags) { this.tags = tags; return this; }
+-        public Builder data(Map<FieldKey, Object> data) { this.data = data; return this; }
+-
+-        /**
+-         * Sets data from a map of raw strings.
+-         * 
+-         * @param data the map of raw data strings
+-         * @return this builder
+-         */
+-        public Builder dataFromStrings(Map<String, Object> data) {
+-            this.data = data == null ? null : data.entrySet().stream()
+-                    .collect(java.util.stream.Collectors.toMap(
+-                            entry -> FieldKey.of(entry.getKey()),
+-                            Map.Entry::getValue
+-                    ));
+-            return this;
+-        }
+-
+-        public Builder state(EditorialState state) { this.state = state; return this; }
++        public Builder status(ContentRevisionStatus status) { this.status = status; return this; }
++        public Builder values(Map<FieldKey, Object> values) { this.values = values; return this; }
+         public Builder createdBy(ActorId createdBy) { this.createdBy = createdBy; return this; }
+         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+-        public Builder sourceRevisionId(ContentRevisionId sourceRevisionId) { this.sourceRevisionId = sourceRevisionId; return this; }
+-        public Builder changeSummary(String changeSummary) { this.changeSummary = changeSummary; return this; }
+-        public Builder comment(String comment) { this.comment = comment; return this; }
+ 
+         /**
+-         * Builds a new ContentRevision instance.
+-         * 
+-         * @return a new ContentRevision instance
++         * Builds a new {@link ContentRevision} instance.
++         *
++         * @return a validated {@code ContentRevision}
+          */
+         public ContentRevision build() {
+-            return new ContentRevision(id, contentItemId, revisionNumber, title, tags, data, state, createdBy, createdAt, sourceRevisionId, changeSummary, comment);
++            return new ContentRevision(id, contentItemId, siteKey, contentTypeKey,
++                    contentTypeVersionId, contentItemKey, revisionNumber, status,
++                    values, createdBy, createdAt);
+         }
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/api/model/identity/ContentRevisionId.java b/codex-codex/src/main/java/codex/codex/api/model/identity/ContentRevisionId.java
+index 2823a97..9905e1c 100644
+--- a/codex-codex/src/main/java/codex/codex/api/model/identity/ContentRevisionId.java
++++ b/codex-codex/src/main/java/codex/codex/api/model/identity/ContentRevisionId.java
+@@ -1,16 +1,22 @@
+ package codex.codex.api.model.identity;
+ 
+ import java.util.Objects;
+-import java.util.UUID;
+ 
+ /**
+- * Unique identifier for a specific revision of a content item.
++ * Unique identifier for a specific revision of a {@link codex.codex.api.model.entity.ContentItem}.
++ * <p>
++ * Prefer the deterministic {@link #forRevision(SiteKey, ContentTypeKey, ContentItemKey, int)} factory
++ * when a stable, reproducible id is needed.
++ * <p>
++ * Deterministic id format: {@code content-revision:{siteKey}:{contentTypeKey}:{itemKey}:r{revisionNumber}}
++ * <br>Example: {@code content-revision:acme:blog-post:welcome-to-codex:r1}
+  */
+ public record ContentRevisionId(String value) {
++
+     /**
+-     * Canonical constructor for ContentRevisionId.
+-     * 
+-     * @param value the raw identifier value, cannot be null or blank
++     * Canonical constructor for {@link ContentRevisionId}.
++     *
++     * @param value the raw identifier value; must not be null or blank
+      */
+     public ContentRevisionId {
+         Objects.requireNonNull(value, "ContentRevisionId value cannot be null");
+@@ -21,21 +27,41 @@ public record ContentRevisionId(String value) {
+     }
+ 
+     /**
+-     * Creates a ContentRevisionId from a raw string value.
+-     * 
++     * Creates a {@link ContentRevisionId} from a raw string value.
++     *
+      * @param value the raw string value
+-     * @return a new ContentRevisionId instance
++     * @return a new {@code ContentRevisionId} instance
+      */
+-    public static ContentRevisionId of(String value) {
++    public static ContentRevisionId of(final String value) {
+         return new ContentRevisionId(value);
+     }
+ 
+     /**
+-     * Generates a new ContentRevisionId using a random UUID.
+-     * 
+-     * @return a new ContentRevisionId instance with a random UUID value
++     * Creates a deterministic {@link ContentRevisionId} for a given site scope,
++     * content type key, content item key, and revision number.
++     * <p>
++     * Format: {@code content-revision:{siteKey}:{contentTypeKey}:{itemKey}:r{revisionNumber}}
++     * <p>
++     * Example: {@code content-revision:acme:blog-post:welcome-to-codex:r1}
++     *
++     * @param siteKey        the site scope; must not be null
++     * @param contentTypeKey the content type key; must not be null
++     * @param itemKey        the content item key; must not be null
++     * @param revisionNumber the revision number; must be >= 1
++     * @return a deterministic content revision id
+      */
+-    public static ContentRevisionId generate() {
+-        return new ContentRevisionId(UUID.randomUUID().toString());
++    public static ContentRevisionId forRevision(final SiteKey siteKey,
++                                                 final ContentTypeKey contentTypeKey,
++                                                 final ContentItemKey itemKey,
++                                                 final int revisionNumber) {
++        Objects.requireNonNull(siteKey, "siteKey must not be null");
++        Objects.requireNonNull(contentTypeKey, "contentTypeKey must not be null");
++        Objects.requireNonNull(itemKey, "itemKey must not be null");
++        if (revisionNumber < 1) {
++            throw new IllegalArgumentException("revisionNumber must be >= 1");
++        }
++        return new ContentRevisionId(
++                "content-revision:" + siteKey.value() + ":" + contentTypeKey.value()
++                        + ":" + itemKey.value() + ":r" + revisionNumber);
+     }
+ }
+diff --git a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+index a5082bf..e50a4b8 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
++++ b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+@@ -4,6 +4,7 @@ import codex.codex.api.model.service.ContentItemService;
+ import codex.codex.api.model.service.ContentTypeService;
+ import codex.codex.api.model.service.SiteService;
+ import codex.codex.internal.repository.MemoryContentItemRepository;
++import codex.codex.internal.repository.MemoryContentRevisionRepository;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
+ import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
+ import codex.codex.internal.repository.MemorySiteRepository;
+@@ -111,8 +112,9 @@ public final class CodexRuntime implements AutoCloseable {
+         final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
+ 
+         final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
++        final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
+         final ContentItemService contentItemService = new EventPublishingContentItemService(
+-                new CodexContentItemService(contentItemRepository, contentTypeRepository, contentTypeVersionRepository, clock),
++                new CodexContentItemService(contentItemRepository, revisionRepository, contentTypeRepository, contentTypeVersionRepository, clock),
+                 deferredDispatcher,
+                 clock);
+ 
+diff --git a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
+index 237e269..c174bc3 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
++++ b/codex-codex/src/main/java/codex/codex/internal/service/CodexContentItemService.java
+@@ -2,20 +2,24 @@ package codex.codex.internal.service;
+ 
+ import codex.codex.api.model.command.CreateContentItemCommand;
+ import codex.codex.api.model.entity.ContentItem;
++import codex.codex.api.model.entity.ContentRevision;
+ import codex.codex.api.model.entity.ContentType;
+ import codex.codex.api.model.entity.ContentTypeVersion;
+ import codex.codex.api.model.entity.Field;
+ import codex.codex.api.model.identity.ContentItemId;
+ import codex.codex.api.model.identity.ContentItemKey;
++import codex.codex.api.model.identity.ContentRevisionId;
+ import codex.codex.api.model.identity.ContentTypeKey;
+ import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+ import codex.codex.api.model.identity.SiteKey;
+ import codex.codex.api.model.service.ContentItemService;
+ import codex.codex.api.model.value.ContentItemStatus;
++import codex.codex.api.model.value.ContentRevisionStatus;
+ import codex.codex.api.model.value.ContentTypeStatus;
+ import codex.codex.api.model.value.ContentTypeVersionStatus;
+ import codex.codex.internal.repository.ContentItemRepository;
++import codex.codex.internal.repository.ContentRevisionRepository;
+ import codex.codex.internal.repository.ContentTypeRepository;
+ import codex.codex.internal.repository.ContentTypeVersionRepository;
+ import codex.fundamentum.api.exception.NotFoundException;
+@@ -36,14 +40,16 @@ import java.util.Optional;
+  * that field checks happen against an immutable schema snapshot rather than the mutable
+  * draft schema in {@link ContentType#fields()}.
+  * <p>
+- * Current validation: unknown fields and missing required fields.
+- * Type validation, constraints, and revisions are future work.
++ * Creating a content item creates revision {@code 1} as {@link ContentRevisionStatus#WORKING}
++ * and sets {@link ContentItem#currentWorkingRevisionId()} to that revision.
++ * {@link ContentItem#currentPublishedRevisionId()} is null until publishing is implemented.
+  */
+ public final class CodexContentItemService implements ContentItemService {
+ 
+     private static final Logger LOGGER = LoggerFactory.getLogger(CodexContentItemService.class);
+ 
+     private final ContentItemRepository repository;
++    private final ContentRevisionRepository revisionRepository;
+     private final ContentTypeRepository contentTypeRepository;
+     private final ContentTypeVersionRepository contentTypeVersionRepository;
+     private final Clock clock;
+@@ -51,16 +57,19 @@ public final class CodexContentItemService implements ContentItemService {
+     /**
+      * Creates a new {@link CodexContentItemService}.
+      *
+-     * @param repository                  the content item repository; must not be null
+-     * @param contentTypeRepository       the content type repository; must not be null
++     * @param repository                   the content item repository; must not be null
++     * @param revisionRepository           the content revision repository; must not be null
++     * @param contentTypeRepository        the content type repository; must not be null
+      * @param contentTypeVersionRepository the content type version repository; must not be null
+-     * @param clock                       the clock for timestamp generation; must not be null
++     * @param clock                        the clock for timestamp generation; must not be null
+      */
+     public CodexContentItemService(final ContentItemRepository repository,
++                                    final ContentRevisionRepository revisionRepository,
+                                     final ContentTypeRepository contentTypeRepository,
+                                     final ContentTypeVersionRepository contentTypeVersionRepository,
+                                     final Clock clock) {
+         this.repository = Objects.requireNonNull(repository, "repository must not be null");
++        this.revisionRepository = Objects.requireNonNull(revisionRepository, "revisionRepository must not be null");
+         this.contentTypeRepository = Objects.requireNonNull(contentTypeRepository, "contentTypeRepository must not be null");
+         this.contentTypeVersionRepository = Objects.requireNonNull(contentTypeVersionRepository, "contentTypeVersionRepository must not be null");
+         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+@@ -87,14 +96,19 @@ public final class CodexContentItemService implements ContentItemService {
+ 
+         validateValues(command.values(), version, command.contentTypeKey());
+ 
++        final ContentItemId itemId = ContentItemId.forItem(command.siteKey(), command.contentTypeKey(), command.key());
++        final ContentRevisionId revisionId = ContentRevisionId.forRevision(
++                command.siteKey(), command.contentTypeKey(), command.key(), 1);
++
+         final ContentItem item = ContentItem.builder()
+-                .id(ContentItemId.forItem(command.siteKey(), command.contentTypeKey(), command.key()))
++                .id(itemId)
+                 .siteKey(command.siteKey())
+                 .contentTypeKey(command.contentTypeKey())
+                 .contentTypeVersionId(versionId)
+                 .key(command.key())
+                 .status(ContentItemStatus.DRAFT)
+-                .values(command.values())
++                .currentWorkingRevisionId(revisionId)
++                .currentPublishedRevisionId(null)
+                 .owner(actor.id())
+                 .createdBy(actor.id())
+                 .updatedBy(actor.id())
+@@ -102,10 +116,27 @@ public final class CodexContentItemService implements ContentItemService {
+                 .updatedAt(clock.instant())
+                 .build();
+ 
+-        LOGGER.info("Created content item {}/{}/{} by actor: {}",
++        final ContentRevision revision = ContentRevision.builder()
++                .id(revisionId)
++                .contentItemId(itemId)
++                .siteKey(command.siteKey())
++                .contentTypeKey(command.contentTypeKey())
++                .contentTypeVersionId(versionId)
++                .contentItemKey(command.key())
++                .revisionNumber(1)
++                .status(ContentRevisionStatus.WORKING)
++                .values(command.values())
++                .createdBy(actor.id())
++                .createdAt(clock.instant())
++                .build();
++
++        revisionRepository.save(revision);
++        final ContentItem saved = repository.save(item);
++
++        LOGGER.info("Created content item {}/{}/{} (revision 1) by actor: {}",
+                 command.siteKey(), command.contentTypeKey(), command.key(), actor);
+ 
+-        return repository.save(item);
++        return saved;
+     }
+ 
+     @Override
+diff --git a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentItemFoundationTest.java b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentItemFoundationTest.java
+index 7399458..3a52cec 100644
+--- a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentItemFoundationTest.java
++++ b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentItemFoundationTest.java
+@@ -1,11 +1,6 @@
+ package codex.codex.api.model.entity;
+ 
+-import codex.codex.api.model.identity.ContentItemId;
+-import codex.codex.api.model.identity.ContentItemKey;
+-import codex.codex.api.model.identity.ContentTypeKey;
+-import codex.codex.api.model.identity.ContentTypeVersionId;
+-import codex.codex.api.model.identity.FieldKey;
+-import codex.codex.api.model.identity.SiteKey;
++import codex.codex.api.model.identity.*;
+ import codex.codex.api.model.value.ContentItemStatus;
+ import codex.fundamentum.api.model.ActorId;
+ import org.junit.jupiter.api.Test;
+@@ -209,45 +204,29 @@ class ContentItemFoundationTest {
+     }
+ 
+     @Test
+-    void contentItem_defaultsValuesToEmptyMap() {
++    void contentItem_allowsNullCurrentWorkingRevisionId() {
+         final ContentItem item = minimalBuilder().build();
+-        assertNotNull(item.values());
+-        assertTrue(item.values().isEmpty());
++        assertNull(item.currentWorkingRevisionId());
+     }
+ 
+     @Test
+-    void contentItem_defensivelyCopiesValues() {
+-        final Map<FieldKey, Object> mutable = new HashMap<>();
+-        mutable.put(FieldKey.of("title"), "Hello");
+-        final ContentItem item = minimalBuilder().values(mutable).build();
+-
+-        mutable.put(FieldKey.of("summary"), "Extra");
+-        assertEquals(1, item.values().size());
++    void contentItem_allowsNullCurrentPublishedRevisionId() {
++        final ContentItem item = minimalBuilder().build();
++        assertNull(item.currentPublishedRevisionId());
+     }
+ 
+     @Test
+-    void contentItem_valuesAccessorIsImmutable() {
++    void contentItem_supportsRevisionPointers() {
++        final ContentRevisionId workingId = ContentRevisionId.of("working");
++        final ContentRevisionId publishedId = ContentRevisionId.of("published");
++        
+         final ContentItem item = minimalBuilder()
+-                .values(Map.of(FieldKey.of("title"), "Hello"))
++                .currentWorkingRevisionId(workingId)
++                .currentPublishedRevisionId(publishedId)
+                 .build();
+-        assertThrows(UnsupportedOperationException.class,
+-                () -> item.values().put(FieldKey.of("other"), "x"));
+-    }
+-
+-    @Test
+-    void contentItem_rejectsNullValueMapKey() {
+-        final Map<FieldKey, Object> badValues = new HashMap<>();
+-        badValues.put(null, "some-value");
+-        assertThrows(NullPointerException.class,
+-                () -> minimalBuilder().values(badValues).build());
+-    }
+-
+-    @Test
+-    void contentItem_rejectsNullValueMapValue() {
+-        final Map<FieldKey, Object> badValues = new HashMap<>();
+-        badValues.put(FieldKey.of("title"), null);
+-        assertThrows(NullPointerException.class,
+-                () -> minimalBuilder().values(badValues).build());
++                
++        assertEquals(workingId, item.currentWorkingRevisionId());
++        assertEquals(publishedId, item.currentPublishedRevisionId());
+     }
+ 
+     @Test
+@@ -285,6 +264,7 @@ class ContentItemFoundationTest {
+     void contentItem_builderSupportsAllFields() {
+         final ActorId actorId = ActorId.of("user-1");
+         final Instant now = Instant.now();
++        final ContentRevisionId workingId = ContentRevisionId.of("working-1");
+         final ContentItem item = ContentItem.builder()
+                 .id(sampleId())
+                 .siteKey(SiteKey.of("acme"))
+@@ -292,7 +272,7 @@ class ContentItemFoundationTest {
+                 .contentTypeVersionId(ContentTypeVersionId.of("v1"))
+                 .key(ContentItemKey.of("my-post"))
+                 .status(ContentItemStatus.PUBLISHED)
+-                .values(Map.of(FieldKey.of("title"), "Hello"))
++                .currentWorkingRevisionId(workingId)
+                 .owner(actorId)
+                 .createdBy(actorId)
+                 .updatedBy(actorId)
+@@ -301,13 +281,16 @@ class ContentItemFoundationTest {
+                 .build();
+ 
+         assertEquals(ContentItemStatus.PUBLISHED, item.status());
+-        assertEquals(1, item.values().size());
++        assertEquals(workingId, item.currentWorkingRevisionId());
++        assertNull(item.currentPublishedRevisionId());
+     }
+ 
+     @Test
+     void contentItem_copyOfPreservesAllFields() {
+         final ActorId actorId = ActorId.of("user-1");
+         final Instant now = Instant.parse("2025-06-01T10:00:00Z");
++        final ContentRevisionId workingId = ContentRevisionId.of("working-1");
++        final ContentRevisionId publishedId = ContentRevisionId.of("pub-1");
+         final ContentItem original = ContentItem.builder()
+                 .id(sampleId())
+                 .siteKey(SiteKey.of("acme"))
+@@ -315,7 +298,8 @@ class ContentItemFoundationTest {
+                 .contentTypeVersionId(ContentTypeVersionId.of("v1"))
+                 .key(ContentItemKey.of("my-post"))
+                 .status(ContentItemStatus.DRAFT)
+-                .values(Map.of(FieldKey.of("title"), "Hello World"))
++                .currentWorkingRevisionId(workingId)
++                .currentPublishedRevisionId(publishedId)
+                 .owner(actorId)
+                 .createdBy(actorId)
+                 .updatedBy(actorId)
+@@ -331,7 +315,8 @@ class ContentItemFoundationTest {
+         assertEquals(original.contentTypeVersionId(), copy.contentTypeVersionId());
+         assertEquals(original.key(), copy.key());
+         assertEquals(original.status(), copy.status());
+-        assertEquals(original.values(), copy.values());
++        assertEquals(original.currentWorkingRevisionId(), copy.currentWorkingRevisionId());
++        assertEquals(original.currentPublishedRevisionId(), copy.currentPublishedRevisionId());
+         assertEquals(original.owner(), copy.owner());
+         assertEquals(original.createdBy(), copy.createdBy());
+         assertEquals(original.updatedBy(), copy.updatedBy());
+diff --git a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentRevisionTest.java b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentRevisionTest.java
+index 2be6c46..c66c57e 100644
+--- a/codex-codex/src/test/java/codex/codex/api/model/entity/ContentRevisionTest.java
++++ b/codex-codex/src/test/java/codex/codex/api/model/entity/ContentRevisionTest.java
+@@ -1,51 +1,221 @@
+ package codex.codex.api.model.entity;
+ 
+ import codex.codex.api.model.identity.ContentItemId;
++import codex.codex.api.model.identity.ContentItemKey;
+ import codex.codex.api.model.identity.ContentRevisionId;
++import codex.codex.api.model.identity.ContentTypeKey;
++import codex.codex.api.model.identity.ContentTypeVersionId;
+ import codex.codex.api.model.identity.FieldKey;
+-import codex.codex.api.model.value.EditorialState;
++import codex.codex.api.model.identity.SiteKey;
++import codex.codex.api.model.value.ContentRevisionStatus;
+ import codex.fundamentum.api.model.ActorId;
+-import org.junit.jupiter.api.DisplayName;
+ import org.junit.jupiter.api.Test;
+ 
++import java.time.Instant;
++import java.util.HashMap;
+ import java.util.Map;
+ 
+-import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assertions.assertThatThrownBy;
++import static org.junit.jupiter.api.Assertions.*;
+ 
++/**
++ * Tests for {@link ContentRevision}.
++ */
+ class ContentRevisionTest {
+ 
++    private static final SiteKey SITE = SiteKey.of("acme");
++    private static final ContentTypeKey CT_KEY = ContentTypeKey.of("blog-post");
++    private static final ContentItemKey ITEM_KEY = ContentItemKey.of("my-post");
++    private static final ContentTypeVersionId VERSION_ID =
++            ContentTypeVersionId.of("content-type-version:acme:blog-post:v1");
++    private static final ContentItemId ITEM_ID =
++            ContentItemId.forItem(SITE, CT_KEY, ITEM_KEY);
++    private static final ContentRevisionId REVISION_ID =
++            ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 1);
++    private static final ActorId ACTOR = ActorId.of("user-1");
++
++    private ContentRevision.Builder minimalBuilder() {
++        return ContentRevision.builder()
++                .id(REVISION_ID)
++                .contentItemId(ITEM_ID)
++                .siteKey(SITE)
++                .contentTypeKey(CT_KEY)
++                .contentTypeVersionId(VERSION_ID)
++                .contentItemKey(ITEM_KEY)
++                .revisionNumber(1)
++                .createdBy(ACTOR);
++    }
++
++    // --- required fields ---
++
+     @Test
+-    @DisplayName("Should create valid ContentRevision")
+-    void validRevision() {
+-        ContentRevisionId id = ContentRevisionId.generate();
+-        ContentItemId itemId = ContentItemId.generate();
+-        ActorId author = ActorId.of("user-1");
++    void rejectsNullId() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().id(null).build());
++    }
+ 
+-        ContentRevision revision = ContentRevision.builder()
+-                .id(id)
+-                .contentItemId(itemId)
+-                .revisionNumber(5)
+-                .title("My Revision")
+-                .createdBy(author)
+-                .dataFromStrings(Map.of("title", "Hello World"))
++    @Test
++    void rejectsNullContentItemId() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().contentItemId(null).build());
++    }
++
++    @Test
++    void rejectsNullSiteKey() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().siteKey(null).build());
++    }
++
++    @Test
++    void rejectsNullContentTypeKey() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().contentTypeKey(null).build());
++    }
++
++    @Test
++    void rejectsNullContentTypeVersionId() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().contentTypeVersionId(null).build());
++    }
++
++    @Test
++    void rejectsNullContentItemKey() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().contentItemKey(null).build());
++    }
++
++    @Test
++    void rejectsRevisionNumberLessThanOne() {
++        assertThrows(IllegalArgumentException.class,
++                () -> minimalBuilder().revisionNumber(0).build());
++    }
++
++    @Test
++    void rejectsNullCreatedBy() {
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().createdBy(null).build());
++    }
++
++    // --- defaults ---
++
++    @Test
++    void defaultsStatusToWorking() {
++        final ContentRevision revision = minimalBuilder().build();
++        assertEquals(ContentRevisionStatus.WORKING, revision.status());
++    }
++
++    @Test
++    void defaultsValuesToEmptyMap() {
++        final ContentRevision revision = minimalBuilder().build();
++        assertNotNull(revision.values());
++        assertTrue(revision.values().isEmpty());
++    }
++
++    @Test
++    void defaultsCreatedAtWhenNull() {
++        final ContentRevision revision = minimalBuilder().build();
++        assertNotNull(revision.createdAt());
++    }
++
++    // --- deterministic identity ---
++
++    @Test
++    void forRevisionIsDeterministic() {
++        final ContentRevisionId id1 = ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 1);
++        final ContentRevisionId id2 = ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 1);
++        assertEquals(id1, id2);
++    }
++
++    @Test
++    void forRevisionUsesExpectedFormat() {
++        final ContentRevisionId id = ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 3);
++        assertEquals("content-revision:acme:blog-post:my-post:r3", id.value());
++    }
++
++    @Test
++    void forRevisionDiffersByNumber() {
++        final ContentRevisionId r1 = ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 1);
++        final ContentRevisionId r2 = ContentRevisionId.forRevision(SITE, CT_KEY, ITEM_KEY, 2);
++        assertNotEquals(r1, r2);
++    }
++
++    // --- values map ---
++
++    @Test
++    void defensivelyCopiesValues() {
++        final Map<FieldKey, Object> mutable = new HashMap<>();
++        mutable.put(FieldKey.of("title"), "Hello");
++        final ContentRevision revision = minimalBuilder().values(mutable).build();
++
++        mutable.put(FieldKey.of("extra"), "mutation");
++        assertEquals(1, revision.values().size());
++    }
++
++    @Test
++    void valuesAccessorIsImmutable() {
++        final ContentRevision revision = minimalBuilder()
++                .values(Map.of(FieldKey.of("title"), "Hello"))
+                 .build();
++        assertThrows(UnsupportedOperationException.class,
++                () -> revision.values().put(FieldKey.of("other"), "x"));
++    }
+ 
+-        assertThat(revision.revisionNumber()).isEqualTo(5);
+-        assertThat(revision.title()).isEqualTo("My Revision");
+-        assertThat(revision.state()).isEqualTo(EditorialState.DRAFT);
+-        assertThat(revision.data()).containsKey(FieldKey.TITLE);
+-        assertThat(revision.data().get(FieldKey.TITLE)).isEqualTo("Hello World");
++    @Test
++    void rejectsNullValueMapKey() {
++        final Map<FieldKey, Object> bad = new HashMap<>();
++        bad.put(null, "value");
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().values(bad).build());
+     }
+ 
+     @Test
+-    @DisplayName("Should throw exception for revision number < 1")
+-    void invalidRevisionNumber() {
+-        assertThatThrownBy(() -> ContentRevision.builder()
+-                .id(ContentRevisionId.generate())
+-                .contentItemId(ContentItemId.generate())
+-                .revisionNumber(0)
+-                .build())
+-                .isInstanceOf(IllegalArgumentException.class);
++    void rejectsNullValueMapValue() {
++        final Map<FieldKey, Object> bad = new HashMap<>();
++        bad.put(FieldKey.of("title"), null);
++        assertThrows(NullPointerException.class,
++                () -> minimalBuilder().values(bad).build());
++    }
++
++    // --- copyOf ---
++
++    @Test
++    void copyOfPreservesAllFields() {
++        final Instant now = Instant.parse("2025-06-01T10:00:00Z");
++        final ContentRevision original = minimalBuilder()
++                .revisionNumber(3)
++                .status(ContentRevisionStatus.PUBLISHED)
++                .values(Map.of(FieldKey.of("title"), "Hello World"))
++                .createdAt(now)
++                .build();
++
++        final ContentRevision copy = ContentRevision.copyOf(original).build();
++
++        assertEquals(original.id(), copy.id());
++        assertEquals(original.contentItemId(), copy.contentItemId());
++        assertEquals(original.siteKey(), copy.siteKey());
++        assertEquals(original.contentTypeKey(), copy.contentTypeKey());
++        assertEquals(original.contentTypeVersionId(), copy.contentTypeVersionId());
++        assertEquals(original.contentItemKey(), copy.contentItemKey());
++        assertEquals(original.revisionNumber(), copy.revisionNumber());
++        assertEquals(original.status(), copy.status());
++        assertEquals(original.values(), copy.values());
++        assertEquals(original.createdBy(), copy.createdBy());
++        assertEquals(original.createdAt(), copy.createdAt());
++    }
++
++    // --- happy path ---
++
++    @Test
++    void validRevisionBuildsSuccessfully() {
++        final ContentRevision revision = minimalBuilder()
++                .revisionNumber(5)
++                .status(ContentRevisionStatus.WORKING)
++                .values(Map.of(FieldKey.of("title"), "Hello World", FieldKey.of("body"), "Content here"))
++                .createdAt(Instant.parse("2025-06-01T10:00:00Z"))
++                .build();
++
++        assertEquals(5, revision.revisionNumber());
++        assertEquals(ContentRevisionStatus.WORKING, revision.status());
++        assertEquals(2, revision.values().size());
++        assertEquals("Hello World", revision.values().get(FieldKey.of("title")));
+     }
+ }
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
+index 98cb629..97d7fae 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/CodexContentItemServiceTest.java
+@@ -16,6 +16,7 @@ import codex.codex.api.model.value.ContentTypeStatus;
+ import codex.codex.api.model.value.ContentTypeVersionStatus;
+ import codex.codex.api.model.value.FieldType;
+ import codex.codex.internal.repository.MemoryContentItemRepository;
++import codex.codex.internal.repository.MemoryContentRevisionRepository;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
+ import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
+ import codex.fundamentum.api.exception.NotFoundException;
+@@ -46,6 +47,7 @@ class CodexContentItemServiceTest {
+     private static final Actor ACTOR = Actor.system("test");
+ 
+     private MemoryContentItemRepository itemRepository;
++    private MemoryContentRevisionRepository revisionRepository;
+     private MemoryContentTypeRepository contentTypeRepository;
+     private MemoryContentTypeVersionRepository versionRepository;
+     private CodexContentItemService service;
+@@ -54,10 +56,11 @@ class CodexContentItemServiceTest {
+     @BeforeEach
+     void setUp() {
+         itemRepository = new MemoryContentItemRepository();
++        revisionRepository = new MemoryContentRevisionRepository();
+         contentTypeRepository = new MemoryContentTypeRepository();
+         versionRepository = new MemoryContentTypeVersionRepository();
+         clock = Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC);
+-        service = new CodexContentItemService(itemRepository, contentTypeRepository, versionRepository, clock);
++        service = new CodexContentItemService(itemRepository, revisionRepository, contentTypeRepository, versionRepository, clock);
+     }
+ 
+     /**
+@@ -192,15 +195,22 @@ class CodexContentItemServiceTest {
+     }
+ 
+     @Test
+-    void createShouldPreserveProvidedFieldValues() {
++    void createShouldPreserveProvidedFieldValuesInFirstRevision() {
+         setupActiveContentType(SITE_ACME, BLOG_POST);
+         final ContentItem item = service.create(
+                 CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
+                         Map.of(TITLE_KEY, "Hello World", BODY_KEY, "Content body here")),
+                 ACTOR);
+ 
+-        assertEquals("Hello World", item.values().get(TITLE_KEY));
+-        assertEquals("Content body here", item.values().get(BODY_KEY));
++        assertNotNull(item.currentWorkingRevisionId());
++        final codex.codex.api.model.entity.ContentRevision revision = revisionRepository.findById(item.currentWorkingRevisionId()).orElseThrow();
++        assertEquals("Hello World", revision.values().get(TITLE_KEY));
++        assertEquals("Content body here", revision.values().get(BODY_KEY));
++        assertEquals(1, revision.revisionNumber());
++        assertEquals(codex.codex.api.model.value.ContentRevisionStatus.WORKING, revision.status());
++        assertEquals(item.id(), revision.contentItemId());
++        assertEquals(item.contentTypeVersionId(), revision.contentTypeVersionId());
++        assertEquals(ACTOR.id(), revision.createdBy());
+     }
+ 
+     @Test
+diff --git a/codex-codex/src/test/java/codex/codex/internal/service/ContentItemRuntimeIntegrationTest.java b/codex-codex/src/test/java/codex/codex/internal/service/ContentItemRuntimeIntegrationTest.java
+index 2e5194d..bd3d15a 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/service/ContentItemRuntimeIntegrationTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/service/ContentItemRuntimeIntegrationTest.java
+@@ -76,7 +76,8 @@ class ContentItemRuntimeIntegrationTest {
+         assertEquals(siteKey, item.siteKey());
+         assertEquals(contentTypeKey, item.contentTypeKey());
+         assertNotNull(item.contentTypeVersionId());
+-        assertEquals("Welcome to Codex", item.values().get(titleKey));
++        assertNotNull(item.currentWorkingRevisionId());
++        assertNull(item.currentPublishedRevisionId());
+         assertEquals(actor.id(), item.owner());
+         assertEquals(actor.id(), item.createdBy());
+     }
