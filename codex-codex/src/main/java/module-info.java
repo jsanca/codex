@@ -2,6 +2,7 @@ module codex.codex {
     requires transitive codex.fundamentum;
     requires org.slf4j;
     exports codex.codex.api;
+    exports codex.codex.api.index;
     exports codex.codex.api.model.command;
     exports codex.codex.api.model.entity;
     exports codex.codex.api.model.event;

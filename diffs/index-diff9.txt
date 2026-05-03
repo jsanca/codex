@@ -1,0 +1,12 @@
+diff --git a/codex-codex/src/main/java/module-info.java b/codex-codex/src/main/java/module-info.java
+index 6b5cbee..50d1c49 100644
+--- a/codex-codex/src/main/java/module-info.java
++++ b/codex-codex/src/main/java/module-info.java
+@@ -2,6 +2,7 @@ module codex.codex {
+     requires transitive codex.fundamentum;
+     requires org.slf4j;
+     exports codex.codex.api;
++    exports codex.codex.api.index;
+     exports codex.codex.api.model.command;
+     exports codex.codex.api.model.entity;
+     exports codex.codex.api.model.event;
