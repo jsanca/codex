@@ -16,11 +16,14 @@ import codex.codex.api.model.value.ContentItemStatus;
 import codex.codex.api.model.value.ContentRevisionStatus;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
+import codex.fundamentum.api.event.CodexEventSubscriber;
+import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -163,5 +166,41 @@ class ContentItemPublishedIndexingSubscriberTest {
         assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
 
         assertTrue(indexWriter.upserts().isEmpty());
+    }
+
+    // --- 8: CodexEventSubscriber contract ---
+
+    @Test
+    void subscriberImplementsCodexEventSubscriber() {
+        assertInstanceOf(CodexEventSubscriber.class, subscriber);
+    }
+
+    @Test
+    void eventTypeReturnsContentItemPublishedEventClass() {
+        assertEquals(ContentItemPublishedEvent.class, subscriber.eventType());
+    }
+
+    @Test
+    void dispatcherCanInvokeSubscriberThroughLocalDispatcher() {
+        itemRepository.save(buildPublishedItem());
+        revisionRepository.save(buildPublishedRevision());
+
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(List.of(subscriber));
+        dispatcher.dispatch(buildEvent());
+
+        assertEquals(1, indexWriter.upserts().size());
+    }
+
+    @Test
+    void whenDispatchedThroughLocalDispatcherPublishedEventResultsInOneIndexUpsert() {
+        itemRepository.save(buildPublishedItem());
+        revisionRepository.save(buildPublishedRevision());
+
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(List.of(subscriber));
+        dispatcher.dispatch(buildEvent());
+
+        final IndexDocument doc = indexWriter.upserts().getFirst();
+        assertEquals("content-item:acme:blog-post:welcome-to-codex", doc.id().value());
+        assertEquals(IndexResourceType.CONTENT_ITEM, doc.resourceType());
     }
 }

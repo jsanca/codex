@@ -7,6 +7,7 @@ import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.internal.repository.ContentItemRepository;
 import codex.codex.internal.repository.ContentRevisionRepository;
+import codex.fundamentum.api.event.CodexEventSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +29,15 @@ import java.util.Objects;
  * If the canonical item or revision cannot be found after the event is received, an
  * {@link IllegalStateException} is thrown because the projection would be inconsistent.
  * Production-grade retry and dead-letter behavior can be layered on top later.
+ * Future: introduce ContentItemIndexingSource / ContentProjectionSource to decouple subscribers from repositories.
+ * Future:
+ * Indexing subscribers may eventually enqueue IndexingRequests instead of writing eagerly.
+ * Projection reads may eventually run inside read-only unit-of-work/transaction boundaries.
+ * Indexing policy will define DEFER vs WAIT_FOR semantics later.
+ *
  */
-public final class ContentItemPublishedIndexingSubscriber {
+public final class ContentItemPublishedIndexingSubscriber
+        implements CodexEventSubscriber<ContentItemPublishedEvent> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentItemPublishedIndexingSubscriber.class);
 
@@ -55,6 +63,11 @@ public final class ContentItemPublishedIndexingSubscriber {
         this.mapper = Objects.requireNonNull(mapper, "mapper must not be null");
     }
 
+    @Override
+    public Class<ContentItemPublishedEvent> eventType() {
+        return ContentItemPublishedEvent.class;
+    }
+
     /**
      * Handles a {@link ContentItemPublishedEvent} by loading the canonical item and revision,
      * mapping them to an {@link IndexDocument}, and writing the document to the index.
@@ -63,6 +76,7 @@ public final class ContentItemPublishedIndexingSubscriber {
      * @throws NullPointerException  if {@code event} is null
      * @throws IllegalStateException if the content item or its published revision cannot be found
      */
+    @Override
     public void handle(final ContentItemPublishedEvent event) {
         Objects.requireNonNull(event, "event must not be null");
 

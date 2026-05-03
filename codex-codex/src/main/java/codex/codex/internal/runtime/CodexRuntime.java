@@ -1,18 +1,22 @@
 package codex.codex.internal.runtime;
 
+import codex.codex.api.index.IndexWriter;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
+import codex.codex.internal.index.ContentItemIndexDocumentMapper;
+import codex.codex.internal.index.ContentItemPublishedIndexingSubscriber;
+import codex.codex.internal.index.NoOpIndexWriter;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.codex.internal.repository.MemorySiteRepository;
 import codex.codex.internal.service.CodexContentItemService;
-import codex.codex.internal.service.EventPublishingContentItemService;
 import codex.codex.internal.service.CodexContentTypeService;
 import codex.codex.internal.service.CodexSiteService;
 import codex.codex.internal.service.DeferredEventDispatcher;
+import codex.codex.internal.service.EventPublishingContentItemService;
 import codex.codex.internal.service.EventPublishingContentTypeService;
 import codex.codex.internal.service.EventPublishingSiteService;
 import codex.codex.internal.service.SiteIdentityGenerator;
@@ -20,6 +24,8 @@ import codex.fundamentum.api.concurrent.CodexExecutor;
 import codex.fundamentum.api.concurrent.CodexExecutorConfig;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
+import codex.fundamentum.api.event.CompositeCodexEventDispatcher;
+import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +44,18 @@ import java.util.concurrent.locks.StampedLock;
  *
  * <p>Obtain an instance via {@link #inMemory()} and release resources via
  * {@link #shutdown()} or try-with-resources.</p>
+ *
+ * <p>Event pipeline (in-memory):</p>
+ * <pre>
+ * DeferredEventDispatcher (transaction-aware)
+ *   → CompositeCodexEventDispatcher
+ *      → EventRecorder       (domain event recording, first so events survive subscriber failures)
+ *      → LocalCodexEventDispatcher
+ *         → ContentItemPublishedIndexingSubscriber → IndexWriter
+ * </pre>
+ *
+ * <p>By default {@link NoOpIndexWriter} is used. Pass a custom {@link IndexWriter} via
+ * {@link #inMemory(IndexWriter)} to enable recording or production indexing.</p>
  *
  * @author jsanca &amp; clio
  */
@@ -71,54 +89,73 @@ public final class CodexRuntime implements AutoCloseable {
     }
 
     /**
-     * Creates a fully wired in-memory runtime suitable for local development and testing.
-     *
-     * <p>Pipeline assembled:</p>
-     * <pre>
-     * MemorySiteRepository
-     *   ← CodexSiteService
-     *     ← EventPublishingSiteService
-     *         ← DeferredEventDispatcher
-     *             ← EventRecorder (inner recording delegate)
-     *
-     * MemoryContentTypeRepository + MemoryContentTypeVersionRepository
-     *   ← CodexContentTypeService
-     *     ← EventPublishingContentTypeService
-     *
-     * MemoryContentItemRepository
-     *   ← CodexContentItemService
-     *     ← EventPublishingContentItemService
-     * </pre>
+     * Creates a fully wired in-memory runtime with a {@link NoOpIndexWriter}.
+     * Indexing is structurally enabled but operations are silently discarded.
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
      */
     public static CodexRuntime inMemory() {
+        return inMemory(new NoOpIndexWriter());
+    }
+
+    /**
+     * Creates a fully wired in-memory runtime with the given {@link IndexWriter}.
+     * <p>
+     * Pass a {@link codex.codex.internal.index.RecordingIndexWriter} in tests to assert
+     * on index upserts. Pass a production writer (OpenSearch, myIR, Lucene) when ready.
+     *
+     * @param indexWriter the index writer to use; must not be null
+     * @return a new runtime instance; call {@link #shutdown()} when done
+     */
+    public static CodexRuntime inMemory(final IndexWriter indexWriter) {
+        Objects.requireNonNull(indexWriter, "indexWriter must not be null");
         LOGGER.info("Starting CodexRuntime (in-memory)");
 
         final Clock clock = Clock.systemUTC();
 
+        // --- repositories (shared between services and projection subscribers) ---
         final MemorySiteRepository siteRepository = new MemorySiteRepository();
-        final SiteIdentityGenerator siteIdentityGenerator = new SiteIdentityGenerator();
-        final CodexSiteService coreSiteService = new CodexSiteService(siteRepository, clock, siteIdentityGenerator);
-        final EventRecorder recorder = new EventRecorder();
-        final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
-        final DeferredEventDispatcher deferredDispatcher = new DeferredEventDispatcher(recorder, asyncExecutor);
-        final SiteService siteService = new EventPublishingSiteService(coreSiteService, deferredDispatcher, clock);
-
         final MemoryContentTypeRepository contentTypeRepository = new MemoryContentTypeRepository();
         final MemoryContentTypeVersionRepository contentTypeVersionRepository = new MemoryContentTypeVersionRepository();
-        final CodexContentTypeService coreContentTypeService = new CodexContentTypeService(
-                contentTypeRepository, contentTypeVersionRepository, clock);
-        final ContentTypeService contentTypeService = new EventPublishingContentTypeService(coreContentTypeService, deferredDispatcher, clock);
-
         final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
         final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
-        final ContentItemService contentItemService = new EventPublishingContentItemService(
-                new CodexContentItemService(contentItemRepository, revisionRepository, contentTypeRepository, contentTypeVersionRepository, clock),
-                deferredDispatcher,
-                clock);
 
-        return new CodexRuntime(siteService, contentTypeService, contentItemService, deferredDispatcher, recorder, asyncExecutor, clock);
+        // --- async executor ---
+        final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
+
+        // --- indexing projection subscriber ---
+        final ContentItemIndexDocumentMapper mapper = new ContentItemIndexDocumentMapper();
+        final ContentItemPublishedIndexingSubscriber indexingSubscriber =
+                new ContentItemPublishedIndexingSubscriber(
+                        contentItemRepository, revisionRepository, indexWriter, mapper);
+
+        // --- event pipeline assembly ---
+        // Recording first: events are captured even if a subscriber fails.
+        final EventRecorder recorder = new EventRecorder();
+        final LocalCodexEventDispatcher localDispatcher =
+                new LocalCodexEventDispatcher(List.of(indexingSubscriber));
+        final CompositeCodexEventDispatcher composite =
+                new CompositeCodexEventDispatcher(List.of(recorder, localDispatcher));
+        final DeferredEventDispatcher deferredDispatcher =
+                new DeferredEventDispatcher(composite, asyncExecutor);
+
+        // --- services ---
+        final SiteIdentityGenerator siteIdentityGenerator = new SiteIdentityGenerator();
+        final SiteService siteService = new EventPublishingSiteService(
+                new CodexSiteService(siteRepository, clock, siteIdentityGenerator),
+                deferredDispatcher, clock);
+
+        final ContentTypeService contentTypeService = new EventPublishingContentTypeService(
+                new CodexContentTypeService(contentTypeRepository, contentTypeVersionRepository, clock),
+                deferredDispatcher, clock);
+
+        final ContentItemService contentItemService = new EventPublishingContentItemService(
+                new CodexContentItemService(contentItemRepository, revisionRepository,
+                        contentTypeRepository, contentTypeVersionRepository, clock),
+                deferredDispatcher, clock);
+
+        return new CodexRuntime(siteService, contentTypeService, contentItemService,
+                deferredDispatcher, recorder, asyncExecutor, clock);
     }
 
     /**
