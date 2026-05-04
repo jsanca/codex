@@ -29,6 +29,7 @@ import java.util.function.Supplier;
  *
  * @param <K> the key type
  * @param <V> the value type
+ * @author jsanca
  */
 public interface CacheRegion<K, V> {
 

@@ -7,6 +7,7 @@ package codex.fundamentum.api.lifecycle;
  * checking for specific resource keys (e.g. {@code SiteKey.SYSTEM}).
  * This keeps lifecycle logic open for future resource types such as system resources,
  * read-only resources, externally managed resources, or virtual resources.
+ * @author jsanca
  */
 public enum LifecycleParticipation {
 

@@ -7,5 +7,6 @@ module codex.fundamentum {
     exports codex.fundamentum.api.exception;
     exports codex.fundamentum.api.lifecycle;
     exports codex.fundamentum.api.model;
+    exports codex.fundamentum.api.runtime;
     exports codex.fundamentum.api.tx;
 }

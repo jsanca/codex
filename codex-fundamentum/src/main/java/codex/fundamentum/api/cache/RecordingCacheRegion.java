@@ -19,6 +19,7 @@ import java.util.function.Supplier;
  *
  * @param <K> the key type
  * @param <V> the value type
+ * @author jsanca
  */
 public final class RecordingCacheRegion<K, V> implements CacheRegion<K, V> {
 

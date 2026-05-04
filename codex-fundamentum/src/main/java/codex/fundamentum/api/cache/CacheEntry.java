@@ -23,6 +23,7 @@ import java.util.Objects;
  * future {@code CachePolicy}.
  *
  * @param <V> the type of the cached value
+ * @author jsnaca
  */
 public sealed interface CacheEntry<V> permits CacheEntry.Found, CacheEntry.NotFound {
 

@@ -109,11 +109,17 @@ Future-forward:
 
 ## Task feedback:
 
+Task 34 feedback:
+- Accepted.
+- Good: runtime abstractions added to fundamentum without CMS/domain concepts; CodexModuleRuntime stays small (moduleName, subscribers, close); CodexModuleRuntimeProvider ready for future ServiceLoader without premature discovery; CodexRuntimeContext documented as composition-only (not a Service Locator); MapBackedCodexRuntimeContext immutable and rejects duplicate type registrations; module-info exports only the new runtime package; no changes to codex-codex, codex-index, or codex-chronicon.
+- Keep doing: keep fundamentum generic and small; domain/services/entities must continue receiving dependencies explicitly through constructors; do not introduce ServiceLoader usage until explicitly tasked.
+
 Task 32 feedback:
 - Accepted.
 - Good: implemented first Chronicon subscribers without touching canonical lifecycle code; each subscriber is simple and self-contained; event projection pattern correct (domain event → AuditRecord → ChroniconRepository); LocalCodexEventDispatcher integration coverage added; module dependencies updated correctly; README reflects new state; 113 chronicon tests, 646 total, BUILD SUCCESS.
 - Keep doing: keep Chronicon as a listener/projection module, not owner of domain events; avoid generic mapping frameworks until duplication is painful; keep runtime wiring out of feature/subscriber tasks unless explicitly requested.
 - Next architectural step: runtime abstractions in codex.fundamentum.api.runtime, then ChroniconRuntime after those exist.
+- Architectural note: subscribers writing directly to ChroniconRepository is acceptable now because it is Chronicon's own projection write port (not an internal repo from another module). Future refinement may introduce a service/sink layer (e.g. AuditRecordWriter or ChroniconRecorder) for batching, idempotency, write policies, transaction boundaries, durable persistence, and retry/dead-letter. Do not add this layer until explicitly tasked.
 
 Task 31 feedback:
 - Accepted.
