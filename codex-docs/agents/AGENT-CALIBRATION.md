@@ -109,6 +109,18 @@ Future-forward:
 
 ## Task feedback:
 
+Task 38b feedback (ConciliumRuntime):
+- Accepted with controlled architectural debt.
+- Good: ConciliumRuntime composes CodexRuntime, IndexRuntime, and ChroniconRuntime; core remains independent from index and chronicon; composed event pipeline works — core events reach both indexing and audit subscribers; CodexRuntime gained clean inMemory(CodexEventDispatcher) overload while preserving inMemory(); EventRecorder remains core observation, Chronicon remains product audit/history; tests cover the composed runtime; full reactor compile passes.
+- Architectural debt: qualified exports (codex.codex.internal.runtime to codex.concilium, codex.index.internal to codex.concilium, codex.chronicon.internal to codex.concilium) are acceptable now but should be removed soon by moving runtime classes to public *.api.runtime packages: codex.codex.api.runtime.CodexRuntime, codex.index.api.runtime.IndexRuntime, codex.chronicon.api.runtime.ChroniconRuntime. Subscribers, mappers, memory repositories, and helpers stay internal.
+- Note: AtomicReference forwarding lambda is acceptable as a documented transitional solution for the runtime creation cycle. Future composition may deserve a cleaner event router or two-phase assembly model.
+- Next recommended task: move module runtime types to public api.runtime packages and remove qualified exports to codex.concilium.
+
+Task 38a feedback (codex-concilium skeleton):
+- Accepted.
+- Good: created codex-concilium as a minimal Maven/Jigsaw skeleton; no ConciliumRuntime or runtime composition implemented; parent pom updated before codex-porta; module-info minimal with no exports; README explains role of Concilium and distinguishes from Porta and future Concordia; MODULE-RESPONSIBILITIES.md updated consistently; no marker class added (appropriate for empty skeleton); Maven test and full reactor compile pass.
+- Keep doing: for skeleton modules, avoid placeholder classes unless the build requires them; keep documentation aligned with module responsibilities; do not implement the next natural step unless explicitly tasked.
+
 Task 34 feedback:
 - Accepted.
 - Good: runtime abstractions added to fundamentum without CMS/domain concepts; CodexModuleRuntime stays small (moduleName, subscribers, close); CodexModuleRuntimeProvider ready for future ServiceLoader without premature discovery; CodexRuntimeContext documented as composition-only (not a Service Locator); MapBackedCodexRuntimeContext immutable and rejects duplicate type registrations; module-info exports only the new runtime package; no changes to codex-codex, codex-index, or codex-chronicon.

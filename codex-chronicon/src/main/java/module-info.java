@@ -3,4 +3,5 @@ module codex.chronicon {
     requires codex.codex;
     requires org.slf4j;
     exports codex.chronicon.api;
+    exports codex.chronicon.internal to codex.concilium;
 }

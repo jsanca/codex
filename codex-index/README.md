@@ -14,10 +14,39 @@
 
 ## Current Status
 
-Skeleton only. No implementation has been migrated here yet.
+Indexing foundation implemented (earlier tasks):
 
-The indexing foundation currently lives inside `codex-codex` during MVP. A future task will move
-indexing abstractions and subscribers into this module once module boundaries are finalized.
+- `IndexDocument`, `IndexDocumentId`, `IndexResourceType`, `IndexWriter` — core indexing model
+- `ContentItemIndexDocumentMapper` — maps a published item + revision into an `IndexDocument`
+- `ContentItemPublishedIndexingSubscriber` — reacts to `ContentItemPublishedEvent` and writes to `IndexWriter`
+- `ReaderContentItemProjectionSource` — adapts the public `ContentItemProjectionReader` contract for index use
+- `NoOpIndexWriter` — discards all operations; suitable when indexing is not yet configured
+- `RecordingIndexWriter` — records all operations for inspection in tests
+
+Module runtime implemented (Task 36):
+
+- `IndexRuntime` — assembles the writer, projection source, mapper, and subscriber into a single
+  composition root implementing `CodexModuleRuntime` from `codex-fundamentum`.
+
+Usage:
+
+```java
+// No-op writer: structurally wired, no infrastructure required
+IndexRuntime runtime = IndexRuntime.inMemory(core.contentItemProjectionReader());
+dispatcher.registerAll(runtime.subscribers());
+
+// Custom writer: future adapters or RecordingIndexWriter in integration tests
+IndexRuntime runtime = IndexRuntime.withWriter(projectionReader, recordingWriter);
+```
+
+**Not yet implemented:**
+
+- Assembly with `CoreRuntime` / `ChroniconRuntime` into a global `ApplicationRuntime`
+- `IndexRuntimeProvider` (ServiceLoader-based provider declaration)
+- OpenSearch, Lucene, Elasticsearch, myIR, and vector index adapters
+- `ContentSearchService` and query abstractions
+- Cache invalidation subscribers
+
 
 ## Dependency Rules
 

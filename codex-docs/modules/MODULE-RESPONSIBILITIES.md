@@ -41,9 +41,9 @@ codex-olorin
   → core must never depend on them
 ```
 
-**Composition and runtime wiring** may eventually live in a dedicated `codex-runtime` or
-`codex-assembly` module once multiple modules need to be wired together from outside the core.
-That module does not exist yet and must not be created until the need is concrete.
+**Composition and runtime wiring** lives in `codex-concilium`. It is the local runtime council:
+it composes module runtimes without making `codex-codex` depend on projection or adapter modules.
+`codex-porta` and other edge modules may depend on `codex-concilium` to obtain a composed runtime.
 
 ---
 
@@ -184,6 +184,36 @@ That module does not exist yet and must not be created until the need is concret
 
 > **Boundary note:** Audit is a **product/domain history concern**. Observability (metrics, traces,
 > logs) is an **operations concern** and must remain separate.
+
+---
+
+## codex-concilium
+
+> The Concilium is the council of module runtimes.
+
+### Responsibilities
+
+- Local runtime composition layer
+- Composing module runtimes (`CodexRuntime`, `IndexRuntime`, `ChroniconRuntime`, and future runtimes)
+  into a coherent local application runtime
+- Collecting all module subscribers into a unified event dispatcher
+- Coordinating lifecycle shutdown across modules
+- Exposing an assembled runtime to edge modules such as `codex-porta`
+- Future: ServiceLoader-based runtime provider discovery
+
+### Rules
+
+- Does not own canonical domain behavior.
+- Does not own REST/GraphQL API exposure (that is `codex-porta`).
+- Does not own cluster coordination (a future `codex-concordia` may handle that).
+- Is not a Service Locator or dependency injection container.
+- `codex-codex` must never depend on `codex-concilium`.
+- `codex-porta` may depend on `codex-concilium` to obtain a composed runtime.
+- `codex-concilium` must not depend on `codex-porta`.
+
+> **Current status:** `ConciliumRuntime` is implemented. `ConciliumRuntime.inMemory()` composes
+> `CodexRuntime` + `IndexRuntime` + `ChroniconRuntime` locally. ServiceLoader provider and
+> Porta integration are future work.
 
 ---
 
@@ -393,6 +423,7 @@ That module does not exist yet and must not be created until the need is concret
 | codex-archivum  | No                       | Maybe                 | No                       | No       | Yes                      |
 | codex-chronicon | No                       | Yes                   | History APIs (future)    | No       | Yes                      |
 | codex-custos    | Identity state           | Maybe                 | Auth APIs (future)       | No       | Yes                      |
+| codex-concilium | No                       | No                    | Assembled runtime (future) | No     | Yes                      |
 | codex-porta     | No                       | No / Maybe            | Yes                      | No       | Yes                      |
 | codex-iter      | Workflow state           | Yes                   | Workflow APIs (future)   | No       | Yes                      |
 | codex-nuntius   | Interaction state        | Maybe                 | Messaging APIs (future)  | Maybe    | Yes                      |
@@ -455,10 +486,7 @@ Document only. Do not add code unless a task explicitly says so:
 These questions are documented here for awareness. Do not resolve them in code until a task
 explicitly addresses each one.
 
-1. **Runtime assembly module**: Should runtime composition eventually move to a dedicated
-   `codex-runtime` or `codex-assembly` module as the number of wired modules grows?
-
-2. **Indexing migration timing**: When should indexing abstractions and subscribers move from their
+1. **Indexing migration timing**: When should indexing abstractions and subscribers move from their
    current MVP location in `codex-codex` to `codex-index`?
 
 3. **`IndexDocumentIdFactory`**: Should this abstraction wait until tenant-aware indexing is

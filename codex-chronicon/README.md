@@ -33,9 +33,25 @@ Subscribers implement `CodexEventSubscriber` from `codex-fundamentum` and write
 `AuditRecord` entries to `ChroniconRepository`. They are tested against
 `LocalCodexEventDispatcher`.
 
+Module runtime implemented (Task 35):
+
+- `ChroniconRuntime` — assembles the Chronicon repository and all subscribers into a single
+  composition root implementing `CodexModuleRuntime` from `codex-fundamentum`.
+
+Usage:
+
+```java
+// In-memory runtime (tests, early development)
+ChroniconRuntime runtime = ChroniconRuntime.inMemory();
+dispatcher.registerAll(runtime.subscribers());
+
+// Custom repository (e.g. RecordingChroniconRepository in integration tests)
+ChroniconRuntime runtime = ChroniconRuntime.withRepository(recordingRepository);
+```
+
 **Not yet implemented:**
-- Runtime wiring (subscribers are not yet connected to `CodexRuntime`)
-- `ChroniconRuntime` composition root
+- Assembly with `CoreRuntime` / `IndexRuntime` into a global `ApplicationRuntime`
+- `ChroniconRuntimeProvider` (ServiceLoader-based provider declaration)
 - Durable persistence (records are in-memory only)
 - Timeline query service and audit search APIs
 

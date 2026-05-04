@@ -21,6 +21,7 @@
         <module>codex-index</module>
         <module>codex-scriptorium</module>
         <module>codex-illuminarium</module>
+        <module>codex-concilium</module>
         <module>codex-porta</module>
         <module>codex-iter</module>
         <module>codex-custos</module>

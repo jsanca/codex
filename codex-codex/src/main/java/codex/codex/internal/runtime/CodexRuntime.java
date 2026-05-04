@@ -23,7 +23,6 @@ import codex.fundamentum.api.concurrent.CodexExecutorConfig;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CompositeCodexEventDispatcher;
-import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.StampedLock;
 
+
 /**
  * Manual composition root for {@code codex-codex}.
  *
@@ -43,12 +43,12 @@ import java.util.concurrent.locks.StampedLock;
  * <p>Obtain an instance via {@link #inMemory()} and release resources via
  * {@link #shutdown()} or try-with-resources.</p>
  *
- * <p>Event pipeline (in-memory):</p>
+ * <p>Event pipeline (in-memory without external dispatcher):</p>
  * <pre>
  * DeferredEventDispatcher (transaction-aware)
  *   → CompositeCodexEventDispatcher
- *      → EventRecorder       (domain event recording, first so events survive subscriber failures)
- *      → LocalCodexEventDispatcher (no built-in subscribers — indexing lives in codex-index)
+ *      → EventRecorder          (domain event recording — first so events survive subscriber failures)
+ *      → externalDispatcher     (no-op by default; Concilium provides module subscribers here)
  * </pre>
  *
  * @author jsanca &amp; clio
@@ -86,16 +86,36 @@ public final class CodexRuntime implements AutoCloseable {
     }
 
     /**
-     * Creates a fully wired in-memory runtime.
-     * <p>
-     * Indexing subscribers are not wired here — they live in {@code codex-index} and are
-     * composed by the runtime assembly module.
+     * Creates a fully wired in-memory runtime with no external event subscribers.
+     *
+     * <p>Module subscribers (indexing, chronicon) are not wired here — they are composed by
+     * {@code codex-concilium} using {@link #inMemory(CodexEventDispatcher)}.</p>
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
      */
     public static CodexRuntime inMemory() {
-        LOGGER.info("Starting CodexRuntime (in-memory)");
+        return inMemory(event -> {});
+    }
 
+    /**
+     * Creates a fully wired in-memory runtime that routes domain events to the provided
+     * external dispatcher after the internal {@code EventRecorder}.
+     *
+     * <p>Intended for use by {@code codex-concilium} to inject module subscribers
+     * (indexing, chronicon) into the core event pipeline without making {@code codex-codex}
+     * depend on those modules.</p>
+     *
+     * @param externalDispatcher the dispatcher to receive all domain events after recording;
+     *                           must not be null
+     * @return a new runtime instance; call {@link #shutdown()} when done
+     */
+    public static CodexRuntime inMemory(final CodexEventDispatcher externalDispatcher) {
+        Objects.requireNonNull(externalDispatcher, "externalDispatcher must not be null");
+        LOGGER.info("Starting CodexRuntime (in-memory)");
+        return assemble(externalDispatcher);
+    }
+
+    private static CodexRuntime assemble(final CodexEventDispatcher externalDispatcher) {
         final Clock clock = Clock.systemUTC();
 
         // --- repositories ---
@@ -115,10 +135,8 @@ public final class CodexRuntime implements AutoCloseable {
         // --- event pipeline assembly ---
         // Recording first: events are captured even if a subscriber fails.
         final EventRecorder recorder = new EventRecorder();
-        final LocalCodexEventDispatcher localDispatcher =
-                new LocalCodexEventDispatcher(List.of());
         final CompositeCodexEventDispatcher composite =
-                new CompositeCodexEventDispatcher(List.of(recorder, localDispatcher));
+                new CompositeCodexEventDispatcher(List.of(recorder, externalDispatcher));
         final DeferredEventDispatcher deferredDispatcher =
                 new DeferredEventDispatcher(composite, asyncExecutor);
 

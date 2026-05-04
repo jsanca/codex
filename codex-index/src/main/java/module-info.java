@@ -3,4 +3,5 @@ module codex.index {
     requires codex.fundamentum;
     requires org.slf4j;
     exports codex.index.api;
+    exports codex.index.internal to codex.concilium;
 }
