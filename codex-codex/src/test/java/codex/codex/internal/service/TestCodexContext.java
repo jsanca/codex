@@ -1,6 +1,5 @@
 package codex.codex.internal.service;
 
-import codex.codex.api.index.IndexWriter;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
@@ -32,18 +31,6 @@ public final class TestCodexContext {
      */
     public static TestCodexContext create() {
         return new TestCodexContext(CodexRuntime.inMemory());
-    }
-
-    /**
-     * Creates a fully wired in-memory context with the given {@link IndexWriter}.
-     * Use this to supply a {@link codex.codex.internal.index.RecordingIndexWriter}
-     * when tests need to assert on index upserts.
-     *
-     * @param indexWriter the index writer to wire; must not be null
-     * @return a new, isolated context
-     */
-    public static TestCodexContext createWithIndexWriter(final IndexWriter indexWriter) {
-        return new TestCodexContext(CodexRuntime.inMemory(indexWriter));
     }
 
     /**

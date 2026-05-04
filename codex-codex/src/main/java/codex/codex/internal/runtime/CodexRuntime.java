@@ -1,14 +1,8 @@
 package codex.codex.internal.runtime;
 
-import codex.codex.api.index.IndexWriter;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
-import codex.codex.internal.index.ContentItemIndexDocumentMapper;
-import codex.codex.internal.index.ContentItemProjectionSource;
-import codex.codex.internal.index.ContentItemPublishedIndexingSubscriber;
-import codex.codex.internal.index.NoOpIndexWriter;
-import codex.codex.internal.index.RepositoryContentItemProjectionSource;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
@@ -52,12 +46,8 @@ import java.util.concurrent.locks.StampedLock;
  * DeferredEventDispatcher (transaction-aware)
  *   → CompositeCodexEventDispatcher
  *      → EventRecorder       (domain event recording, first so events survive subscriber failures)
- *      → LocalCodexEventDispatcher
- *         → ContentItemPublishedIndexingSubscriber → IndexWriter
+ *      → LocalCodexEventDispatcher (no built-in subscribers — indexing lives in codex-index)
  * </pre>
- *
- * <p>By default {@link NoOpIndexWriter} is used. Pass a custom {@link IndexWriter} via
- * {@link #inMemory(IndexWriter)} to enable recording or production indexing.</p>
  *
  * @author jsanca &amp; clio
  */
@@ -91,31 +81,19 @@ public final class CodexRuntime implements AutoCloseable {
     }
 
     /**
-     * Creates a fully wired in-memory runtime with a {@link NoOpIndexWriter}.
-     * Indexing is structurally enabled but operations are silently discarded.
+     * Creates a fully wired in-memory runtime.
+     * <p>
+     * Indexing subscribers are not wired here — they live in {@code codex-index} and are
+     * composed by the runtime assembly module.
      *
      * @return a new runtime instance; call {@link #shutdown()} when done
      */
     public static CodexRuntime inMemory() {
-        return inMemory(new NoOpIndexWriter());
-    }
-
-    /**
-     * Creates a fully wired in-memory runtime with the given {@link IndexWriter}.
-     * <p>
-     * Pass a {@link codex.codex.internal.index.RecordingIndexWriter} in tests to assert
-     * on index upserts. Pass a production writer (OpenSearch, myIR, Lucene) when ready.
-     *
-     * @param indexWriter the index writer to use; must not be null
-     * @return a new runtime instance; call {@link #shutdown()} when done
-     */
-    public static CodexRuntime inMemory(final IndexWriter indexWriter) {
-        Objects.requireNonNull(indexWriter, "indexWriter must not be null");
         LOGGER.info("Starting CodexRuntime (in-memory)");
 
         final Clock clock = Clock.systemUTC();
 
-        // --- repositories (shared between services and projection subscribers) ---
+        // --- repositories ---
         final MemorySiteRepository siteRepository = new MemorySiteRepository();
         final MemoryContentTypeRepository contentTypeRepository = new MemoryContentTypeRepository();
         final MemoryContentTypeVersionRepository contentTypeVersionRepository = new MemoryContentTypeVersionRepository();
@@ -125,18 +103,11 @@ public final class CodexRuntime implements AutoCloseable {
         // --- async executor ---
         final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
 
-        // --- indexing projection subscriber ---
-        final ContentItemIndexDocumentMapper mapper = new ContentItemIndexDocumentMapper();
-        final ContentItemProjectionSource projectionSource =
-                new RepositoryContentItemProjectionSource(contentItemRepository, revisionRepository);
-        final ContentItemPublishedIndexingSubscriber indexingSubscriber =
-                new ContentItemPublishedIndexingSubscriber(projectionSource, indexWriter, mapper);
-
         // --- event pipeline assembly ---
         // Recording first: events are captured even if a subscriber fails.
         final EventRecorder recorder = new EventRecorder();
         final LocalCodexEventDispatcher localDispatcher =
-                new LocalCodexEventDispatcher(List.of(indexingSubscriber));
+                new LocalCodexEventDispatcher(List.of());
         final CompositeCodexEventDispatcher composite =
                 new CompositeCodexEventDispatcher(List.of(recorder, localDispatcher));
         final DeferredEventDispatcher deferredDispatcher =

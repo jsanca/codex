@@ -1,4 +1,4 @@
-package codex.codex.api.index;
+package codex.index.api;
 
 import org.junit.jupiter.api.Test;
 

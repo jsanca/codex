@@ -1,4 +1,4 @@
-package codex.codex.internal.index;
+package codex.index.internal;
 
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
@@ -11,7 +11,7 @@ import java.util.Objects;
 /**
  * Repository-backed implementation of {@link ContentItemProjectionSource}.
  * <p>
- * This is the MVP implementation. It loads canonical objects directly from
+ * MVP implementation. Loads canonical objects directly from
  * {@link ContentItemRepository} and {@link ContentRevisionRepository}.
  * <p>
  * Future implementations may wrap these reads inside a read-only unit-of-work,
@@ -38,8 +38,10 @@ public final class RepositoryContentItemProjectionSource implements ContentItemP
     public RepositoryContentItemProjectionSource(
             final ContentItemRepository contentItemRepository,
             final ContentRevisionRepository contentRevisionRepository) {
-        this.contentItemRepository = Objects.requireNonNull(contentItemRepository, "contentItemRepository must not be null");
-        this.contentRevisionRepository = Objects.requireNonNull(contentRevisionRepository, "contentRevisionRepository must not be null");
+        this.contentItemRepository = Objects.requireNonNull(contentItemRepository,
+                "contentItemRepository must not be null");
+        this.contentRevisionRepository = Objects.requireNonNull(contentRevisionRepository,
+                "contentRevisionRepository must not be null");
     }
 
     @Override

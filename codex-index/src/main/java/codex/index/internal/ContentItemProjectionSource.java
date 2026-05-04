@@ -1,4 +1,4 @@
-package codex.codex.internal.index;
+package codex.index.internal;
 
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
@@ -6,20 +6,14 @@ import codex.codex.api.model.event.ContentItemPublishedEvent;
 
 /**
  * Read facade used by indexing projection subscribers to load canonical data
- * required for building an {@link codex.codex.api.index.IndexDocument}.
+ * required for building an {@link codex.index.api.IndexDocument}.
  * <p>
- * Subscribers should depend on this interface, not directly on repositories. This allows
- * the underlying loading mechanism to evolve independently:
+ * Subscribers depend on this interface, not directly on repositories. This allows the
+ * underlying loading mechanism to evolve independently:
  * <ul>
- *   <li>current MVP: repository-backed ({@link RepositoryContentItemProjectionSource})</li>
- *   <li>future: cache-aware, read-only unit-of-work, read model, projection store</li>
+ *   <li>MVP: repository-backed ({@link RepositoryContentItemProjectionSource})</li>
+ *   <li>Future: cache-aware, read-only unit-of-work, read model, projection store</li>
  * </ul>
- * <p>
- * This source has no indexing, mapping, caching, or transaction behavior.
- * It only provides the canonical objects needed to build a projection document.
- * <p>
- * Audit, observability, cache invalidation, and workflow projections should use
- * their own dedicated sources, keeping each subscriber small and focused.
  */
 public interface ContentItemProjectionSource {
 

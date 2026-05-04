@@ -1,4 +1,4 @@
-package codex.codex.api.index;
+package codex.index.api;
 
 /**
  * Identifies the kind of Codex resource represented by an {@link IndexDocument}.

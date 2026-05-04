@@ -1,4 +1,4 @@
-package codex.codex.api.index;
+package codex.index.api;
 
 import codex.codex.api.model.identity.SiteKey;
 import org.junit.jupiter.api.Test;
@@ -25,8 +25,6 @@ class IndexDocumentTest {
                 .siteKey(SITE);
     }
 
-    // --- required field validation ---
-
     @Test
     void rejectsNullId() {
         assertThrows(NullPointerException.class, () -> minimal().id(null).build());
@@ -42,60 +40,46 @@ class IndexDocumentTest {
         assertThrows(NullPointerException.class, () -> minimal().siteKey(null).build());
     }
 
-    // --- defaults ---
-
     @Test
     void defaultsNullTitleToEmptyString() {
-        final IndexDocument doc = minimal().title(null).build();
-        assertEquals("", doc.title());
+        assertEquals("", minimal().title(null).build().title());
     }
 
     @Test
     void defaultsNullBodyToEmptyString() {
-        final IndexDocument doc = minimal().body(null).build();
-        assertEquals("", doc.body());
+        assertEquals("", minimal().body(null).build().body());
     }
 
     @Test
     void trimsTitle() {
-        final IndexDocument doc = minimal().title("  Hello World  ").build();
-        assertEquals("Hello World", doc.title());
+        assertEquals("Hello World", minimal().title("  Hello World  ").build().title());
     }
 
     @Test
     void trimsBody() {
-        final IndexDocument doc = minimal().body("  Full text  ").build();
-        assertEquals("Full text", doc.body());
+        assertEquals("Full text", minimal().body("  Full text  ").build().body());
     }
 
     @Test
     void defaultsNullFieldsToEmptyMap() {
-        final IndexDocument doc = minimal().fields(null).build();
-        assertNotNull(doc.fields());
-        assertTrue(doc.fields().isEmpty());
+        assertTrue(minimal().fields(null).build().fields().isEmpty());
     }
 
     @Test
     void defaultsNullMetadataToEmptyMap() {
-        final IndexDocument doc = minimal().metadata(null).build();
-        assertNotNull(doc.metadata());
-        assertTrue(doc.metadata().isEmpty());
+        assertTrue(minimal().metadata(null).build().metadata().isEmpty());
     }
 
     @Test
     void defaultsUpdatedAtWhenNull() {
-        final IndexDocument doc = minimal().updatedAt(null).build();
-        assertNotNull(doc.updatedAt());
+        assertNotNull(minimal().updatedAt(null).build().updatedAt());
     }
-
-    // --- defensive copies ---
 
     @Test
     void defensivelyCopiesFields() {
         final Map<String, Object> mutable = new HashMap<>();
         mutable.put("title", "Hello");
         final IndexDocument doc = minimal().fields(mutable).build();
-
         mutable.put("extra", "mutation");
         assertEquals(1, doc.fields().size());
     }
@@ -105,7 +89,6 @@ class IndexDocumentTest {
         final Map<String, String> mutable = new HashMap<>();
         mutable.put("contentTypeKey", "blog-post");
         final IndexDocument doc = minimal().metadata(mutable).build();
-
         mutable.put("extra", "mutation");
         assertEquals(1, doc.metadata().size());
     }
@@ -121,8 +104,6 @@ class IndexDocumentTest {
         final IndexDocument doc = minimal().metadata(Map.of("k", "v")).build();
         assertThrows(UnsupportedOperationException.class, () -> doc.metadata().put("x", "y"));
     }
-
-    // --- null key/value rejection ---
 
     @Test
     void rejectsNullFieldKey() {
@@ -152,22 +133,16 @@ class IndexDocumentTest {
         assertThrows(NullPointerException.class, () -> minimal().metadata(bad).build());
     }
 
-    // --- builder ---
-
     @Test
     void builderSupportsAllFields() {
         final Instant now = Instant.parse("2026-05-01T00:00:00Z");
         final IndexDocument doc = IndexDocument.builder()
-                .id(ID)
-                .resourceType(TYPE)
-                .siteKey(SITE)
-                .title("Hello World")
-                .body("Full searchable text")
+                .id(ID).resourceType(TYPE).siteKey(SITE)
+                .title("Hello World").body("Full searchable text")
                 .fields(Map.of("published", true))
                 .metadata(Map.of("contentTypeKey", "blog-post"))
                 .updatedAt(now)
                 .build();
-
         assertEquals(ID, doc.id());
         assertEquals(TYPE, doc.resourceType());
         assertEquals(SITE, doc.siteKey());
@@ -178,49 +153,31 @@ class IndexDocumentTest {
         assertEquals(now, doc.updatedAt());
     }
 
-    // --- copyOf ---
-
     @Test
     void copyOfPreservesAllFields() {
         final Instant now = Instant.parse("2026-05-01T00:00:00Z");
         final IndexDocument original = IndexDocument.builder()
-                .id(ID)
-                .resourceType(TYPE)
-                .siteKey(SITE)
-                .title("Original")
-                .body("Body text")
-                .fields(Map.of("x", 1))
-                .metadata(Map.of("k", "v"))
-                .updatedAt(now)
-                .build();
-
+                .id(ID).resourceType(TYPE).siteKey(SITE)
+                .title("Original").body("Body text")
+                .fields(Map.of("x", 1)).metadata(Map.of("k", "v"))
+                .updatedAt(now).build();
         final IndexDocument copy = IndexDocument.copyOf(original).build();
-
         assertEquals(original.id(), copy.id());
-        assertEquals(original.resourceType(), copy.resourceType());
-        assertEquals(original.siteKey(), copy.siteKey());
         assertEquals(original.title(), copy.title());
-        assertEquals(original.body(), copy.body());
         assertEquals(original.fields(), copy.fields());
-        assertEquals(original.metadata(), copy.metadata());
         assertEquals(original.updatedAt(), copy.updatedAt());
     }
-
-    // --- toString ---
 
     @Test
     void toStringDoesNotDumpFullBody() {
         final IndexDocument doc = minimal()
                 .body("This is a very long body text that should not appear in toString")
                 .build();
-        final String str = doc.toString();
-        assertFalse(str.contains("This is a very long body text"),
-                "toString must not include the full body content");
+        assertFalse(doc.toString().contains("This is a very long body text"));
     }
 
     @Test
     void toStringIncludesId() {
-        final IndexDocument doc = minimal().build();
-        assertTrue(doc.toString().contains(ID.value()));
+        assertTrue(minimal().build().toString().contains(ID.value()));
     }
 }

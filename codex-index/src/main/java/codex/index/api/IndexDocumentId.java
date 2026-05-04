@@ -1,4 +1,4 @@
-package codex.codex.api.index;
+package codex.index.api;
 
 import java.util.Objects;
 
@@ -21,11 +21,6 @@ import java.util.Objects;
  */
 public record IndexDocumentId(String value) {
 
-    /**
-     * Canonical constructor for {@link IndexDocumentId}.
-     *
-     * @param value the raw id; must not be null or blank after trimming
-     */
     public IndexDocumentId {
         Objects.requireNonNull(value, "IndexDocumentId value cannot be null");
         value = value.trim();

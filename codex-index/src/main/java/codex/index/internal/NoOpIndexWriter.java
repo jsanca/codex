@@ -1,8 +1,8 @@
-package codex.codex.internal.index;
+package codex.index.internal;
 
-import codex.codex.api.index.IndexDocument;
-import codex.codex.api.index.IndexDocumentId;
-import codex.codex.api.index.IndexWriter;
+import codex.index.api.IndexDocument;
+import codex.index.api.IndexDocumentId;
+import codex.index.api.IndexWriter;
 
 import java.util.Objects;
 

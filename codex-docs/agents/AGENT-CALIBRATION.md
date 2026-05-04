@@ -11,6 +11,9 @@
 - When a task is documentation-only, make zero code changes — no Java, no pom.xml, no module-info, no wiring, no tests.
 - Surface follow-up tasks in the post-task report instead of implementing them opportunistically.
 - Keep future-forward concepts documented but never implemented unless a task explicitly says so.
+- When a module already exists partially, complete it minimally instead of recreating or broadening the task scope.
+- For skeleton tasks, keep module-info and dependencies minimal — only add what is needed for compilation.
+- Do not add .gitkeep to empty directories unless the project explicitly adopts that convention.
 
 ## Corrections
 
@@ -67,17 +70,22 @@ Future-forward:
 - Document only.
 - Do not add code.
 
+## Module dependency conventions
+
+- `exports X.internal.Y to codex.Z` is acceptable as controlled architectural debt when a projection module needs repository access.
+- Treat qualified exports as a signal that a cleaner projection/read API boundary is needed in the future.
+- Use `requires transitive` only when the module's own API surface exposes the depended-on module's types. If codex.index.api exposes SiteKey or other codex-codex types, `requires transitive codex.codex` is correct. Otherwise prefer plain `requires`.
+
 ## Current Classification
 
 Active:
-- Event subscriber routing
-- Index projection source
-- Runtime integration tests
+- Runtime/assembly module that composes CodexRuntime + codex-index subscribers
 
 Near-future:
-- Cache foundation
+- Cache foundation integration in codex-index
 - ContentSearchService
 - IndexingPolicy
+- Projection/read API boundary to replace qualified repository export
 
 Future-forward:
 - Speculum
@@ -86,22 +94,14 @@ Future-forward:
 - PublishedPointer
 
 ## Task feedback:
-- Accepted / Accepted with minor changes / Needs changes.
-- Good:
-    - ...
-- Adjust next time:
-    - ...
-- Add to calibration:
-    - ...
-- Follow-up task:
-    - ...
-example:
-Task feedback:
-- Accepted with minor changes.
-- Good: subscriber now uses ContentItemProjectionSource instead of repositories.
-- Adjust next time: keep entity builders vertically formatted in tests.
-- Add to calibration: projection subscribers should not access repositories directly.
-- Follow-up task: add tests for RepositoryContentItemProjectionSource.
+
+Task 28 feedback:
+- Accepted with architectural notes.
+- Good: indexing classes moved cleanly to codex-index; codex-codex no longer depends on indexing; CodexRuntime boundary preserved; integration coverage moved; placeholders removed; hand-written stubs match project style.
+- Notes: qualified export is acceptable debt for now; `requires transitive codex.codex` is acceptable while codex.index.api exposes codex-codex types.
+- Follow-up tasks:
+  - Design a cleaner projection/read API boundary so codex-index does not need qualified access to codex-codex internal repositories.
+  - Runtime/assembly module that composes CodexRuntime plus codex-index subscribers.
 
 ## Linter / formatting
 

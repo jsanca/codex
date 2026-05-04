@@ -1,12 +1,12 @@
-package codex.codex.internal.index;
+package codex.index.internal;
 
-import codex.codex.api.index.IndexDocument;
-import codex.codex.api.index.IndexDocumentId;
-import codex.codex.api.index.IndexResourceType;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.value.ContentRevisionStatus;
+import codex.index.api.IndexDocument;
+import codex.index.api.IndexDocumentId;
+import codex.index.api.IndexResourceType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,10 +16,6 @@ import java.util.StringJoiner;
 /**
  * Maps a published {@link ContentItem} and its {@link ContentRevision} into a backend-neutral
  * {@link IndexDocument}.
- * <p>
- * This class is part of the indexing projection layer. It has no knowledge of any specific
- * search backend (OpenSearch, Lucene, myIR, embeddings). The produced {@link IndexDocument}
- * can be consumed by any {@link codex.codex.api.index.IndexWriter} implementation.
  * <p>
  * The index document id is deterministic and stable:
  * {@code content-item:{siteKey}:{contentTypeKey}:{contentItemKey}}.
@@ -36,7 +32,7 @@ public final class ContentItemIndexDocumentMapper {
      * @return a backend-neutral index document
      * @throws NullPointerException     if {@code item} or {@code revision} is null
      * @throws IllegalArgumentException if the item/revision identity fields are inconsistent,
-     *                                  or if the revision status is not {@link ContentRevisionStatus#PUBLISHED}
+     *                                  or if the revision is not {@link ContentRevisionStatus#PUBLISHED}
      */
     public IndexDocument toDocument(final ContentItem item, final ContentRevision revision) {
         Objects.requireNonNull(item, "item must not be null");

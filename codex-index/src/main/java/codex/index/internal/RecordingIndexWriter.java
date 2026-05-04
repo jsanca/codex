@@ -1,8 +1,8 @@
-package codex.codex.internal.index;
+package codex.index.internal;
 
-import codex.codex.api.index.IndexDocument;
-import codex.codex.api.index.IndexDocumentId;
-import codex.codex.api.index.IndexWriter;
+import codex.index.api.IndexDocument;
+import codex.index.api.IndexDocumentId;
+import codex.index.api.IndexWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +33,6 @@ public final class RecordingIndexWriter implements IndexWriter {
 
     /**
      * Returns an immutable snapshot of all upserted documents in insertion order.
-     *
-     * @return immutable list; never null
      */
     public synchronized List<IndexDocument> upserts() {
         return List.copyOf(upserted);
@@ -42,8 +40,6 @@ public final class RecordingIndexWriter implements IndexWriter {
 
     /**
      * Returns an immutable snapshot of all deleted document ids in deletion order.
-     *
-     * @return immutable list; never null
      */
     public synchronized List<IndexDocumentId> deletes() {
         return List.copyOf(deleted);
