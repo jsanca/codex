@@ -1,8 +1,7 @@
-package codex.index.internal;
+package codex.codex.internal.projection;
 
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
-import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentRevisionId;
@@ -12,7 +11,6 @@ import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentRevisionStatus;
 import codex.codex.internal.repository.ContentItemRepository;
 import codex.codex.internal.repository.ContentRevisionRepository;
-import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,9 +22,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for {@link RepositoryContentItemProjectionSource}.
+ * Tests for {@link RepositoryContentItemProjectionReader}.
  */
-class RepositoryContentItemProjectionSourceTest {
+class RepositoryContentItemProjectionReaderTest {
 
     private static final SiteKey SITE_KEY = SiteKey.of("acme");
     private static final ContentTypeKey CT_KEY = ContentTypeKey.of("blog-post");
@@ -39,7 +37,6 @@ class RepositoryContentItemProjectionSourceTest {
 
     private ContentItem item;
     private ContentRevision revision;
-    private ContentItemPublishedEvent event;
 
     @BeforeEach
     void setUp() {
@@ -67,64 +64,85 @@ class RepositoryContentItemProjectionSourceTest {
                 .status(ContentRevisionStatus.PUBLISHED)
                 .createdBy(ACTOR_ID)
                 .build();
-
-        event = new ContentItemPublishedEvent(
-                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID,
-                ITEM_KEY, REVISION_ID, Actor.system("test"), NOW);
     }
 
     @Test
     void rejectsNullContentItemRepository() {
         assertThrows(NullPointerException.class, () ->
-                new RepositoryContentItemProjectionSource(null, new StubRevisionRepository(revision)));
+                new RepositoryContentItemProjectionReader(null, new StubRevisionRepository(revision)));
     }
 
     @Test
     void rejectsNullContentRevisionRepository() {
         assertThrows(NullPointerException.class, () ->
-                new RepositoryContentItemProjectionSource(new StubItemRepository(item), null));
+                new RepositoryContentItemProjectionReader(new StubItemRepository(item), null));
     }
 
     @Test
-    void loadItemRejectsNullEvent() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(item), new StubRevisionRepository(revision));
-        assertThrows(NullPointerException.class, () -> source.loadItem(null));
+    void findContentItemRejectsNullSiteKey() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertThrows(NullPointerException.class,
+                () -> reader.findContentItem(null, CT_KEY, ITEM_KEY));
     }
 
     @Test
-    void loadPublishedRevisionRejectsNullEvent() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(item), new StubRevisionRepository(revision));
-        assertThrows(NullPointerException.class, () -> source.loadPublishedRevision(null));
+    void findContentItemRejectsNullContentTypeKey() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertThrows(NullPointerException.class,
+                () -> reader.findContentItem(SITE_KEY, null, ITEM_KEY));
     }
 
     @Test
-    void loadItemReturnsMatchingItem() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(item), new StubRevisionRepository(revision));
-        assertEquals(item, source.loadItem(event));
+    void findContentItemRejectsNullKey() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertThrows(NullPointerException.class,
+                () -> reader.findContentItem(SITE_KEY, CT_KEY, null));
     }
 
     @Test
-    void loadPublishedRevisionReturnsMatchingRevision() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(item), new StubRevisionRepository(revision));
-        assertEquals(revision, source.loadPublishedRevision(event));
+    void findContentRevisionRejectsNullRevisionId() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertThrows(NullPointerException.class, () -> reader.findContentRevision(null));
     }
 
     @Test
-    void loadItemThrowsWhenNotFound() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(null), new StubRevisionRepository(revision));
-        assertThrows(IllegalStateException.class, () -> source.loadItem(event));
+    void findContentItemReturnsExistingItem() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertEquals(Optional.of(item), reader.findContentItem(SITE_KEY, CT_KEY, ITEM_KEY));
     }
 
     @Test
-    void loadPublishedRevisionThrowsWhenNotFound() {
-        final RepositoryContentItemProjectionSource source = new RepositoryContentItemProjectionSource(
-                new StubItemRepository(item), new StubRevisionRepository(null));
-        assertThrows(IllegalStateException.class, () -> source.loadPublishedRevision(event));
+    void findContentItemReturnsEmptyWhenMissing() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(null), new StubRevisionRepository(revision));
+        assertEquals(Optional.empty(), reader.findContentItem(SITE_KEY, CT_KEY, ITEM_KEY));
+    }
+
+    @Test
+    void findContentRevisionReturnsExistingRevision() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(revision));
+        assertEquals(Optional.of(revision), reader.findContentRevision(REVISION_ID));
+    }
+
+    @Test
+    void findContentRevisionReturnsEmptyWhenMissing() {
+        final RepositoryContentItemProjectionReader reader =
+                new RepositoryContentItemProjectionReader(
+                        new StubItemRepository(item), new StubRevisionRepository(null));
+        assertEquals(Optional.empty(), reader.findContentRevision(REVISION_ID));
     }
 
     private static final class StubItemRepository implements ContentItemRepository {

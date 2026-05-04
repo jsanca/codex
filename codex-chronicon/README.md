@@ -23,9 +23,19 @@ Audit foundation implemented (Task 30):
 - `MemoryChroniconRepository` — in-memory implementation for development and testing
 - `RecordingChroniconRepository` — test helper that records saved records
 
+Initial event subscribers implemented (Task 32):
+
+- `SiteCreatedChroniconSubscriber` — records audit entry on site creation
+- `ContentTypeCreatedChroniconSubscriber` — records audit entry on content type creation
+- `ContentItemPublishedChroniconSubscriber` — records audit entry on content item publication
+
+Subscribers implement `CodexEventSubscriber` from `codex-fundamentum` and write
+`AuditRecord` entries to `ChroniconRepository`. They are tested against
+`LocalCodexEventDispatcher`.
+
 **Not yet implemented:**
-- Event subscribers (Chronicon does not yet listen to domain events)
-- Runtime wiring (Chronicon is not yet connected to the event pipeline)
+- Runtime wiring (subscribers are not yet connected to `CodexRuntime`)
+- `ChroniconRuntime` composition root
 - Durable persistence (records are in-memory only)
 - Timeline query service and audit search APIs
 

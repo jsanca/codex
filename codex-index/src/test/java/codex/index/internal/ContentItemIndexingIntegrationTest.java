@@ -11,8 +11,7 @@ import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentRevisionStatus;
-import codex.codex.internal.repository.ContentItemRepository;
-import codex.codex.internal.repository.ContentRevisionRepository;
+import codex.codex.api.projection.ContentItemProjectionReader;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
 import codex.index.api.IndexDocument;
@@ -22,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * End-to-end test for the content item indexing pipeline:
  * {@link ContentItemPublishedEvent} → {@link ContentItemPublishedIndexingSubscriber}
- * → {@link RepositoryContentItemProjectionSource}
+ * → {@link ReaderContentItemProjectionSource}
  * → {@link ContentItemIndexDocumentMapper}
  * → {@link RecordingIndexWriter}.
  * <p>
@@ -50,15 +48,12 @@ class ContentItemIndexingIntegrationTest {
 
     private RecordingIndexWriter indexWriter;
     private ContentItemPublishedIndexingSubscriber subscriber;
-    private InMemoryItemRepository itemRepository;
-    private InMemoryRevisionRepository revisionRepository;
+    private StubContentItemProjectionReader stubReader;
 
     @BeforeEach
     void setUp() {
-        itemRepository = new InMemoryItemRepository();
-        revisionRepository = new InMemoryRevisionRepository();
-        final RepositoryContentItemProjectionSource source =
-                new RepositoryContentItemProjectionSource(itemRepository, revisionRepository);
+        stubReader = new StubContentItemProjectionReader();
+        final ReaderContentItemProjectionSource source = new ReaderContentItemProjectionSource(stubReader);
         indexWriter = new RecordingIndexWriter();
         subscriber = new ContentItemPublishedIndexingSubscriber(
                 source, indexWriter, new ContentItemIndexDocumentMapper());
@@ -92,8 +87,8 @@ class ContentItemIndexingIntegrationTest {
                 .createdBy(ACTOR_ID)
                 .build();
 
-        itemRepository.save(item);
-        revisionRepository.save(revision);
+        stubReader.saveItem(item);
+        stubReader.saveRevision(revision);
 
         final ContentItemPublishedEvent event = new ContentItemPublishedEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID,
@@ -139,8 +134,8 @@ class ContentItemIndexingIntegrationTest {
                 .createdBy(ACTOR_ID)
                 .build();
 
-        itemRepository.save(item);
-        revisionRepository.save(revision);
+        stubReader.saveItem(item);
+        stubReader.saveRevision(revision);
 
         final ContentItemPublishedEvent event = new ContentItemPublishedEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID,
@@ -153,83 +148,28 @@ class ContentItemIndexingIntegrationTest {
         assertEquals(indexWriter.upserts().get(0).id(), indexWriter.upserts().get(1).id());
     }
 
-    private static final class InMemoryItemRepository implements ContentItemRepository {
-        private final Map<String, ContentItem> store = new HashMap<>();
+    private static final class StubContentItemProjectionReader implements ContentItemProjectionReader {
+        private final Map<String, ContentItem> items = new HashMap<>();
+        private final Map<String, ContentRevision> revisions = new HashMap<>();
 
-        @Override
-        public ContentItem save(final ContentItem item) {
-            store.put(item.siteKey().value() + ":" + item.contentTypeKey().value() + ":" + item.key().value(), item);
-            return item;
+        void saveItem(final ContentItem item) {
+            items.put(item.siteKey().value() + ":" + item.contentTypeKey().value() + ":" + item.key().value(), item);
+        }
+
+        void saveRevision(final ContentRevision revision) {
+            revisions.put(revision.id().value(), revision);
         }
 
         @Override
-        public Optional<ContentItem> findByKey(
+        public Optional<ContentItem> findContentItem(
                 final SiteKey siteKey, final ContentTypeKey contentTypeKey, final ContentItemKey key) {
-            return Optional.ofNullable(store.get(siteKey.value() + ":" + contentTypeKey.value() + ":" + key.value()));
+            return Optional.ofNullable(
+                    items.get(siteKey.value() + ":" + contentTypeKey.value() + ":" + key.value()));
         }
 
         @Override
-        public boolean existsByKey(
-                final SiteKey siteKey, final ContentTypeKey contentTypeKey, final ContentItemKey key) {
-            return store.containsKey(siteKey.value() + ":" + contentTypeKey.value() + ":" + key.value());
-        }
-
-        @Override
-        public List<ContentItem> findByContentType(
-                final SiteKey siteKey, final ContentTypeKey contentTypeKey) {
-            return List.copyOf(store.values());
-        }
-
-        @Override
-        public List<ContentItem> findAll() {
-            return List.copyOf(store.values());
-        }
-    }
-
-    private static final class InMemoryRevisionRepository implements ContentRevisionRepository {
-        private final Map<String, ContentRevision> store = new HashMap<>();
-
-        @Override
-        public ContentRevision save(final ContentRevision revision) {
-            store.put(revision.id().value(), revision);
-            return revision;
-        }
-
-        @Override
-        public Optional<ContentRevision> findById(final ContentRevisionId id) {
-            return Optional.ofNullable(store.get(id.value()));
-        }
-
-        @Override
-        public Optional<ContentRevision> findByContentItemAndRevision(
-                final ContentItemId contentItemId, final int revisionNumber) {
-            return store.values().stream()
-                    .filter(r -> r.contentItemId().equals(contentItemId) && r.revisionNumber() == revisionNumber)
-                    .findFirst();
-        }
-
-        @Override
-        public Optional<ContentRevision> findLatestWorking(final ContentItemId contentItemId) {
-            return store.values().stream()
-                    .filter(r -> r.contentItemId().equals(contentItemId)
-                            && r.status() == ContentRevisionStatus.WORKING)
-                    .max((a, b) -> Integer.compare(a.revisionNumber(), b.revisionNumber()));
-        }
-
-        @Override
-        public Optional<ContentRevision> findLatestPublished(final ContentItemId contentItemId) {
-            return store.values().stream()
-                    .filter(r -> r.contentItemId().equals(contentItemId)
-                            && r.status() == ContentRevisionStatus.PUBLISHED)
-                    .max((a, b) -> Integer.compare(a.revisionNumber(), b.revisionNumber()));
-        }
-
-        @Override
-        public List<ContentRevision> findByContentItem(final ContentItemId contentItemId) {
-            return store.values().stream()
-                    .filter(r -> r.contentItemId().equals(contentItemId))
-                    .sorted((a, b) -> Integer.compare(a.revisionNumber(), b.revisionNumber()))
-                    .toList();
+        public Optional<ContentRevision> findContentRevision(final ContentRevisionId revisionId) {
+            return Optional.ofNullable(revisions.get(revisionId.value()));
         }
     }
 }

@@ -109,6 +109,19 @@ Future-forward:
 
 ## Task feedback:
 
+Task 32 feedback:
+- Accepted.
+- Good: implemented first Chronicon subscribers without touching canonical lifecycle code; each subscriber is simple and self-contained; event projection pattern correct (domain event → AuditRecord → ChroniconRepository); LocalCodexEventDispatcher integration coverage added; module dependencies updated correctly; README reflects new state; 113 chronicon tests, 646 total, BUILD SUCCESS.
+- Keep doing: keep Chronicon as a listener/projection module, not owner of domain events; avoid generic mapping frameworks until duplication is painful; keep runtime wiring out of feature/subscriber tasks unless explicitly requested.
+- Next architectural step: runtime abstractions in codex.fundamentum.api.runtime, then ChroniconRuntime after those exist.
+
+Task 31 feedback:
+- Accepted.
+- Good: CodexRuntime acts as a clean core-only composition root; exposes ContentItemProjectionReader without depending on codex-index; removed indexing wiring and preserved the dependency direction; event pipeline remains transaction-aware and extensible; EventRecorder kept as internal observation/testing helper, not confused with Chronicon; runtime is AutoCloseable and shutdown is idempotent.
+- Minor notes:
+  - LocalCodexEventDispatcher is currently empty — acceptable as a placeholder for core-local subscribers.
+  - Do not turn EventRecorder into product audit; Chronicon owns audit/history.
+
 Task 30 feedback:
 - Accepted with minor notes.
 - Good: Chronicon foundation stayed independent of codex-codex; AuditSubject uses a flexible String type instead of prematurely introducing an enum; AuditRecord is explicit and immutable with actorId required; Metadata constrained to Map<String, String>; ChroniconRepository is append-only in spirit (no update/delete); query methods are simple and focused.

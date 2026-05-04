@@ -3,6 +3,8 @@ package codex.codex.internal.runtime;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
+import codex.codex.api.projection.ContentItemProjectionReader;
+import codex.codex.internal.projection.RepositoryContentItemProjectionReader;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
@@ -58,6 +60,7 @@ public final class CodexRuntime implements AutoCloseable {
     private final SiteService siteService;
     private final ContentTypeService contentTypeService;
     private final ContentItemService contentItemService;
+    private final ContentItemProjectionReader contentItemProjectionReader;
     private final CodexEventDispatcher eventDispatcher;
     private final EventRecorder eventRecorder;
     private final CodexExecutor asyncExecutor;
@@ -67,6 +70,7 @@ public final class CodexRuntime implements AutoCloseable {
     private CodexRuntime(final SiteService siteService,
                          final ContentTypeService contentTypeService,
                          final ContentItemService contentItemService,
+                         final ContentItemProjectionReader contentItemProjectionReader,
                          final CodexEventDispatcher eventDispatcher,
                          final EventRecorder eventRecorder,
                          final CodexExecutor asyncExecutor,
@@ -74,6 +78,7 @@ public final class CodexRuntime implements AutoCloseable {
         this.siteService = Objects.requireNonNull(siteService);
         this.contentTypeService = Objects.requireNonNull(contentTypeService);
         this.contentItemService = Objects.requireNonNull(contentItemService);
+        this.contentItemProjectionReader = Objects.requireNonNull(contentItemProjectionReader);
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher);
         this.eventRecorder = Objects.requireNonNull(eventRecorder);
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor);
@@ -99,6 +104,10 @@ public final class CodexRuntime implements AutoCloseable {
         final MemoryContentTypeVersionRepository contentTypeVersionRepository = new MemoryContentTypeVersionRepository();
         final MemoryContentItemRepository contentItemRepository = new MemoryContentItemRepository();
         final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
+
+        // --- projection reader ---
+        final ContentItemProjectionReader projectionReader =
+                new RepositoryContentItemProjectionReader(contentItemRepository, revisionRepository);
 
         // --- async executor ---
         final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
@@ -129,7 +138,7 @@ public final class CodexRuntime implements AutoCloseable {
                 deferredDispatcher, clock);
 
         return new CodexRuntime(siteService, contentTypeService, contentItemService,
-                deferredDispatcher, recorder, asyncExecutor, clock);
+                projectionReader, deferredDispatcher, recorder, asyncExecutor, clock);
     }
 
     /**
@@ -158,6 +167,19 @@ public final class CodexRuntime implements AutoCloseable {
      */
     public ContentItemService contentItemService() {
         return contentItemService;
+    }
+
+    /**
+     * Returns the {@link ContentItemProjectionReader} — the public projection/read contract
+     * for modules that need canonical content state without depending on internal repositories.
+     *
+     * <p>Intended for use by runtime assembly layers to wire projection modules such as
+     * {@code codex-index} or {@code codex-chronicon}.</p>
+     *
+     * @return the projection reader; never null
+     */
+    public ContentItemProjectionReader contentItemProjectionReader() {
+        return contentItemProjectionReader;
     }
 
     /**
