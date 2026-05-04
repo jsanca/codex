@@ -1,6 +1,7 @@
 module codex.fundamentum {
     requires org.slf4j;
     exports codex.fundamentum.api;
+    exports codex.fundamentum.api.cache;
     exports codex.fundamentum.api.concurrent;
     exports codex.fundamentum.api.event;
     exports codex.fundamentum.api.exception;

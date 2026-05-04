@@ -44,6 +44,7 @@ class ContentItemPublishedIndexingSubscriberTest {
 
     private MemoryContentItemRepository itemRepository;
     private MemoryContentRevisionRepository revisionRepository;
+    private RepositoryContentItemProjectionSource projectionSource;
     private RecordingIndexWriter indexWriter;
     private ContentItemPublishedIndexingSubscriber subscriber;
 
@@ -51,36 +52,28 @@ class ContentItemPublishedIndexingSubscriberTest {
     void setUp() {
         itemRepository = new MemoryContentItemRepository();
         revisionRepository = new MemoryContentRevisionRepository();
+        projectionSource = new RepositoryContentItemProjectionSource(itemRepository, revisionRepository);
         indexWriter = new RecordingIndexWriter();
         subscriber = new ContentItemPublishedIndexingSubscriber(
-                itemRepository, revisionRepository, indexWriter, new ContentItemIndexDocumentMapper());
+                projectionSource, indexWriter, new ContentItemIndexDocumentMapper());
     }
 
     private ContentItem buildPublishedItem() {
         return ContentItem.builder()
-                .id(ITEM_ID)
-                .siteKey(SITE_KEY)
-                .contentTypeKey(CT_KEY)
-                .contentTypeVersionId(CT_VERSION_ID)
-                .key(ITEM_KEY)
+                .id(ITEM_ID).siteKey(SITE_KEY).contentTypeKey(CT_KEY)
+                .contentTypeVersionId(CT_VERSION_ID).key(ITEM_KEY)
                 .status(ContentItemStatus.PUBLISHED)
                 .currentWorkingRevisionId(REVISION_ID)
                 .currentPublishedRevisionId(REVISION_ID)
-                .owner(ACTOR.id())
-                .createdBy(ACTOR.id())
-                .updatedBy(ACTOR.id())
+                .owner(ACTOR.id()).createdBy(ACTOR.id()).updatedBy(ACTOR.id())
                 .build();
     }
 
     private ContentRevision buildPublishedRevision() {
         return ContentRevision.builder()
-                .id(REVISION_ID)
-                .contentItemId(ITEM_ID)
-                .siteKey(SITE_KEY)
-                .contentTypeKey(CT_KEY)
-                .contentTypeVersionId(CT_VERSION_ID)
-                .contentItemKey(ITEM_KEY)
-                .revisionNumber(1)
+                .id(REVISION_ID).contentItemId(ITEM_ID).siteKey(SITE_KEY)
+                .contentTypeKey(CT_KEY).contentTypeVersionId(CT_VERSION_ID)
+                .contentItemKey(ITEM_KEY).revisionNumber(1)
                 .status(ContentRevisionStatus.PUBLISHED)
                 .values(Map.of(FieldKey.TITLE, "Welcome to Codex"))
                 .createdBy(ACTOR.id())
@@ -93,10 +86,38 @@ class ContentItemPublishedIndexingSubscriberTest {
                 REVISION_ID, ACTOR, Instant.now());
     }
 
-    // --- 1: handle publishes index document ---
+    // --- constructor ---
 
     @Test
-    void handlePublishedEventLoadsItemAndRevisionAndUpsertsDocument() {
+    void constructorRejectsNullProjectionSource() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedIndexingSubscriber(
+                        null, indexWriter, new ContentItemIndexDocumentMapper()));
+    }
+
+    @Test
+    void constructorRejectsNullIndexWriter() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedIndexingSubscriber(
+                        projectionSource, null, new ContentItemIndexDocumentMapper()));
+    }
+
+    @Test
+    void constructorRejectsNullMapper() {
+        assertThrows(NullPointerException.class,
+                () -> new ContentItemPublishedIndexingSubscriber(
+                        projectionSource, indexWriter, null));
+    }
+
+    // --- handle ---
+
+    @Test
+    void handleRejectsNullEvent() {
+        assertThrows(NullPointerException.class, () -> subscriber.handle(null));
+    }
+
+    @Test
+    void handleUsesProjectionSourceToLoadItemAndRevision() {
         itemRepository.save(buildPublishedItem());
         revisionRepository.save(buildPublishedRevision());
 
@@ -105,70 +126,48 @@ class ContentItemPublishedIndexingSubscriberTest {
         assertEquals(1, indexWriter.upserts().size());
     }
 
-    // --- 2: upserted document has expected id and resource type ---
-
     @Test
-    void upsertedDocumentHasExpectedIdAndResourceType() {
+    void handleMapsItemAndRevisionToDocument() {
         itemRepository.save(buildPublishedItem());
         revisionRepository.save(buildPublishedRevision());
 
         subscriber.handle(buildEvent());
 
         final IndexDocument doc = indexWriter.upserts().getFirst();
-        assertEquals("content-item:acme:blog-post:welcome-to-codex", doc.id().value());
-        assertEquals(IndexResourceType.CONTENT_ITEM, doc.resourceType());
+        assertEquals("Welcome to Codex", doc.title());
+        assertEquals(SITE_KEY, doc.siteKey());
     }
 
-    // --- 3: null event rejection ---
-
     @Test
-    void handleRejectsNullEvent() {
-        assertThrows(NullPointerException.class, () -> subscriber.handle(null));
-    }
-
-    // --- 4: missing content item ---
-
-    @Test
-    void handleThrowsWhenContentItemIsMissing() {
-        // only save revision, not item
-        revisionRepository.save(buildPublishedRevision());
-
-        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
-    }
-
-    // --- 5: missing revision ---
-
-    @Test
-    void handleThrowsWhenRevisionIsMissing() {
-        // only save item, not revision
+    void handleWritesOneUpsertToIndexWriter() {
         itemRepository.save(buildPublishedItem());
+        revisionRepository.save(buildPublishedRevision());
 
+        subscriber.handle(buildEvent());
+
+        assertEquals(1, indexWriter.upserts().size());
+    }
+
+    @Test
+    void missingItemStillThrows() {
+        revisionRepository.save(buildPublishedRevision());
         assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
     }
 
-    // --- 6: no index write when item is missing ---
+    @Test
+    void missingRevisionStillThrows() {
+        itemRepository.save(buildPublishedItem());
+        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
+    }
 
     @Test
-    void handleDoesNotWriteToIndexWhenContentItemIsMissing() {
-        revisionRepository.save(buildPublishedRevision());
-
+    void whenSourceThrowsNoDocumentIsIndexed() {
+        // neither item nor revision seeded — source will throw
         assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
-
         assertTrue(indexWriter.upserts().isEmpty());
     }
 
-    // --- 7: no index write when revision is missing ---
-
-    @Test
-    void handleDoesNotWriteToIndexWhenRevisionIsMissing() {
-        itemRepository.save(buildPublishedItem());
-
-        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
-
-        assertTrue(indexWriter.upserts().isEmpty());
-    }
-
-    // --- 8: CodexEventSubscriber contract ---
+    // --- CodexEventSubscriber contract ---
 
     @Test
     void subscriberImplementsCodexEventSubscriber() {

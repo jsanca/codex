@@ -1,0 +1,339 @@
+diff --git a/codex-codex/src/main/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriber.java b/codex-codex/src/main/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriber.java
+index 2072803..e8d8e98 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriber.java
++++ b/codex-codex/src/main/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriber.java
+@@ -5,8 +5,6 @@ import codex.codex.api.index.IndexWriter;
+ import codex.codex.api.model.entity.ContentItem;
+ import codex.codex.api.model.entity.ContentRevision;
+ import codex.codex.api.model.event.ContentItemPublishedEvent;
+-import codex.codex.internal.repository.ContentItemRepository;
+-import codex.codex.internal.repository.ContentRevisionRepository;
+ import codex.fundamentum.api.event.CodexEventSubscriber;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -17,48 +15,39 @@ import java.util.Objects;
+  * Projection subscriber that handles {@link ContentItemPublishedEvent} and writes a
+  * backend-neutral {@link IndexDocument} to the configured {@link IndexWriter}.
+  * <p>
+- * This is the first indexing projection in Codex. Indexing is event-driven:
+- * canonical services ({@link codex.codex.internal.service.CodexContentItemService},
+- * {@link codex.codex.internal.service.EventPublishingContentItemService}) do not call
+- * indexing code directly. This subscriber listens for the domain event and drives the projection.
++ * Indexing is event-driven. Canonical services do not call indexing code directly.
++ * This subscriber reacts to the domain event and drives the projection.
++ * <p>
++ * Canonical data is loaded through a {@link ContentItemProjectionSource}, not directly from
++ * repositories. This keeps the subscriber small, focused, and decoupled from the
++ * persistence layer. Future sources may use cache, read-only unit-of-work, or read models.
+  * <p>
+  * {@code ContentItemPublishedEvent} is the natural trigger for public content indexing.
+  * Actual backends such as OpenSearch, myIR, Lucene, and embeddings are future adapters.
+- * Search and query APIs are future work.
++ * Audit, observability, cache invalidation, and workflow should be separate subscribers.
+  * <p>
+- * If the canonical item or revision cannot be found after the event is received, an
+- * {@link IllegalStateException} is thrown because the projection would be inconsistent.
+- * Production-grade retry and dead-letter behavior can be layered on top later.
+- * Future: introduce ContentItemIndexingSource / ContentProjectionSource to decouple subscribers from repositories.
+- * Future:
+- * Indexing subscribers may eventually enqueue IndexingRequests instead of writing eagerly.
+- * Projection reads may eventually run inside read-only unit-of-work/transaction boundaries.
+- * Indexing policy will define DEFER vs WAIT_FOR semantics later.
+- *
++ * If canonical data cannot be found, an {@link IllegalStateException} is thrown because
++ * the projection would be inconsistent. Production retry and dead-letter behavior are future work.
+  */
+ public final class ContentItemPublishedIndexingSubscriber
+         implements CodexEventSubscriber<ContentItemPublishedEvent> {
+ 
+     private static final Logger LOGGER = LoggerFactory.getLogger(ContentItemPublishedIndexingSubscriber.class);
+ 
+-    private final ContentItemRepository contentItemRepository;
+-    private final ContentRevisionRepository contentRevisionRepository;
++    private final ContentItemProjectionSource projectionSource;
+     private final IndexWriter indexWriter;
+     private final ContentItemIndexDocumentMapper mapper;
+ 
+     /**
+-     * @param contentItemRepository     repository for loading the published content item; must not be null
+-     * @param contentRevisionRepository repository for loading the published revision; must not be null
+-     * @param indexWriter               the writer that receives the resulting {@link IndexDocument}; must not be null
+-     * @param mapper                    maps item + revision to {@link IndexDocument}; must not be null
++     * @param projectionSource the read source for canonical projection data; must not be null
++     * @param indexWriter      the writer that receives the resulting {@link IndexDocument}; must not be null
++     * @param mapper           maps item + revision to {@link IndexDocument}; must not be null
+      */
+     public ContentItemPublishedIndexingSubscriber(
+-            final ContentItemRepository contentItemRepository,
+-            final ContentRevisionRepository contentRevisionRepository,
++            final ContentItemProjectionSource projectionSource,
+             final IndexWriter indexWriter,
+             final ContentItemIndexDocumentMapper mapper) {
+-        this.contentItemRepository = Objects.requireNonNull(contentItemRepository, "contentItemRepository must not be null");
+-        this.contentRevisionRepository = Objects.requireNonNull(contentRevisionRepository, "contentRevisionRepository must not be null");
++        this.projectionSource = Objects.requireNonNull(projectionSource, "projectionSource must not be null");
+         this.indexWriter = Objects.requireNonNull(indexWriter, "indexWriter must not be null");
+         this.mapper = Objects.requireNonNull(mapper, "mapper must not be null");
+     }
+@@ -69,8 +58,9 @@ public final class ContentItemPublishedIndexingSubscriber
+     }
+ 
+     /**
+-     * Handles a {@link ContentItemPublishedEvent} by loading the canonical item and revision,
+-     * mapping them to an {@link IndexDocument}, and writing the document to the index.
++     * Handles a {@link ContentItemPublishedEvent} by loading the canonical item and revision
++     * through the {@link ContentItemProjectionSource}, mapping them to an {@link IndexDocument},
++     * and writing the document to the index.
+      *
+      * @param event the published event; must not be null
+      * @throws NullPointerException  if {@code event} is null
+@@ -83,17 +73,8 @@ public final class ContentItemPublishedIndexingSubscriber
+         LOGGER.debug("Indexing content item published: siteKey={} contentTypeKey={} key={}",
+                 event.siteKey(), event.contentTypeKey(), event.key());
+ 
+-        final ContentItem item = contentItemRepository
+-                .findByKey(event.siteKey(), event.contentTypeKey(), event.key())
+-                .orElseThrow(() -> new IllegalStateException(
+-                        "Content item not found for published event: "
+-                                + event.siteKey() + "/" + event.contentTypeKey() + "/" + event.key()));
+-
+-        final ContentRevision revision = contentRevisionRepository
+-                .findById(event.publishedRevisionId())
+-                .orElseThrow(() -> new IllegalStateException(
+-                        "Published revision not found: " + event.publishedRevisionId()));
+-
++        final ContentItem item = projectionSource.loadItem(event);
++        final ContentRevision revision = projectionSource.loadPublishedRevision(event);
+         final IndexDocument document = mapper.toDocument(item, revision);
+         indexWriter.upsert(document);
+ 
+diff --git a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+index 94bc49b..ead92bc 100644
+--- a/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
++++ b/codex-codex/src/main/java/codex/codex/internal/runtime/CodexRuntime.java
+@@ -5,8 +5,10 @@ import codex.codex.api.model.service.ContentItemService;
+ import codex.codex.api.model.service.ContentTypeService;
+ import codex.codex.api.model.service.SiteService;
+ import codex.codex.internal.index.ContentItemIndexDocumentMapper;
++import codex.codex.internal.index.ContentItemProjectionSource;
+ import codex.codex.internal.index.ContentItemPublishedIndexingSubscriber;
+ import codex.codex.internal.index.NoOpIndexWriter;
++import codex.codex.internal.index.RepositoryContentItemProjectionSource;
+ import codex.codex.internal.repository.MemoryContentItemRepository;
+ import codex.codex.internal.repository.MemoryContentRevisionRepository;
+ import codex.codex.internal.repository.MemoryContentTypeRepository;
+@@ -125,9 +127,10 @@ public final class CodexRuntime implements AutoCloseable {
+ 
+         // --- indexing projection subscriber ---
+         final ContentItemIndexDocumentMapper mapper = new ContentItemIndexDocumentMapper();
++        final ContentItemProjectionSource projectionSource =
++                new RepositoryContentItemProjectionSource(contentItemRepository, revisionRepository);
+         final ContentItemPublishedIndexingSubscriber indexingSubscriber =
+-                new ContentItemPublishedIndexingSubscriber(
+-                        contentItemRepository, revisionRepository, indexWriter, mapper);
++                new ContentItemPublishedIndexingSubscriber(projectionSource, indexWriter, mapper);
+ 
+         // --- event pipeline assembly ---
+         // Recording first: events are captured even if a subscriber fails.
+diff --git a/codex-codex/src/test/java/codex/codex/internal/index/ContentItemIndexingIntegrationTest.java b/codex-codex/src/test/java/codex/codex/internal/index/ContentItemIndexingIntegrationTest.java
+index c0f0588..ba8420d 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/index/ContentItemIndexingIntegrationTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/index/ContentItemIndexingIntegrationTest.java
+@@ -82,10 +82,11 @@ class ContentItemIndexingIntegrationTest {
+         final MemoryContentItemRepository itemRepository = new MemoryContentItemRepository();
+         final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
+         final RecordingIndexWriter indexWriter = new RecordingIndexWriter();
++        final ContentItemProjectionSource projectionSource =
++                new RepositoryContentItemProjectionSource(itemRepository, revisionRepository);
+         final ContentItemPublishedIndexingSubscriber subscriber =
+                 new ContentItemPublishedIndexingSubscriber(
+-                        itemRepository, revisionRepository, indexWriter,
+-                        new ContentItemIndexDocumentMapper());
++                        projectionSource, indexWriter, new ContentItemIndexDocumentMapper());
+ 
+         // seed repositories from what the service pipeline created
+         itemRepository.save(publishedItem);
+diff --git a/codex-codex/src/test/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriberTest.java b/codex-codex/src/test/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriberTest.java
+index 253da67..083bd96 100644
+--- a/codex-codex/src/test/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriberTest.java
++++ b/codex-codex/src/test/java/codex/codex/internal/index/ContentItemPublishedIndexingSubscriberTest.java
+@@ -44,6 +44,7 @@ class ContentItemPublishedIndexingSubscriberTest {
+ 
+     private MemoryContentItemRepository itemRepository;
+     private MemoryContentRevisionRepository revisionRepository;
++    private RepositoryContentItemProjectionSource projectionSource;
+     private RecordingIndexWriter indexWriter;
+     private ContentItemPublishedIndexingSubscriber subscriber;
+ 
+@@ -51,36 +52,28 @@ class ContentItemPublishedIndexingSubscriberTest {
+     void setUp() {
+         itemRepository = new MemoryContentItemRepository();
+         revisionRepository = new MemoryContentRevisionRepository();
++        projectionSource = new RepositoryContentItemProjectionSource(itemRepository, revisionRepository);
+         indexWriter = new RecordingIndexWriter();
+         subscriber = new ContentItemPublishedIndexingSubscriber(
+-                itemRepository, revisionRepository, indexWriter, new ContentItemIndexDocumentMapper());
++                projectionSource, indexWriter, new ContentItemIndexDocumentMapper());
+     }
+ 
+     private ContentItem buildPublishedItem() {
+         return ContentItem.builder()
+-                .id(ITEM_ID)
+-                .siteKey(SITE_KEY)
+-                .contentTypeKey(CT_KEY)
+-                .contentTypeVersionId(CT_VERSION_ID)
+-                .key(ITEM_KEY)
++                .id(ITEM_ID).siteKey(SITE_KEY).contentTypeKey(CT_KEY)
++                .contentTypeVersionId(CT_VERSION_ID).key(ITEM_KEY)
+                 .status(ContentItemStatus.PUBLISHED)
+                 .currentWorkingRevisionId(REVISION_ID)
+                 .currentPublishedRevisionId(REVISION_ID)
+-                .owner(ACTOR.id())
+-                .createdBy(ACTOR.id())
+-                .updatedBy(ACTOR.id())
++                .owner(ACTOR.id()).createdBy(ACTOR.id()).updatedBy(ACTOR.id())
+                 .build();
+     }
+ 
+     private ContentRevision buildPublishedRevision() {
+         return ContentRevision.builder()
+-                .id(REVISION_ID)
+-                .contentItemId(ITEM_ID)
+-                .siteKey(SITE_KEY)
+-                .contentTypeKey(CT_KEY)
+-                .contentTypeVersionId(CT_VERSION_ID)
+-                .contentItemKey(ITEM_KEY)
+-                .revisionNumber(1)
++                .id(REVISION_ID).contentItemId(ITEM_ID).siteKey(SITE_KEY)
++                .contentTypeKey(CT_KEY).contentTypeVersionId(CT_VERSION_ID)
++                .contentItemKey(ITEM_KEY).revisionNumber(1)
+                 .status(ContentRevisionStatus.PUBLISHED)
+                 .values(Map.of(FieldKey.TITLE, "Welcome to Codex"))
+                 .createdBy(ACTOR.id())
+@@ -93,82 +86,88 @@ class ContentItemPublishedIndexingSubscriberTest {
+                 REVISION_ID, ACTOR, Instant.now());
+     }
+ 
+-    // --- 1: handle publishes index document ---
++    // --- constructor ---
+ 
+     @Test
+-    void handlePublishedEventLoadsItemAndRevisionAndUpsertsDocument() {
+-        itemRepository.save(buildPublishedItem());
+-        revisionRepository.save(buildPublishedRevision());
+-
+-        subscriber.handle(buildEvent());
+-
+-        assertEquals(1, indexWriter.upserts().size());
++    void constructorRejectsNullProjectionSource() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedIndexingSubscriber(
++                        null, indexWriter, new ContentItemIndexDocumentMapper()));
+     }
+ 
+-    // --- 2: upserted document has expected id and resource type ---
+-
+     @Test
+-    void upsertedDocumentHasExpectedIdAndResourceType() {
+-        itemRepository.save(buildPublishedItem());
+-        revisionRepository.save(buildPublishedRevision());
+-
+-        subscriber.handle(buildEvent());
++    void constructorRejectsNullIndexWriter() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedIndexingSubscriber(
++                        projectionSource, null, new ContentItemIndexDocumentMapper()));
++    }
+ 
+-        final IndexDocument doc = indexWriter.upserts().getFirst();
+-        assertEquals("content-item:acme:blog-post:welcome-to-codex", doc.id().value());
+-        assertEquals(IndexResourceType.CONTENT_ITEM, doc.resourceType());
++    @Test
++    void constructorRejectsNullMapper() {
++        assertThrows(NullPointerException.class,
++                () -> new ContentItemPublishedIndexingSubscriber(
++                        projectionSource, indexWriter, null));
+     }
+ 
+-    // --- 3: null event rejection ---
++    // --- handle ---
+ 
+     @Test
+     void handleRejectsNullEvent() {
+         assertThrows(NullPointerException.class, () -> subscriber.handle(null));
+     }
+ 
+-    // --- 4: missing content item ---
+-
+     @Test
+-    void handleThrowsWhenContentItemIsMissing() {
+-        // only save revision, not item
++    void handleUsesProjectionSourceToLoadItemAndRevision() {
++        itemRepository.save(buildPublishedItem());
+         revisionRepository.save(buildPublishedRevision());
+ 
+-        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
+-    }
++        subscriber.handle(buildEvent());
+ 
+-    // --- 5: missing revision ---
++        assertEquals(1, indexWriter.upserts().size());
++    }
+ 
+     @Test
+-    void handleThrowsWhenRevisionIsMissing() {
+-        // only save item, not revision
++    void handleMapsItemAndRevisionToDocument() {
+         itemRepository.save(buildPublishedItem());
++        revisionRepository.save(buildPublishedRevision());
+ 
+-        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
+-    }
++        subscriber.handle(buildEvent());
+ 
+-    // --- 6: no index write when item is missing ---
++        final IndexDocument doc = indexWriter.upserts().getFirst();
++        assertEquals("Welcome to Codex", doc.title());
++        assertEquals(SITE_KEY, doc.siteKey());
++    }
+ 
+     @Test
+-    void handleDoesNotWriteToIndexWhenContentItemIsMissing() {
++    void handleWritesOneUpsertToIndexWriter() {
++        itemRepository.save(buildPublishedItem());
+         revisionRepository.save(buildPublishedRevision());
+ 
+-        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
++        subscriber.handle(buildEvent());
+ 
+-        assertTrue(indexWriter.upserts().isEmpty());
++        assertEquals(1, indexWriter.upserts().size());
+     }
+ 
+-    // --- 7: no index write when revision is missing ---
++    @Test
++    void missingItemStillThrows() {
++        revisionRepository.save(buildPublishedRevision());
++        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
++    }
+ 
+     @Test
+-    void handleDoesNotWriteToIndexWhenRevisionIsMissing() {
++    void missingRevisionStillThrows() {
+         itemRepository.save(buildPublishedItem());
+-
+         assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
++    }
+ 
++    @Test
++    void whenSourceThrowsNoDocumentIsIndexed() {
++        // neither item nor revision seeded — source will throw
++        assertThrows(IllegalStateException.class, () -> subscriber.handle(buildEvent()));
+         assertTrue(indexWriter.upserts().isEmpty());
+     }
+ 
+-    // --- 8: CodexEventSubscriber contract ---
++    // --- CodexEventSubscriber contract ---
+ 
+     @Test
+     void subscriberImplementsCodexEventSubscriber() {

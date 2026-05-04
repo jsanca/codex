@@ -5,8 +5,6 @@ import codex.codex.api.index.IndexWriter;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
-import codex.codex.internal.repository.ContentItemRepository;
-import codex.codex.internal.repository.ContentRevisionRepository;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,48 +15,39 @@ import java.util.Objects;
  * Projection subscriber that handles {@link ContentItemPublishedEvent} and writes a
  * backend-neutral {@link IndexDocument} to the configured {@link IndexWriter}.
  * <p>
- * This is the first indexing projection in Codex. Indexing is event-driven:
- * canonical services ({@link codex.codex.internal.service.CodexContentItemService},
- * {@link codex.codex.internal.service.EventPublishingContentItemService}) do not call
- * indexing code directly. This subscriber listens for the domain event and drives the projection.
+ * Indexing is event-driven. Canonical services do not call indexing code directly.
+ * This subscriber reacts to the domain event and drives the projection.
+ * <p>
+ * Canonical data is loaded through a {@link ContentItemProjectionSource}, not directly from
+ * repositories. This keeps the subscriber small, focused, and decoupled from the
+ * persistence layer. Future sources may use cache, read-only unit-of-work, or read models.
  * <p>
  * {@code ContentItemPublishedEvent} is the natural trigger for public content indexing.
  * Actual backends such as OpenSearch, myIR, Lucene, and embeddings are future adapters.
- * Search and query APIs are future work.
+ * Audit, observability, cache invalidation, and workflow should be separate subscribers.
  * <p>
- * If the canonical item or revision cannot be found after the event is received, an
- * {@link IllegalStateException} is thrown because the projection would be inconsistent.
- * Production-grade retry and dead-letter behavior can be layered on top later.
- * Future: introduce ContentItemIndexingSource / ContentProjectionSource to decouple subscribers from repositories.
- * Future:
- * Indexing subscribers may eventually enqueue IndexingRequests instead of writing eagerly.
- * Projection reads may eventually run inside read-only unit-of-work/transaction boundaries.
- * Indexing policy will define DEFER vs WAIT_FOR semantics later.
- *
+ * If canonical data cannot be found, an {@link IllegalStateException} is thrown because
+ * the projection would be inconsistent. Production retry and dead-letter behavior are future work.
  */
 public final class ContentItemPublishedIndexingSubscriber
         implements CodexEventSubscriber<ContentItemPublishedEvent> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentItemPublishedIndexingSubscriber.class);
 
-    private final ContentItemRepository contentItemRepository;
-    private final ContentRevisionRepository contentRevisionRepository;
+    private final ContentItemProjectionSource projectionSource;
     private final IndexWriter indexWriter;
     private final ContentItemIndexDocumentMapper mapper;
 
     /**
-     * @param contentItemRepository     repository for loading the published content item; must not be null
-     * @param contentRevisionRepository repository for loading the published revision; must not be null
-     * @param indexWriter               the writer that receives the resulting {@link IndexDocument}; must not be null
-     * @param mapper                    maps item + revision to {@link IndexDocument}; must not be null
+     * @param projectionSource the read source for canonical projection data; must not be null
+     * @param indexWriter      the writer that receives the resulting {@link IndexDocument}; must not be null
+     * @param mapper           maps item + revision to {@link IndexDocument}; must not be null
      */
     public ContentItemPublishedIndexingSubscriber(
-            final ContentItemRepository contentItemRepository,
-            final ContentRevisionRepository contentRevisionRepository,
+            final ContentItemProjectionSource projectionSource,
             final IndexWriter indexWriter,
             final ContentItemIndexDocumentMapper mapper) {
-        this.contentItemRepository = Objects.requireNonNull(contentItemRepository, "contentItemRepository must not be null");
-        this.contentRevisionRepository = Objects.requireNonNull(contentRevisionRepository, "contentRevisionRepository must not be null");
+        this.projectionSource = Objects.requireNonNull(projectionSource, "projectionSource must not be null");
         this.indexWriter = Objects.requireNonNull(indexWriter, "indexWriter must not be null");
         this.mapper = Objects.requireNonNull(mapper, "mapper must not be null");
     }
@@ -69,8 +58,9 @@ public final class ContentItemPublishedIndexingSubscriber
     }
 
     /**
-     * Handles a {@link ContentItemPublishedEvent} by loading the canonical item and revision,
-     * mapping them to an {@link IndexDocument}, and writing the document to the index.
+     * Handles a {@link ContentItemPublishedEvent} by loading the canonical item and revision
+     * through the {@link ContentItemProjectionSource}, mapping them to an {@link IndexDocument},
+     * and writing the document to the index.
      *
      * @param event the published event; must not be null
      * @throws NullPointerException  if {@code event} is null
@@ -83,17 +73,8 @@ public final class ContentItemPublishedIndexingSubscriber
         LOGGER.debug("Indexing content item published: siteKey={} contentTypeKey={} key={}",
                 event.siteKey(), event.contentTypeKey(), event.key());
 
-        final ContentItem item = contentItemRepository
-                .findByKey(event.siteKey(), event.contentTypeKey(), event.key())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Content item not found for published event: "
-                                + event.siteKey() + "/" + event.contentTypeKey() + "/" + event.key()));
-
-        final ContentRevision revision = contentRevisionRepository
-                .findById(event.publishedRevisionId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Published revision not found: " + event.publishedRevisionId()));
-
+        final ContentItem item = projectionSource.loadItem(event);
+        final ContentRevision revision = projectionSource.loadPublishedRevision(event);
         final IndexDocument document = mapper.toDocument(item, revision);
         indexWriter.upsert(document);
 

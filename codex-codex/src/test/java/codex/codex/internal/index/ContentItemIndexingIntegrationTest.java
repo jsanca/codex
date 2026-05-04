@@ -82,10 +82,11 @@ class ContentItemIndexingIntegrationTest {
         final MemoryContentItemRepository itemRepository = new MemoryContentItemRepository();
         final MemoryContentRevisionRepository revisionRepository = new MemoryContentRevisionRepository();
         final RecordingIndexWriter indexWriter = new RecordingIndexWriter();
+        final ContentItemProjectionSource projectionSource =
+                new RepositoryContentItemProjectionSource(itemRepository, revisionRepository);
         final ContentItemPublishedIndexingSubscriber subscriber =
                 new ContentItemPublishedIndexingSubscriber(
-                        itemRepository, revisionRepository, indexWriter,
-                        new ContentItemIndexDocumentMapper());
+                        projectionSource, indexWriter, new ContentItemIndexDocumentMapper());
 
         // seed repositories from what the service pipeline created
         itemRepository.save(publishedItem);

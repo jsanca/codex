@@ -5,8 +5,10 @@ import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
 import codex.codex.internal.index.ContentItemIndexDocumentMapper;
+import codex.codex.internal.index.ContentItemProjectionSource;
 import codex.codex.internal.index.ContentItemPublishedIndexingSubscriber;
 import codex.codex.internal.index.NoOpIndexWriter;
+import codex.codex.internal.index.RepositoryContentItemProjectionSource;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
@@ -125,9 +127,10 @@ public final class CodexRuntime implements AutoCloseable {
 
         // --- indexing projection subscriber ---
         final ContentItemIndexDocumentMapper mapper = new ContentItemIndexDocumentMapper();
+        final ContentItemProjectionSource projectionSource =
+                new RepositoryContentItemProjectionSource(contentItemRepository, revisionRepository);
         final ContentItemPublishedIndexingSubscriber indexingSubscriber =
-                new ContentItemPublishedIndexingSubscriber(
-                        contentItemRepository, revisionRepository, indexWriter, mapper);
+                new ContentItemPublishedIndexingSubscriber(projectionSource, indexWriter, mapper);
 
         // --- event pipeline assembly ---
         // Recording first: events are captured even if a subscriber fails.
