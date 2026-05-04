@@ -14,4 +14,18 @@
     <packaging>jar</packaging>
 
     <name>Codex Archivum</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>codex</groupId>
+            <artifactId>codex-fundamentum</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

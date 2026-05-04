@@ -8,6 +8,9 @@
 - Do not introduce dynamic runtime behavior unless explicitly requested.
 - If a task repeats an existing pattern, preserve the pattern closely.
 - Keep large entity builders vertically formatted in tests — one field per line, easier to read and review diffs.
+- When a task is documentation-only, make zero code changes — no Java, no pom.xml, no module-info, no wiring, no tests.
+- Surface follow-up tasks in the post-task report instead of implementing them opportunistically.
+- Keep future-forward concepts documented but never implemented unless a task explicitly says so.
 
 ## Corrections
 

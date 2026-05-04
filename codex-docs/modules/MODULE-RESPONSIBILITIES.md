@@ -5,6 +5,9 @@ This document defines the responsibility boundary of each Codex module.
 It exists to make the architectural map explicit before code is moved across module boundaries,
 to prevent dependency cycles, god modules, and premature coupling.
 
+> **Skeleton status (Task 27):** Maven/Jigsaw skeletons now exist for `codex-index`,
+> `codex-archivum`, and `codex-chronicon`. Implementation migration is future work.
+
 ---
 
 ## Dependency Direction
