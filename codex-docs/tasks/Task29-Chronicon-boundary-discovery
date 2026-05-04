@@ -1,0 +1,378 @@
+# Task29: Chronicon Boundary Discovery
+
+## Objective
+
+Review the current codebase and documentation to determine whether any existing classes, tests, packages, or concepts already belong to `codex-chronicon`.
+
+This is primarily a discovery and boundary-definition task.
+
+Do not implement audit yet.
+
+Do not move domain events.
+
+Do not move event infrastructure.
+
+Do not move canonical lifecycle services.
+
+The goal is to clarify what belongs to Chronicon before creating audit/history/timeline functionality.
+
+## Decision Context
+
+`codex-chronicon` represents the memory of the manuscript.
+
+It should own audit/history/timeline projections derived from domain events.
+
+However, Codex already has:
+
+- domain events
+- actors
+- timestamps
+- event dispatchers
+- event subscribers
+- lifecycle services
+- content type/item/revision state
+
+Not all of these belong to Chronicon.
+
+Important distinction:
+
+```text
+codex-codex
+  emits domain events
+
+codex-chronicon
+  listens to domain events
+  records audit/history/timeline projections
+ ```
+
+ Domain events are canonical facts and should stay in codex-codex.
+
+ Generic event infrastructure should stay in codex-fundamentum.
+
+ Chronicon should not own the canonical lifecycle.
+
+ Scope
+
+ Perform discovery and documentation.
+
+ Allowed:
+
+ search for audit/history/timeline/chronicon-like code
+ review packages and class names
+ review documentation references
+ update or create a short documentation note
+ report findings and recommended follow-up tasks
+
+ Not allowed:
+
+ no new audit model implementation
+ no new audit repository
+ no event subscribers yet
+ no code movement unless it is purely placeholder/documentation and clearly safe
+ no domain event moves
+ no event dispatcher changes
+ no runtime wiring changes
+ no Maven dependency changes unless required only for docs, which should not be needed
+ Suggested Documentation Output
+
+ Create:
+
+ codex-docs/modules/CHRONICON-BOUNDARY-NOTES.md
+
+ or, if preferred by existing docs convention:
+
+ codex-docs/modules/CHRONICON-MIGRATION-NOTES.md
+
+ The document should summarize:
+
+ what currently exists
+ what belongs to Chronicon
+ what should stay in core/fundamentum
+ what should not be moved
+ recommended next tasks
+
+ Do not overbuild the document.
+
+ Keep it practical and actionable.
+
+ 1. Repository Search
+
+ Search the codebase for terms such as:
+
+ Audit
+ audit
+ History
+ history
+ Timeline
+ timeline
+ Chronicon
+ chronicon
+ ChangeLog
+ Change
+ EventHistory
+ EventLog
+ Activity
+ ActivityLog
+ LogEntry
+
+ Also review relevant packages:
+
+ codex-chronicon
+ codex-codex
+ codex-fundamentum
+ event packages
+ service decorators
+ runtime wiring
+ docs/modules
+ ADRs if present
+ 2. Identify Existing Chronicon Candidates
+
+ If any classes or tests appear audit/history/timeline-related, list them.
+
+ For each candidate, document:
+
+ file/class:
+ current module:
+ why it might belong to Chronicon:
+ why it might not:
+ recommendation:
+
+ Possible recommendations:
+
+ keep where it is
+ move later to codex-chronicon
+ rename later
+ replace with a future Chronicon model
+ delete if obsolete placeholder
+
+ Do not move them in this task unless explicitly trivial and safe.
+
+ 3. Clarify What Must Stay Outside Chronicon
+
+ Document that the following should not move to Chronicon:
+
+ Domain events
+
+ Examples:
+
+ SiteCreatedEvent
+ ContentTypeCreatedEvent
+ ContentTypeActivatedEvent
+ ContentItemCreatedEvent
+ ContentItemPublishedEvent
+
+ Reason:
+
+ Domain events are canonical domain facts emitted by codex-codex.
+
+ Chronicon listens to them but does not own them.
+
+ Event infrastructure
+
+ Examples:
+
+ CodexEvent
+ CodexEventDispatcher
+ CodexEventSubscriber
+ LocalCodexEventDispatcher
+ DeferredEventDispatcher
+ CompositeCodexEventDispatcher
+ TransactionContext
+
+ Reason:
+
+ Generic event and transaction primitives belong in codex-fundamentum.
+
+ Actor primitives
+
+ Examples:
+
+ Actor
+ ActorId
+
+ Reason:
+
+ Minimal actor identity is a shared primitive.
+
+ Full identity/permissions belong to codex-custos, not Chronicon.
+
+ Canonical timestamps
+
+ Examples:
+
+ createdAt
+ updatedAt
+ occurredAt
+
+ Reason:
+
+ Canonical entities and events may carry timestamps.
+
+ Chronicon records history but does not own every timestamp.
+
+ Lifecycle services
+
+ Examples:
+
+ CodexSiteService
+ CodexContentTypeService
+ CodexContentItemService
+ EventPublishing*Service
+
+ Reason:
+
+ Canonical lifecycle belongs to codex-codex.
+
+ Event publishing decorators emit facts; Chronicon may subscribe later.
+
+ 4. Define What Chronicon Should Eventually Own
+
+ Document future Chronicon responsibilities.
+
+ Potential future model:
+
+ AuditRecord
+ AuditRecordId
+ AuditAction
+ AuditSubject
+ AuditActor
+ AuditMetadata
+ TimelineEntry
+ EventHistoryEntry
+ ChroniconRepository
+ MemoryChroniconRepository
+ ChroniconEventSubscriber
+
+ Chronicon may eventually provide:
+
+ audit trail storage
+ event history projection
+ content/site timeline views
+ change narratives
+ restoration views
+ who/what/when records
+ temporal projections
+ audit search/query APIs
+
+ Chronicon should listen to events such as:
+
+ site created/started/suspended/archived
+ content type created/activated/archived
+ content item created/published/archived
+ future workflow events
+ future permission/security events if appropriate
+
+ Do not implement these yet.
+
+ 5. Audit vs Observability
+
+ Add a short distinction:
+
+ Audit
+   product/domain history
+   who did what, to which resource, when, and why if available
+   durable, queryable, user-visible or admin-visible
+
+ Observability
+   operational telemetry
+   metrics, logs, traces, latency, failures
+   used for operating the system
+
+ Chronicon owns audit/history.
+
+ Observability should be separate and may eventually live in another infrastructure concern or fundamentum-level telemetry abstraction.
+
+ Do not implement observability here.
+
+ 6. Chronicon Module Status
+
+ Review current codex-chronicon skeleton.
+
+ Document:
+
+ whether it exists
+ whether it has README
+ whether it has module-info
+ whether it has placeholder classes
+ whether it currently contains implementation
+
+ If placeholder classes exist, do not delete unless the task remains clearly safe and build-neutral.
+
+ Prefer documenting them as placeholders.
+
+ 7. Recommended Follow-up Tasks
+
+ The document should recommend one or more next tasks.
+
+ Likely next task:
+
+ Task30: Chronicon Audit Foundation
+
+ Potential scope for Task30:
+
+ AuditRecord
+ AuditRecordId
+ AuditAction
+ AuditSubject
+ ChroniconRepository
+ MemoryChroniconRepository
+ RecordingChroniconRepository
+ first event subscriber for selected events
+ tests
+
+ Other possible follow-ups:
+
+ Task31: Chronicon Event Subscribers
+ Task32: Chronicon Timeline Query Model
+ Task33: Observability Boundary ADR
+
+ Do not implement them in this task.
+
+ 8. Backlog Classification
+
+ Classify Chronicon as:
+
+ Near-future
+
+ Reason:
+
+ The event pipeline is already mature enough to support audit/history subscribers soon, but this task is only boundary discovery.
+
+ Dynamic runtime/assembly wiring may still affect how Chronicon subscribers are connected.
+
+ 9. Post-Task Report
+
+ After completion, report:
+
+ files reviewed
+ search terms used
+ documentation file created or updated
+ whether any code was changed
+ whether any classes appear to belong to Chronicon now
+ whether any classes should explicitly stay out of Chronicon
+ recommended next task
+ any open questions
+ 10. Constraints
+ Follow CLAUDE.md.
+ Follow CODING_IDENTITY.md.
+ Follow AGENT-CALIBRATION.md.
+ Discovery/documentation task.
+ Do not implement audit.
+ Do not implement Chronicon repositories.
+ Do not implement Chronicon subscribers.
+ Do not move domain events.
+ Do not move event infrastructure.
+ Do not move canonical lifecycle services.
+ Do not alter runtime wiring.
+ Do not modify Maven modules.
+ Do not add dependencies.
+ Do not add Spring.
+ Do not add JPA.
+ Do not add persistence.
+ Do not add REST.
+ Do not add search/indexing changes.
+ Do not add cache changes.
+ Do not add workflow.
+ Do not modify unrelated files.
+ Keep documentation in English.
+ Prefer practical boundary notes over excessive theory.

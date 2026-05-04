@@ -70,6 +70,17 @@ Future-forward:
 - Document only.
 - Do not add code.
 
+## Fundamentum rule
+
+A type belongs in fundamentum only if it is:
+- generic,
+- framework-agnostic,
+- reusable by multiple modules,
+- free of CMS/domain concepts,
+- small enough to remain stable.
+
+If a type mentions Site, ContentItem, ContentType, IndexDocument, AuditRecord, Workflow, User, Role, REST, AI, or persistence backend details, it does not belong in fundamentum.
+
 ## Module dependency conventions
 
 - `exports X.internal.Y to codex.Z` is acceptable as controlled architectural debt when a projection module needs repository access.
@@ -79,21 +90,37 @@ Future-forward:
 ## Current Classification
 
 Active:
-- Runtime/assembly module that composes CodexRuntime + codex-index subscribers
+- Chronicon event subscribers (SiteCreatedChroniconSubscriber, ContentTypeCreatedChroniconSubscriber, ContentItemPublishedChroniconSubscriber)
+- Runtime/assembly module that composes CodexRuntime + codex-index + codex-chronicon subscribers
 
 Near-future:
+- ContentItemProjectionReader: new public API contract in codex.codex.api.projection to replace qualified export to codex-index
+- Runtime abstractions (CodexModuleRuntime, CodexModuleRuntimeProvider, CodexRuntimeContext) in codex.fundamentum.api.runtime
 - Cache foundation integration in codex-index
 - ContentSearchService
 - IndexingPolicy
-- Projection/read API boundary to replace qualified repository export
 
 Future-forward:
 - Speculum
 - tenant-aware index ids
 - dynamic subscriber registry
 - PublishedPointer
+- ServiceLoader-based runtime discovery
 
 ## Task feedback:
+
+Task 30 feedback:
+- Accepted with minor notes.
+- Good: Chronicon foundation stayed independent of codex-codex; AuditSubject uses a flexible String type instead of prematurely introducing an enum; AuditRecord is explicit and immutable with actorId required; Metadata constrained to Map<String, String>; ChroniconRepository is append-only in spirit (no update/delete); query methods are simple and focused.
+- Minor notes:
+  - Keep AuditSubject type as String for now; may later add constants for common subject types.
+  - ChroniconRepository should eventually clarify duplicate AuditRecordId behavior.
+  - Metadata values are not trimmed; acceptable because values may preserve meaningful whitespace.
+
+Task 29 feedback:
+- Accepted.
+- Good: correctly treated as discovery/documentation only; no code changed; candidate classification correct; EventRecorder identified as conceptual seed, not Chronicon implementation.
+- Keep doing: for boundary-discovery tasks, document findings without implementing opportunistically; keep domain events and canonical entities in codex-codex; treat Chronicon as a projection/listener module, not lifecycle owner.
 
 Task 28 feedback:
 - Accepted with architectural notes.

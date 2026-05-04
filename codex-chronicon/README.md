@@ -16,7 +16,18 @@ eventually hold:
 
 ## Current Status
 
-Skeleton only. No audit or history implementation exists yet.
+Audit foundation implemented (Task 30):
+
+- `AuditRecordId`, `AuditAction`, `AuditSubject`, `AuditRecord` — core audit model
+- `ChroniconRepository` — append-only storage contract
+- `MemoryChroniconRepository` — in-memory implementation for development and testing
+- `RecordingChroniconRepository` — test helper that records saved records
+
+**Not yet implemented:**
+- Event subscribers (Chronicon does not yet listen to domain events)
+- Runtime wiring (Chronicon is not yet connected to the event pipeline)
+- Durable persistence (records are in-memory only)
+- Timeline query service and audit search APIs
 
 ## Dependency Rules
 
