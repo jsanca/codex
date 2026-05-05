@@ -1,6 +1,7 @@
 package codex.index.internal;
 
 import codex.codex.api.model.entity.ContentItem;
+import codex.index.api.runtime.IndexRuntime;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.identity.ContentItemId;

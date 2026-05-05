@@ -1,4 +1,4 @@
-package codex.codex.internal.runtime;
+package codex.codex.api.runtime;
 
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;

@@ -1,6 +1,7 @@
 package codex.codex.internal.runtime;
 
 import codex.codex.api.model.command.ActivateContentTypeCommand;
+import codex.codex.api.runtime.CodexRuntime;
 import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;

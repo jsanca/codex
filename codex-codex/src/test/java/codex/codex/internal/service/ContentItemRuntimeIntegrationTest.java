@@ -12,7 +12,7 @@ import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.ContentItemStatus;
 import codex.codex.api.model.value.FieldType;
-import codex.codex.internal.runtime.CodexRuntime;
+import codex.codex.api.runtime.CodexRuntime;
 import codex.fundamentum.api.model.Actor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

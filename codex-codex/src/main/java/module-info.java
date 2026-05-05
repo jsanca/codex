@@ -9,5 +9,5 @@ module codex.codex {
     exports codex.codex.api.model.service;
     exports codex.codex.api.model.value;
     exports codex.codex.api.projection;
-    exports codex.codex.internal.runtime to codex.concilium;
+    exports codex.codex.api.runtime;
 }

@@ -1,8 +1,11 @@
 package codex.concilium.internal;
 
+import codex.chronicon.api.AuditAction;
 import codex.chronicon.api.AuditRecord;
-import codex.chronicon.internal.ChroniconRuntime;
-import codex.chronicon.internal.RecordingChroniconRepository;
+import codex.chronicon.api.AuditRecordId;
+import codex.chronicon.api.AuditSubject;
+import codex.chronicon.api.ChroniconRepository;
+import codex.chronicon.api.runtime.ChroniconRuntime;
 import codex.codex.api.model.command.ActivateContentTypeCommand;
 import codex.codex.api.model.command.AddContentTypeFieldCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
@@ -19,7 +22,7 @@ import codex.codex.api.model.identity.FieldKey;
 import codex.codex.api.model.identity.SiteKey;
 import codex.codex.api.model.value.FieldType;
 import codex.codex.api.projection.ContentItemProjectionReader;
-import codex.codex.internal.runtime.CodexRuntime;
+import codex.codex.api.runtime.CodexRuntime;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CodexEventSubscriber;
@@ -27,13 +30,16 @@ import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
 import codex.index.api.IndexDocument;
-import codex.index.internal.IndexRuntime;
-import codex.index.internal.RecordingIndexWriter;
+import codex.index.api.IndexDocumentId;
+import codex.index.api.IndexWriter;
+import codex.index.api.runtime.IndexRuntime;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -167,9 +173,9 @@ class ConciliumRuntimeTest {
      * <p>Uses a forwarding dispatcher to break the circular construction dependency, then
      * runs a full publish flow. After publication:</p>
      * <ul>
-     *   <li>{@code RecordingChroniconRepository} should contain three audit records
+     *   <li>{@code LocalRecordingChroniconRepository} should contain three audit records
      *       (site created, content type created, content item published).</li>
-     *   <li>{@code RecordingIndexWriter} should contain one upserted index document.</li>
+     *   <li>{@code LocalRecordingIndexWriter} should contain one upserted index document.</li>
      * </ul>
      */
     @Test
@@ -182,11 +188,11 @@ class ConciliumRuntimeTest {
         final CodexRuntime core = CodexRuntime.inMemory(
                 event -> placeholder.get().dispatch(event));
 
-        final RecordingIndexWriter recordingWriter = new RecordingIndexWriter();
+        final LocalRecordingIndexWriter recordingWriter = new LocalRecordingIndexWriter();
         final IndexRuntime index = IndexRuntime.withWriter(
                 core.contentItemProjectionReader(), recordingWriter);
 
-        final RecordingChroniconRepository recordingRepo = new RecordingChroniconRepository();
+        final LocalRecordingChroniconRepository recordingRepo = new LocalRecordingChroniconRepository();
         final ChroniconRuntime chronicon = ChroniconRuntime.withRepository(recordingRepo);
 
         // Wire the combined module dispatcher into the core's event pipeline.
@@ -230,7 +236,7 @@ class ConciliumRuntimeTest {
                 "core event recorder should have captured events");
 
         // Chronicon received site created, content type created, content item published
-        final List<AuditRecord> auditRecords = recordingRepo.savedRecords();
+        final List<AuditRecord> auditRecords = recordingRepo.findAll();
         assertEquals(3, auditRecords.size(),
                 "chronicon should have one audit record per subscribed event type");
 
@@ -271,17 +277,86 @@ class ConciliumRuntimeTest {
 
     private static final class EmptyContentItemProjectionReader implements ContentItemProjectionReader {
         @Override
-        public java.util.Optional<ContentItem> findContentItem(
+        public Optional<ContentItem> findContentItem(
                 final SiteKey siteKey,
                 final ContentTypeKey contentTypeKey,
                 final ContentItemKey key) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
 
         @Override
-        public java.util.Optional<ContentRevision> findContentRevision(
+        public Optional<ContentRevision> findContentRevision(
                 final ContentRevisionId revisionId) {
-            return java.util.Optional.empty();
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Local recording implementation of {@link IndexWriter} for use in this test.
+     * Avoids any dependency on internal recording helpers from {@code codex-index}.
+     */
+    private static final class LocalRecordingIndexWriter implements IndexWriter {
+
+        private final List<IndexDocument> upserted = new ArrayList<>();
+
+        @Override
+        public void upsert(final IndexDocument document) {
+            Objects.requireNonNull(document);
+            upserted.add(document);
+        }
+
+        @Override
+        public void delete(final IndexDocumentId id) {
+            // not used in these tests
+        }
+
+        List<IndexDocument> upserts() {
+            return List.copyOf(upserted);
+        }
+    }
+
+    /**
+     * Local recording implementation of {@link ChroniconRepository} for use in this test.
+     * Avoids any dependency on internal recording helpers from {@code codex-chronicon}.
+     */
+    private static final class LocalRecordingChroniconRepository implements ChroniconRepository {
+
+        private final List<AuditRecord> saved = new ArrayList<>();
+
+        @Override
+        public AuditRecord save(final AuditRecord record) {
+            Objects.requireNonNull(record);
+            saved.add(record);
+            return record;
+        }
+
+        @Override
+        public Optional<AuditRecord> findById(final AuditRecordId id) {
+            Objects.requireNonNull(id);
+            return saved.stream().filter(r -> r.id().equals(id)).findFirst();
+        }
+
+        @Override
+        public List<AuditRecord> findBySubject(final AuditSubject subject) {
+            Objects.requireNonNull(subject);
+            return saved.stream().filter(r -> r.subject().equals(subject)).toList();
+        }
+
+        @Override
+        public List<AuditRecord> findByActor(final ActorId actorId) {
+            Objects.requireNonNull(actorId);
+            return saved.stream().filter(r -> r.actorId().equals(actorId)).toList();
+        }
+
+        @Override
+        public List<AuditRecord> findByAction(final AuditAction action) {
+            Objects.requireNonNull(action);
+            return saved.stream().filter(r -> r.action().equals(action)).toList();
+        }
+
+        @Override
+        public List<AuditRecord> findAll() {
+            return List.copyOf(saved);
         }
     }
 }

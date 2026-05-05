@@ -1,10 +1,14 @@
-package codex.index.internal;
+package codex.index.api.runtime;
 
 import codex.codex.api.projection.ContentItemProjectionReader;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
 import codex.index.api.IndexWriter;
+import codex.index.internal.ContentItemIndexDocumentMapper;
+import codex.index.internal.ContentItemPublishedIndexingSubscriber;
+import codex.index.internal.NoOpIndexWriter;
+import codex.index.internal.ReaderContentItemProjectionSource;
 
 import java.util.List;
 import java.util.Objects;
@@ -22,7 +26,8 @@ import java.util.Objects;
  * dispatcher.registerAll(runtime.subscribers());
  * }</pre>
  *
- * <p>Usage with a custom writer (e.g. {@link RecordingIndexWriter} in integration tests):</p>
+ * <p>Usage with a custom writer (e.g. {@link codex.index.internal.RecordingIndexWriter}
+ * in integration tests):</p>
  * <pre>{@code
  * IndexRuntime runtime = IndexRuntime.withWriter(stubReader, recordingWriter);
  * }</pre>
@@ -60,8 +65,9 @@ public final class IndexRuntime implements CodexModuleRuntime {
     /**
      * Creates an {@code IndexRuntime} backed by the provided {@link IndexWriter}.
      *
-     * <p>Useful when the caller controls the writer (e.g. a {@link RecordingIndexWriter}
-     * in integration tests, or a future durable adapter such as OpenSearch or Lucene).</p>
+     * <p>Useful when the caller controls the writer (e.g. a
+     * {@link codex.index.internal.RecordingIndexWriter} in integration tests, or a future
+     * durable adapter such as OpenSearch or Lucene).</p>
      *
      * @param projectionReader the public core projection contract; must not be null
      * @param indexWriter      the writer to send index documents to; must not be null

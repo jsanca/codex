@@ -3,7 +3,7 @@ package codex.codex.internal.service;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
-import codex.codex.internal.runtime.CodexRuntime;
+import codex.codex.api.runtime.CodexRuntime;
 import codex.fundamentum.api.event.CodexEvent;
 
 import java.util.List;

@@ -79,6 +79,8 @@ runtime.coreRuntime().siteService().create(createSiteCommand, actor);
 // SiteCreatedEvent reaches ChroniconRuntime subscribers automatically
 ```
 
+Concilium has an end-to-end smoke test proving that publishing content through the core can project to both Index and Chronicon through the composed runtime.
+
 **Not yet implemented:**
 - Assembly with `PortaRuntime` or other edge modules
 - `ConciliumRuntimeProvider` (ServiceLoader-based provider declaration)

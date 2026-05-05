@@ -1,6 +1,7 @@
 package codex.chronicon.internal;
 
 import codex.chronicon.api.ChroniconRepository;
+import codex.chronicon.api.runtime.ChroniconRuntime;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.event.ContentTypeCreatedEvent;
 import codex.codex.api.model.event.SiteCreatedEvent;

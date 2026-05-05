@@ -1,6 +1,10 @@
-package codex.chronicon.internal;
+package codex.chronicon.api.runtime;
 
 import codex.chronicon.api.ChroniconRepository;
+import codex.chronicon.internal.ContentItemPublishedChroniconSubscriber;
+import codex.chronicon.internal.ContentTypeCreatedChroniconSubscriber;
+import codex.chronicon.internal.MemoryChroniconRepository;
+import codex.chronicon.internal.SiteCreatedChroniconSubscriber;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
@@ -22,7 +26,8 @@ import java.util.Objects;
  * dispatcher.registerAll(runtime.subscribers());
  * }</pre>
  *
- * <p>Usage with a custom repository (e.g. {@link RecordingChroniconRepository} in tests):</p>
+ * <p>Usage with a custom repository (e.g.
+ * {@link codex.chronicon.internal.RecordingChroniconRepository} in tests):</p>
  * <pre>{@code
  * ChroniconRuntime runtime = ChroniconRuntime.withRepository(recordingRepository);
  * }</pre>
@@ -57,8 +62,9 @@ public final class ChroniconRuntime implements CodexModuleRuntime {
     /**
      * Creates a {@code ChroniconRuntime} backed by the provided repository.
      *
-     * <p>Useful when the caller controls the repository (e.g. a {@link RecordingChroniconRepository}
-     * in integration tests, or a future durable implementation).</p>
+     * <p>Useful when the caller controls the repository (e.g. a
+     * {@link codex.chronicon.internal.RecordingChroniconRepository} in integration tests,
+     * or a future durable implementation).</p>
      *
      * @param repository the repository to use; must not be null
      * @return a new, fully assembled {@code ChroniconRuntime}

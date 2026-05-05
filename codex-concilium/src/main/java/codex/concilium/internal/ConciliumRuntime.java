@@ -1,13 +1,13 @@
 package codex.concilium.internal;
 
-import codex.chronicon.internal.ChroniconRuntime;
-import codex.codex.internal.runtime.CodexRuntime;
+import codex.chronicon.api.runtime.ChroniconRuntime;
+import codex.codex.api.runtime.CodexRuntime;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
-import codex.index.internal.IndexRuntime;
+import codex.index.api.runtime.IndexRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
