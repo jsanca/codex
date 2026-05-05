@@ -10,4 +10,5 @@ module codex.concilium {
     requires codex.index;
     requires codex.chronicon;
     requires org.slf4j;
+    exports codex.concilium.api.runtime;
 }

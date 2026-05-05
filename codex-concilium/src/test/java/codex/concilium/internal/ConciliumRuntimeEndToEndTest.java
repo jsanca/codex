@@ -1,6 +1,7 @@
 package codex.concilium.internal;
 
 import codex.chronicon.api.AuditAction;
+import codex.concilium.api.runtime.ConciliumRuntime;
 import codex.chronicon.api.AuditRecord;
 import codex.chronicon.api.AuditRecordId;
 import codex.chronicon.api.AuditSubject;

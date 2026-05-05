@@ -1,4 +1,5 @@
 module codex.fundamentum {
+    requires com.github.benmanes.caffeine;
     requires org.slf4j;
     exports codex.fundamentum.api;
     exports codex.fundamentum.api.cache;

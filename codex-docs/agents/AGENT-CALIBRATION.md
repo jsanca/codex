@@ -109,6 +109,16 @@ Future-forward:
 
 ## Task feedback:
 
+Task 41 feedback (Move ConciliumRuntime to api.runtime):
+- Accepted.
+- Good: ConciliumRuntime moved to public api.runtime package; module-info exports codex.concilium.api.runtime; tests updated to import public runtime package; runtime behavior unchanged; ConciliumRuntimeEndToEndTest still passes; full reactor compile passes; no ServiceLoader, Spring, Porta integration, or runtime redesign introduced.
+- Note: empty codex.concilium.internal package directory can be removed; no need to add marker classes or placeholders.
+
+Task 39 feedback (Move module runtimes to public api.runtime packages):
+- Accepted.
+- Good: CodexRuntime, IndexRuntime, and ChroniconRuntime moved to public *.api.runtime packages; all three qualified exports to codex.concilium removed; ConciliumRuntimeTest replaced internal RecordingIndexWriter and RecordingChroniconRepository imports with local inner class implementations using public IndexWriter and ChroniconRepository APIs; no runtime behavior changed; all tests pass; full reactor compile passes.
+- Keep doing: when internal recording helpers become inaccessible across module boundaries after removing qualified exports, replace them with local inner class implementations using only the public interface — do not reach back into internal packages.
+
 Task 38b feedback (ConciliumRuntime):
 - Accepted with controlled architectural debt.
 - Good: ConciliumRuntime composes CodexRuntime, IndexRuntime, and ChroniconRuntime; core remains independent from index and chronicon; composed event pipeline works — core events reach both indexing and audit subscribers; CodexRuntime gained clean inMemory(CodexEventDispatcher) overload while preserving inMemory(); EventRecorder remains core observation, Chronicon remains product audit/history; tests cover the composed runtime; full reactor compile passes.

@@ -1,4 +1,4 @@
-package codex.concilium.internal;
+package codex.concilium.api.runtime;
 
 import codex.chronicon.api.runtime.ChroniconRuntime;
 import codex.codex.api.runtime.CodexRuntime;
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * // SiteCreatedEvent reaches ChroniconRuntime subscribers automatically
  * }</pre>
  *
- * <p>Usage with custom child runtimes (e.g. recording helpers in integration tests):</p>
+ * <p>Usage with custom child runtimes (e.g. recording writers/repositories in tests):</p>
  * <pre>{@code
  * AtomicReference<CodexEventDispatcher> placeholder = new AtomicReference<>(event -> {});
  * CodexRuntime core = CodexRuntime.inMemory(event -> placeholder.get().dispatch(event));
@@ -81,10 +81,6 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
      * {@code IndexRuntime} creation (which needs the projection reader from
      * {@code CodexRuntime}). The forwarding reference is set once before any
      * service call can occur and is effectively fixed for the lifetime of the runtime.</p>
-     *
-     * <p>The no-op index writer from {@link IndexRuntime#inMemory} is used by default.
-     * Use {@link #compose} with a {@link codex.index.internal.RecordingIndexWriter} for tests
-     * that need to inspect index writes.</p>
      *
      * @return a new, fully assembled {@code ConciliumRuntime}
      */
