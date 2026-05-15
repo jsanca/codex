@@ -219,8 +219,11 @@ sufficient for the MVP single-node deployment.
 The recommended sequence once cache invalidation is explicitly tasked:
 
 ```
-Task 44: ContentItem cache keys and CachingContentItemService (identity reads only)
-Task 45: ContentItem cache invalidation subscriber
+Task 44: ContentItem cache keys and CachingContentItemService (identity reads only) — DONE
+Task 45: ContentItem cache invalidation subscriber — DONE
+         ContentItemCreatedEvent and ContentItemPublishedEvent now have cache invalidation
+         subscribers for ContentItem identity reads (ContentItemCreatedCacheInvalidationSubscriber,
+         ContentItemPublishedCacheInvalidationSubscriber in codex.codex.internal.cache).
 Task 46: ContentType cache keys and CachingContentTypeService (identity reads only)
 Task 47: ContentType cache invalidation subscriber
 Task 48: ContentRevision / ContentTypeVersion snapshot cache (discussion or implementation)
