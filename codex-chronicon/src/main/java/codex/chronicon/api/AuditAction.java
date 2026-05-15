@@ -18,8 +18,14 @@ public enum AuditAction {
     /** A resource was published or made live. */
     PUBLISHED,
 
+    /** A resource was unpublished and reverted to an editable state. */
+    UNPUBLISHED,
+
     /** A resource was archived or removed from active use. */
     ARCHIVED,
+
+    /** A resource was restored from an archived state back to an editable state. */
+    RESTORED,
 
     /** A resource transitioned to a started/active state. */
     STARTED,

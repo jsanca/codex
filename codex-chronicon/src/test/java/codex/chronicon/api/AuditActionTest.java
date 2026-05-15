@@ -50,6 +50,16 @@ class AuditActionTest {
     }
 
     @Test
+    void unpublishedExists() {
+        assertNotNull(AuditAction.UNPUBLISHED);
+    }
+
+    @Test
+    void restoredExists() {
+        assertNotNull(AuditAction.RESTORED);
+    }
+
+    @Test
     void deletedExists() {
         assertNotNull(AuditAction.DELETED);
     }
@@ -60,7 +70,7 @@ class AuditActionTest {
     }
 
     @Test
-    void tenValuesPresent() {
-        assertEquals(10, AuditAction.values().length);
+    void twelveValuesPresent() {
+        assertEquals(12, AuditAction.values().length);
     }
 }

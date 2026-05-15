@@ -1,15 +1,25 @@
 package codex.codex.api.runtime;
 
+import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.service.ContentTypeService;
 import codex.codex.api.model.service.SiteService;
 import codex.codex.api.projection.ContentItemProjectionReader;
+import codex.codex.internal.cache.ContentItemArchivedCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemCacheKey;
+import codex.codex.internal.cache.ContentItemCreatedCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemDeletedCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemPublishedCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemRestoredCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemUnpublishedCacheInvalidationSubscriber;
+import codex.codex.internal.cache.ContentItemUpdatedCacheInvalidationSubscriber;
 import codex.codex.internal.projection.RepositoryContentItemProjectionReader;
 import codex.codex.internal.repository.MemoryContentItemRepository;
 import codex.codex.internal.repository.MemoryContentRevisionRepository;
 import codex.codex.internal.repository.MemoryContentTypeRepository;
 import codex.codex.internal.repository.MemoryContentTypeVersionRepository;
 import codex.codex.internal.repository.MemorySiteRepository;
+import codex.codex.internal.service.CachingContentItemService;
 import codex.codex.internal.service.CodexContentItemService;
 import codex.codex.internal.service.CodexContentTypeService;
 import codex.codex.internal.service.CodexSiteService;
@@ -18,11 +28,13 @@ import codex.codex.internal.service.EventPublishingContentItemService;
 import codex.codex.internal.service.EventPublishingContentTypeService;
 import codex.codex.internal.service.EventPublishingSiteService;
 import codex.codex.internal.service.SiteIdentityGenerator;
+import codex.fundamentum.api.cache.ConcurrentMapCacheRegion;
 import codex.fundamentum.api.concurrent.CodexExecutor;
 import codex.fundamentum.api.concurrent.CodexExecutorConfig;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CompositeCodexEventDispatcher;
+import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,8 +59,9 @@ import java.util.concurrent.locks.StampedLock;
  * <pre>
  * DeferredEventDispatcher (transaction-aware)
  *   → CompositeCodexEventDispatcher
- *      → EventRecorder          (domain event recording — first so events survive subscriber failures)
- *      → externalDispatcher     (no-op by default; Concilium provides module subscribers here)
+ *      → EventRecorder              (domain event recording — first so events survive subscriber failures)
+ *      → LocalCodexEventDispatcher  (ContentItem cache invalidation subscribers)
+ *      → externalDispatcher         (no-op by default; Concilium provides module subscribers here)
  * </pre>
  *
  * @author jsanca &amp; clio
@@ -132,11 +145,26 @@ public final class CodexRuntime implements AutoCloseable {
         // --- async executor ---
         final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
 
+        // --- content item cache ---
+        final ConcurrentMapCacheRegion<ContentItemCacheKey, ContentItem> contentItemCache =
+                new ConcurrentMapCacheRegion<>();
+
+        final LocalCodexEventDispatcher cacheDispatcher = new LocalCodexEventDispatcher(List.of(
+                new ContentItemCreatedCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemUpdatedCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemPublishedCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemUnpublishedCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemArchivedCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemRestoredCacheInvalidationSubscriber(contentItemCache),
+                new ContentItemDeletedCacheInvalidationSubscriber(contentItemCache)
+        ));
+
         // --- event pipeline assembly ---
         // Recording first: events are captured even if a subscriber fails.
+        // Cache invalidation second: evictions happen before external module subscribers run.
         final EventRecorder recorder = new EventRecorder();
         final CompositeCodexEventDispatcher composite =
-                new CompositeCodexEventDispatcher(List.of(recorder, externalDispatcher));
+                new CompositeCodexEventDispatcher(List.of(recorder, cacheDispatcher, externalDispatcher));
         final DeferredEventDispatcher deferredDispatcher =
                 new DeferredEventDispatcher(composite, asyncExecutor);
 
@@ -151,8 +179,10 @@ public final class CodexRuntime implements AutoCloseable {
                 deferredDispatcher, clock);
 
         final ContentItemService contentItemService = new EventPublishingContentItemService(
-                new CodexContentItemService(contentItemRepository, revisionRepository,
-                        contentTypeRepository, contentTypeVersionRepository, clock),
+                new CachingContentItemService(
+                        new CodexContentItemService(contentItemRepository, revisionRepository,
+                                contentTypeRepository, contentTypeVersionRepository, clock),
+                        contentItemCache),
                 deferredDispatcher, clock);
 
         return new CodexRuntime(siteService, contentTypeService, contentItemService,

@@ -61,4 +61,14 @@ public interface ContentItemRepository {
      * @return list of all content items; never null
      */
     List<ContentItem> findAll();
+
+    /**
+     * Removes the content item with the given scoped identity from storage.
+     *
+     * @param siteKey        the site scope; must not be null
+     * @param contentTypeKey the content type key; must not be null
+     * @param key            the content item key; must not be null
+     * @return {@code true} if an item was removed, {@code false} if no such item existed
+     */
+    boolean deleteByKey(SiteKey siteKey, ContentTypeKey contentTypeKey, ContentItemKey key);
 }

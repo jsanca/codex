@@ -1,7 +1,12 @@
 package codex.chronicon.api.runtime;
 
 import codex.chronicon.api.ChroniconRepository;
+import codex.chronicon.internal.ContentItemArchivedChroniconSubscriber;
+import codex.chronicon.internal.ContentItemCreatedChroniconSubscriber;
 import codex.chronicon.internal.ContentItemPublishedChroniconSubscriber;
+import codex.chronicon.internal.ContentItemRestoredChroniconSubscriber;
+import codex.chronicon.internal.ContentItemUnpublishedChroniconSubscriber;
+import codex.chronicon.internal.ContentItemUpdatedChroniconSubscriber;
 import codex.chronicon.internal.ContentTypeCreatedChroniconSubscriber;
 import codex.chronicon.internal.MemoryChroniconRepository;
 import codex.chronicon.internal.SiteCreatedChroniconSubscriber;
@@ -125,7 +130,12 @@ public final class ChroniconRuntime implements CodexModuleRuntime {
         return List.of(
                 new SiteCreatedChroniconSubscriber(repository),
                 new ContentTypeCreatedChroniconSubscriber(repository),
-                new ContentItemPublishedChroniconSubscriber(repository)
+                new ContentItemCreatedChroniconSubscriber(repository),
+                new ContentItemUpdatedChroniconSubscriber(repository),
+                new ContentItemPublishedChroniconSubscriber(repository),
+                new ContentItemUnpublishedChroniconSubscriber(repository),
+                new ContentItemArchivedChroniconSubscriber(repository),
+                new ContentItemRestoredChroniconSubscriber(repository)
         );
     }
 }

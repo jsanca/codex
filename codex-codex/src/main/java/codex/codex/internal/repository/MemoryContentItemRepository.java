@@ -64,5 +64,15 @@ public final class MemoryContentItemRepository implements ContentItemRepository 
         return store.findAll();
     }
 
+    @Override
+    public boolean deleteByKey(final SiteKey siteKey,
+                                final ContentTypeKey contentTypeKey,
+                                final ContentItemKey key) {
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
+        Objects.requireNonNull(contentTypeKey, "contentTypeKey must not be null");
+        Objects.requireNonNull(key, "key must not be null");
+        return store.deleteByKey(new RepositoryKey(siteKey, contentTypeKey, key));
+    }
+
     private record RepositoryKey(SiteKey siteKey, ContentTypeKey contentTypeKey, ContentItemKey itemKey) {}
 }

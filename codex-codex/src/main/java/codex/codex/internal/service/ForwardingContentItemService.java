@@ -1,7 +1,12 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
+import codex.codex.api.model.command.UnpublishContentItemCommand;
+import codex.codex.api.model.command.UpdateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeKey;
@@ -51,6 +56,31 @@ public interface ForwardingContentItemService extends ContentItemService {
     @Override
     default List<ContentItem> findAll(final Actor actor) {
         return getDelegate().findAll(actor);
+    }
+
+    @Override
+    default ContentItem update(final UpdateContentItemCommand command, final Actor actor) {
+        return getDelegate().update(command, actor);
+    }
+
+    @Override
+    default ContentItem archive(final ArchiveContentItemCommand command, final Actor actor) {
+        return getDelegate().archive(command, actor);
+    }
+
+    @Override
+    default ContentItem unpublish(final UnpublishContentItemCommand command, final Actor actor) {
+        return getDelegate().unpublish(command, actor);
+    }
+
+    @Override
+    default void delete(final DeleteContentItemCommand command, final Actor actor) {
+        getDelegate().delete(command, actor);
+    }
+
+    @Override
+    default ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
+        return getDelegate().restore(command, actor);
     }
 
     @Override

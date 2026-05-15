@@ -177,6 +177,12 @@ class RepositoryContentItemProjectionReaderTest {
         public List<ContentItem> findAll() {
             return result == null ? List.of() : List.of(result);
         }
+
+        @Override
+        public boolean deleteByKey(
+                final SiteKey siteKey, final ContentTypeKey contentTypeKey, final ContentItemKey key) {
+            return false;
+        }
     }
 
     private static final class StubRevisionRepository implements ContentRevisionRepository {

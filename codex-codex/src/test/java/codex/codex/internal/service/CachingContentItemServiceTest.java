@@ -1,7 +1,12 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
+import codex.codex.api.model.command.UnpublishContentItemCommand;
+import codex.codex.api.model.command.UpdateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.identity.ContentItemId;
@@ -276,6 +281,31 @@ class CachingContentItemServiceTest {
 
         @Override
         public List<ContentItem> findAll(final Actor actor) {
+            throw new UnsupportedOperationException("not used in this test");
+        }
+
+        @Override
+        public ContentItem update(final UpdateContentItemCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in this test");
+        }
+
+        @Override
+        public ContentItem archive(final ArchiveContentItemCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in this test");
+        }
+
+        @Override
+        public void delete(final DeleteContentItemCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in this test");
+        }
+
+        @Override
+        public ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
+            throw new UnsupportedOperationException("not used in this test");
+        }
+
+        @Override
+        public ContentItem unpublish(final UnpublishContentItemCommand command, final Actor actor) {
             throw new UnsupportedOperationException("not used in this test");
         }
 

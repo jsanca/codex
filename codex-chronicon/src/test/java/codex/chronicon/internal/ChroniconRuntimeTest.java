@@ -2,7 +2,12 @@ package codex.chronicon.internal;
 
 import codex.chronicon.api.ChroniconRepository;
 import codex.chronicon.api.runtime.ChroniconRuntime;
+import codex.codex.api.model.event.ContentItemArchivedEvent;
+import codex.codex.api.model.event.ContentItemCreatedEvent;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
+import codex.codex.api.model.event.ContentItemRestoredEvent;
+import codex.codex.api.model.event.ContentItemUnpublishedEvent;
+import codex.codex.api.model.event.ContentItemUpdatedEvent;
 import codex.codex.api.model.event.ContentTypeCreatedEvent;
 import codex.codex.api.model.event.SiteCreatedEvent;
 import codex.codex.api.model.identity.ContentItemId;
@@ -72,9 +77,9 @@ class ChroniconRuntimeTest {
     }
 
     @Test
-    void subscribersContainsThreeSubscribers() {
+    void subscribersContainsEightSubscribers() {
         final ChroniconRuntime runtime = ChroniconRuntime.inMemory();
-        assertEquals(3, runtime.subscribers().size());
+        assertEquals(8, runtime.subscribers().size());
     }
 
     @Test
@@ -99,10 +104,10 @@ class ChroniconRuntimeTest {
     }
 
     @Test
-    void withRepositoryAlsoExposesThreeSubscribers() {
+    void withRepositoryAlsoExposesEightSubscribers() {
         final RecordingChroniconRepository recording = new RecordingChroniconRepository();
         final ChroniconRuntime runtime = ChroniconRuntime.withRepository(recording);
-        assertEquals(3, runtime.subscribers().size());
+        assertEquals(8, runtime.subscribers().size());
     }
 
     // --- close ---
@@ -126,11 +131,21 @@ class ChroniconRuntimeTest {
 
         dispatcher.dispatch(new SiteCreatedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
         dispatcher.dispatch(new ContentTypeCreatedEvent(CT_ID, SITE_KEY, CT_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemCreatedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemUpdatedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
         dispatcher.dispatch(new ContentItemPublishedEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, REVISION_ID, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemUnpublishedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemArchivedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemRestoredEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
 
-        assertEquals(3, recording.savedRecords().size(),
-                "all three events should produce audit records");
+        assertEquals(8, recording.savedRecords().size(),
+                "all eight events should produce audit records");
     }
 
     @Test

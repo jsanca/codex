@@ -1,7 +1,12 @@
 package codex.codex.api.model.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
+import codex.codex.api.model.command.UnpublishContentItemCommand;
+import codex.codex.api.model.command.UpdateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeKey;
@@ -60,6 +65,69 @@ public interface ContentItemService {
      * @return immutable list of all content items; never null
      */
     List<ContentItem> findAll(Actor actor);
+
+    /**
+     * Updates the field values on the current working revision of a content item.
+     * <p>
+     * Validates the new values against the version recorded on the item. Throws if the
+     * item does not exist or if unknown or missing required fields are detected.
+     *
+     * @param command the update command; must not be null
+     * @param actor   the acting user; must not be null
+     * @return the content item with updated metadata
+     */
+    ContentItem update(UpdateContentItemCommand command, Actor actor);
+
+    /**
+     * Archives a content item, transitioning it to {@code ARCHIVED} status.
+     * <p>
+     * Valid source states are {@code DRAFT} and {@code PUBLISHED}. If the item is
+     * {@code PUBLISHED}, its publication state is cleared as part of the transition.
+     * Throws if the item does not exist or is already {@code ARCHIVED}.
+     *
+     * @param command the archive command; must not be null
+     * @param actor   the acting user; must not be null
+     * @return the content item with updated status
+     */
+    ContentItem archive(ArchiveContentItemCommand command, Actor actor);
+
+    /**
+     * Unpublishes a content item, reverting it from {@code PUBLISHED} back to {@code DRAFT}.
+     * <p>
+     * Clears the item's {@code currentPublishedRevisionId} and reverts the formerly-published
+     * revision to {@code WORKING} status. Throws if the item does not exist or is not currently
+     * in {@code PUBLISHED} status.
+     *
+     * @param command the unpublish command; must not be null
+     * @param actor   the acting user; must not be null
+     * @return the content item with updated status
+     */
+    ContentItem unpublish(UnpublishContentItemCommand command, Actor actor);
+
+    /**
+     * Permanently deletes a content item and its identity from storage.
+     * <p>
+     * Only items in {@code ARCHIVED} status may be deleted. After deletion,
+     * {@code findByKey} returns empty for the same identity.
+     * Throws if the item does not exist or is not currently {@code ARCHIVED}.
+     *
+     * @param command the delete command; must not be null
+     * @param actor   the acting user; must not be null
+     */
+    void delete(DeleteContentItemCommand command, Actor actor);
+
+    /**
+     * Restores a content item from {@code ARCHIVED} status back to {@code DRAFT}.
+     * <p>
+     * The item becomes editable again; it is not automatically republished.
+     * {@code currentPublishedRevisionId} remains empty after the restore.
+     * Throws if the item does not exist or is not currently {@code ARCHIVED}.
+     *
+     * @param command the restore command; must not be null
+     * @param actor   the acting user; must not be null
+     * @return the content item with {@code DRAFT} status
+     */
+    ContentItem restore(RestoreContentItemCommand command, Actor actor);
 
     /**
      * Publishes the current working revision of a content item.

@@ -1,7 +1,10 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.value.ContentRevisionStatus;
 import codex.codex.api.model.entity.ContentItem;
@@ -741,6 +744,157 @@ class CodexContentItemServiceTest {
         assertThrows(NullPointerException.class,
                 () -> service.publish(
                         PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        null));
+    }
+
+    // -------------------------------------------------------------------------
+    // restore
+    // -------------------------------------------------------------------------
+
+    @Test
+    void restoreArchivedDraftReturnsItemToDraftAndRevisionToWorking() {
+        final ContentItem draft = createDraftItem();
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem restored = service.restore(
+                RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(ContentItemStatus.DRAFT, restored.status());
+        assertNull(restored.currentPublishedRevisionId());
+
+        final ContentRevision working = revisionRepository.findById(restored.currentWorkingRevisionId()).orElseThrow();
+        assertEquals(ContentRevisionStatus.WORKING, working.status());
+    }
+
+    @Test
+    void restorePublishedThenArchivedItemReturnsItemToDraftAndRevisionToWorking() {
+        createDraftItem();
+        service.publish(PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem restored = service.restore(
+                RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(ContentItemStatus.DRAFT, restored.status());
+        assertNull(restored.currentPublishedRevisionId());
+
+        final ContentRevision working = revisionRepository.findById(restored.currentWorkingRevisionId()).orElseThrow();
+        assertEquals(ContentRevisionStatus.WORKING, working.status());
+    }
+
+    @Test
+    void restoredItemCanBePublishedAgain() {
+        createDraftItem();
+        service.publish(PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        service.restore(RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final ContentItem republished = service.publish(
+                PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertEquals(ContentItemStatus.PUBLISHED, republished.status());
+        assertNotNull(republished.currentPublishedRevisionId());
+    }
+
+    @Test
+    void restoreRejectsDraftItem() {
+        createDraftItem();
+        assertThrows(InvalidContentItemRestoreException.class,
+                () -> service.restore(
+                        RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void restoreRejectsPublishedItem() {
+        createDraftItem();
+        service.publish(PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        assertThrows(InvalidContentItemRestoreException.class,
+                () -> service.restore(
+                        RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void restoreRejectsNullCommand() {
+        assertThrows(NullPointerException.class, () -> service.restore(null, ACTOR));
+    }
+
+    @Test
+    void restoreRejectsNullActor() {
+        createDraftItem();
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        assertThrows(NullPointerException.class,
+                () -> service.restore(
+                        RestoreContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        null));
+    }
+
+    // -------------------------------------------------------------------------
+    // delete
+    // -------------------------------------------------------------------------
+
+    @Test
+    void deleteArchivedItemRemovesItFromRepository() {
+        createDraftItem();
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        service.delete(DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        final Optional<ContentItem> found = service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR);
+        assertTrue(found.isEmpty(), "item must not be found after hard delete");
+    }
+
+    @Test
+    void deleteArchivedPublishedThenArchivedItemRemovesIt() {
+        createDraftItem();
+        service.publish(PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        service.delete(DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+
+        assertTrue(service.findByKey(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"), ACTOR).isEmpty());
+    }
+
+    @Test
+    void deleteRejectsDraftItem() {
+        createDraftItem();
+        assertThrows(InvalidContentItemDeleteException.class,
+                () -> service.delete(
+                        DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void deleteRejectsPublishedItem() {
+        createDraftItem();
+        service.publish(PublishContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        assertThrows(InvalidContentItemDeleteException.class,
+                () -> service.delete(
+                        DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
+                        ACTOR));
+    }
+
+    @Test
+    void deleteRejectsMissingItem() {
+        assertThrows(NotFoundException.class,
+                () -> service.delete(
+                        DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("ghost")),
+                        ACTOR));
+    }
+
+    @Test
+    void deleteRejectsNullCommand() {
+        assertThrows(NullPointerException.class, () -> service.delete(null, ACTOR));
+    }
+
+    @Test
+    void deleteRejectsNullActor() {
+        createDraftItem();
+        service.archive(ArchiveContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")), ACTOR);
+        assertThrows(NullPointerException.class,
+                () -> service.delete(
+                        DeleteContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post")),
                         null));
     }
 }

@@ -1,13 +1,24 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
+import codex.codex.api.model.command.UnpublishContentItemCommand;
+import codex.codex.api.model.command.UpdateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
+import codex.codex.api.model.event.ContentItemArchivedEvent;
 import codex.codex.api.model.event.ContentItemCreatedEvent;
+import codex.codex.api.model.event.ContentItemDeletedEvent;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
+import codex.codex.api.model.event.ContentItemRestoredEvent;
+import codex.codex.api.model.event.ContentItemUnpublishedEvent;
+import codex.codex.api.model.event.ContentItemUpdatedEvent;
 import codex.codex.api.model.service.ContentItemService;
 import codex.codex.api.model.value.ContentItemStatus;
 import codex.fundamentum.api.event.CodexEventDispatcher;
+import codex.fundamentum.api.exception.NotFoundException;
 import codex.fundamentum.api.model.Actor;
 
 import java.time.Clock;
@@ -59,6 +70,96 @@ public final class EventPublishingContentItemService implements ForwardingConten
 
         final ContentItem result = delegate.create(command, actor);
         eventDispatcher.dispatch(new ContentItemCreatedEvent(
+                result.id(),
+                result.siteKey(),
+                result.contentTypeKey(),
+                result.contentTypeVersionId(),
+                result.key(),
+                actor,
+                clock.instant()));
+        return result;
+    }
+
+    @Override
+    public ContentItem update(final UpdateContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final ContentItem result = delegate.update(command, actor);
+        eventDispatcher.dispatch(new ContentItemUpdatedEvent(
+                result.id(),
+                result.siteKey(),
+                result.contentTypeKey(),
+                result.contentTypeVersionId(),
+                result.key(),
+                actor,
+                clock.instant()));
+        return result;
+    }
+
+    @Override
+    public void delete(final DeleteContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final ContentItem item = delegate.findByKey(
+                command.siteKey(), command.contentTypeKey(), command.key(), actor)
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        delegate.delete(command, actor);
+
+        eventDispatcher.dispatch(new ContentItemDeletedEvent(
+                item.id(),
+                item.siteKey(),
+                item.contentTypeKey(),
+                item.contentTypeVersionId(),
+                item.key(),
+                actor,
+                clock.instant()));
+    }
+
+    @Override
+    public ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final ContentItem result = delegate.restore(command, actor);
+        eventDispatcher.dispatch(new ContentItemRestoredEvent(
+                result.id(),
+                result.siteKey(),
+                result.contentTypeKey(),
+                result.contentTypeVersionId(),
+                result.key(),
+                actor,
+                clock.instant()));
+        return result;
+    }
+
+    @Override
+    public ContentItem archive(final ArchiveContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final ContentItem result = delegate.archive(command, actor);
+        eventDispatcher.dispatch(new ContentItemArchivedEvent(
+                result.id(),
+                result.siteKey(),
+                result.contentTypeKey(),
+                result.contentTypeVersionId(),
+                result.key(),
+                actor,
+                clock.instant()));
+        return result;
+    }
+
+    @Override
+    public ContentItem unpublish(final UnpublishContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        final ContentItem result = delegate.unpublish(command, actor);
+        eventDispatcher.dispatch(new ContentItemUnpublishedEvent(
                 result.id(),
                 result.siteKey(),
                 result.contentTypeKey(),

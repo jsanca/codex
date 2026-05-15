@@ -1,7 +1,12 @@
 package codex.codex.internal.service;
 
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
+import codex.codex.api.model.command.DeleteContentItemCommand;
 import codex.codex.api.model.command.PublishContentItemCommand;
+import codex.codex.api.model.command.RestoreContentItemCommand;
+import codex.codex.api.model.command.UnpublishContentItemCommand;
+import codex.codex.api.model.command.UpdateContentItemCommand;
 import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentRevision;
 import codex.codex.api.model.entity.ContentType;
@@ -180,6 +185,187 @@ public final class CodexContentItemService implements ContentItemService {
 
         LOGGER.debug("Finding all content items by actor: {}", actor);
         return repository.findAll();
+    }
+
+    @Override
+    public ContentItem update(final UpdateContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Updating content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        final ContentTypeVersion version = findVersionRequired(item.contentTypeVersionId());
+        validateValues(command.values(), version, command.contentTypeKey());
+
+        final ContentRevision working = revisionRepository.findById(item.currentWorkingRevisionId())
+                .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
+                        + item.currentWorkingRevisionId().value()));
+
+        final ContentRevision updatedRevision = ContentRevision.copyOf(working)
+                .values(command.values())
+                .build();
+        revisionRepository.save(updatedRevision);
+
+        final ContentItem updatedItem = ContentItem.copyOf(item)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build();
+        final ContentItem saved = repository.save(updatedItem);
+
+        LOGGER.info("Updated content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        return saved;
+    }
+
+    @Override
+    public ContentItem archive(final ArchiveContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Archiving content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        if (item.status() == ContentItemStatus.ARCHIVED) {
+            throw new InvalidContentItemArchiveException(item.key(),
+                    "item is already ARCHIVED");
+        }
+
+        final ContentItem.Builder builder = ContentItem.copyOf(item)
+                .status(ContentItemStatus.ARCHIVED)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant());
+
+        if (item.status() == ContentItemStatus.PUBLISHED && item.currentPublishedRevisionId() != null) {
+            final ContentRevision published = revisionRepository.findById(item.currentPublishedRevisionId())
+                    .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
+                            + item.currentPublishedRevisionId().value()));
+            final ContentRevision reverted = ContentRevision.copyOf(published)
+                    .status(ContentRevisionStatus.ARCHIVED)
+                    .build();
+            revisionRepository.save(reverted);
+            builder.currentPublishedRevisionId(null);
+        }
+
+        final ContentItem saved = repository.save(builder.build());
+
+        LOGGER.info("Archived content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        return saved;
+    }
+
+    @Override
+    public void delete(final DeleteContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Deleting content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        if (item.status() != ContentItemStatus.ARCHIVED) {
+            throw new InvalidContentItemDeleteException(item.key(),
+                    "item is not ARCHIVED (current status: " + item.status() + ")");
+        }
+
+        repository.deleteByKey(command.siteKey(), command.contentTypeKey(), command.key());
+
+        LOGGER.info("Deleted content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+    }
+
+    @Override
+    public ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Restoring content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        if (item.status() != ContentItemStatus.ARCHIVED) {
+            throw new InvalidContentItemRestoreException(item.key(),
+                    "item is not ARCHIVED (current status: " + item.status() + ")");
+        }
+
+        final ContentRevision working = revisionRepository.findById(item.currentWorkingRevisionId())
+                .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
+                        + item.currentWorkingRevisionId().value()));
+
+        if (working.status() == ContentRevisionStatus.ARCHIVED) {
+            revisionRepository.save(ContentRevision.copyOf(working)
+                    .status(ContentRevisionStatus.WORKING)
+                    .build());
+        }
+
+        final ContentItem restored = ContentItem.copyOf(item)
+                .status(ContentItemStatus.DRAFT)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build();
+
+        final ContentItem saved = repository.save(restored);
+
+        LOGGER.info("Restored content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        return saved;
+    }
+
+    @Override
+    public ContentItem unpublish(final UnpublishContentItemCommand command, final Actor actor) {
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+
+        LOGGER.debug("Unpublishing content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        final ContentItem item = repository.findByKey(command.siteKey(), command.contentTypeKey(), command.key())
+                .orElseThrow(() -> new NotFoundException("ContentItem not found: "
+                        + command.siteKey() + "/" + command.contentTypeKey() + "/" + command.key()));
+
+        if (item.status() != ContentItemStatus.PUBLISHED) {
+            throw new InvalidContentItemUnpublishException(item.key(),
+                    "item is not PUBLISHED (current status: " + item.status() + ")");
+        }
+
+        final ContentRevision published = revisionRepository.findById(item.currentPublishedRevisionId())
+                .orElseThrow(() -> new NotFoundException("ContentRevision not found: "
+                        + item.currentPublishedRevisionId().value()));
+
+        final ContentRevision reverted = ContentRevision.copyOf(published)
+                .status(ContentRevisionStatus.WORKING)
+                .build();
+        revisionRepository.save(reverted);
+
+        final ContentItem unpublished = ContentItem.copyOf(item)
+                .status(ContentItemStatus.DRAFT)
+                .currentPublishedRevisionId(null)
+                .updatedBy(actor.id())
+                .updatedAt(clock.instant())
+                .build();
+        final ContentItem saved = repository.save(unpublished);
+
+        LOGGER.info("Unpublished content item {}/{}/{} by actor: {}",
+                command.siteKey(), command.contentTypeKey(), command.key(), actor);
+
+        return saved;
     }
 
     @Override
