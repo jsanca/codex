@@ -3,6 +3,7 @@ package codex.index.internal;
 import codex.codex.api.model.entity.ContentItem;
 import codex.index.api.runtime.IndexRuntime;
 import codex.codex.api.model.entity.ContentRevision;
+import codex.codex.api.model.event.ContentItemArchivedEvent;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
@@ -73,9 +74,9 @@ class IndexRuntimeTest {
     }
 
     @Test
-    void subscribersContainsOneSubscriber() {
+    void subscribersContainsFourSubscribers() {
         final IndexRuntime runtime = IndexRuntime.inMemory(stubReader());
-        assertEquals(1, runtime.subscribers().size());
+        assertEquals(4, runtime.subscribers().size());
     }
 
     @Test
@@ -166,6 +167,22 @@ class IndexRuntimeTest {
 
         assertEquals(1, writer.upserts().size(), "one index document should have been upserted");
         assertEquals("content-item:acme:blog-post:my-post", writer.upserts().get(0).id().value());
+    }
+
+    @Test
+    void runtimeSubscriberHandlesArchivedEventAndCallsDelete() {
+        final RecordingIndexWriter writer = new RecordingIndexWriter();
+        final IndexRuntime runtime = IndexRuntime.withWriter(stubReader(), writer);
+
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(runtime.subscribers());
+
+        dispatcher.dispatch(new ContentItemArchivedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY,
+                Actor.human(ACTOR_ID, "Test User"), NOW));
+
+        assertEquals(1, writer.deletes().size(), "one document id should have been deleted");
+        assertEquals("content-item:acme:blog-post:my-post", writer.deletes().get(0).value());
     }
 
     // --- private helpers ---

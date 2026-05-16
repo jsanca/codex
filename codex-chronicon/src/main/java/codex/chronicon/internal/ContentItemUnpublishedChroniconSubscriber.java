@@ -2,7 +2,6 @@ package codex.chronicon.internal;
 
 import codex.chronicon.api.AuditAction;
 import codex.chronicon.api.AuditRecord;
-import codex.chronicon.api.AuditRecordId;
 import codex.chronicon.api.AuditSubject;
 import codex.chronicon.api.ChroniconRepository;
 import codex.codex.api.model.event.ContentItemUnpublishedEvent;
@@ -46,12 +45,8 @@ public final class ContentItemUnpublishedChroniconSubscriber
                 event.siteKey(), event.contentTypeKey(), event.key());
 
         final AuditRecord record = AuditRecord.builder()
-                .id(AuditRecordId.of(
-                        "audit:content-item-unpublished:"
-                                + event.siteKey().value() + ":"
-                                + event.contentTypeKey().value() + ":"
-                                + event.key().value() + ":"
-                                + event.occurredAt().toEpochMilli()))
+                .id(AuditRecordIdGenerator.contentItemLifecycle(
+                        "unpublished", event.siteKey(), event.contentTypeKey(), event.key(), event.occurredAt()))
                 .action(AuditAction.UNPUBLISHED)
                 .subject(AuditSubject.of("content-item", event.id().value(), event.key().value()))
                 .actorId(event.actor().id())

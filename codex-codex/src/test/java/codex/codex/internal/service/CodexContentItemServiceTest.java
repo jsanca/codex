@@ -11,8 +11,10 @@ import codex.codex.api.model.entity.ContentItem;
 import codex.codex.api.model.entity.ContentType;
 import codex.codex.api.model.entity.ContentTypeVersion;
 import codex.codex.api.model.entity.Field;
+import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentTypeId;
+import codex.fundamentum.api.model.IdentityGenerator;
 import codex.codex.api.model.identity.ContentTypeKey;
 import codex.codex.api.model.identity.ContentTypeVersionId;
 import codex.codex.api.model.identity.FieldKey;
@@ -432,6 +434,24 @@ class CodexContentItemServiceTest {
                 CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
                         Map.of(TITLE_KEY, "Hello World")),
                 ACTOR));
+    }
+
+    @Test
+    void createUsesInjectedIdentityGenerator() {
+        setupActiveContentType(SITE_ACME, BLOG_POST);
+        final ContentItemId fixedId = ContentItemId.of("fixed-id-123");
+        final IdentityGenerator<CreateContentItemCommand, ContentItemId> fixedGenerator =
+                command -> fixedId;
+        final CodexContentItemService custom = new CodexContentItemService(
+                itemRepository, revisionRepository, contentTypeRepository, versionRepository,
+                clock, fixedGenerator);
+
+        final ContentItem created = custom.create(
+                CreateContentItemCommand.of(SITE_ACME, BLOG_POST, ContentItemKey.of("my-post"),
+                        Map.of(TITLE_KEY, "Hello")),
+                ACTOR);
+
+        assertEquals(fixedId, created.id());
     }
 
     @Test

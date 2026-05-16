@@ -4,7 +4,7 @@ import codex.chronicon.api.AuditAction;
 import codex.chronicon.api.AuditRecord;
 import codex.chronicon.api.AuditSubject;
 import codex.chronicon.api.ChroniconRepository;
-import codex.codex.api.model.event.ContentItemRestoredEvent;
+import codex.codex.api.model.event.ContentItemDeletedEvent;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,45 +13,47 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Listens to {@link ContentItemRestoredEvent} and writes an {@link AuditRecord} to
+ * Listens to {@link ContentItemDeletedEvent} and writes an {@link AuditRecord} to
  * {@link ChroniconRepository}.
  *
- * <p>Relies only on event fields; does not reload the entity from a repository.</p>
+ * <p>Relies only on event fields; does not reload the entity from a repository.
+ * Reloading is intentionally impossible here: delete is a hard delete and the item
+ * has already been permanently removed from the repository by the time this event fires.</p>
  */
-public final class ContentItemRestoredChroniconSubscriber
-        implements CodexEventSubscriber<ContentItemRestoredEvent> {
+public final class ContentItemDeletedChroniconSubscriber
+        implements CodexEventSubscriber<ContentItemDeletedEvent> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ContentItemRestoredChroniconSubscriber.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ContentItemDeletedChroniconSubscriber.class);
 
     private final ChroniconRepository repository;
 
     /**
      * @param repository the audit repository; must not be null
      */
-    public ContentItemRestoredChroniconSubscriber(final ChroniconRepository repository) {
+    public ContentItemDeletedChroniconSubscriber(final ChroniconRepository repository) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
     }
 
     @Override
-    public Class<ContentItemRestoredEvent> eventType() {
-        return ContentItemRestoredEvent.class;
+    public Class<ContentItemDeletedEvent> eventType() {
+        return ContentItemDeletedEvent.class;
     }
 
     @Override
-    public void handle(final ContentItemRestoredEvent event) {
+    public void handle(final ContentItemDeletedEvent event) {
         Objects.requireNonNull(event, "event must not be null");
 
-        LOGGER.debug("Recording content item restored audit: siteKey={} contentTypeKey={} key={}",
+        LOGGER.debug("Recording content item deleted audit: siteKey={} contentTypeKey={} key={}",
                 event.siteKey(), event.contentTypeKey(), event.key());
 
         final AuditRecord record = AuditRecord.builder()
                 .id(AuditRecordIdGenerator.contentItemLifecycle(
-                        "restored", event.siteKey(), event.contentTypeKey(), event.key(), event.occurredAt()))
-                .action(AuditAction.RESTORED)
+                        "deleted", event.siteKey(), event.contentTypeKey(), event.key(), event.occurredAt()))
+                .action(AuditAction.DELETED)
                 .subject(AuditSubject.of("content-item", event.id().value(), event.key().value()))
                 .actorId(event.actor().id())
                 .occurredAt(event.occurredAt())
-                .summary("Restored content item " + event.key().value()
+                .summary("Deleted content item " + event.key().value()
                         + " in content type " + event.contentTypeKey().value())
                 .metadata(Map.of(
                         "siteKey", event.siteKey().value(),
@@ -64,6 +66,6 @@ public final class ContentItemRestoredChroniconSubscriber
         repository.save(record);
 
         LOGGER.info("Audit record saved: siteKey={} contentTypeKey={} key={} action={}",
-                event.siteKey(), event.contentTypeKey(), event.key(), AuditAction.RESTORED);
+                event.siteKey(), event.contentTypeKey(), event.key(), AuditAction.DELETED);
     }
 }

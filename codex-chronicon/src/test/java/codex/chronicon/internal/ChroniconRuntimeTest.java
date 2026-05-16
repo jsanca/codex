@@ -4,6 +4,7 @@ import codex.chronicon.api.ChroniconRepository;
 import codex.chronicon.api.runtime.ChroniconRuntime;
 import codex.codex.api.model.event.ContentItemArchivedEvent;
 import codex.codex.api.model.event.ContentItemCreatedEvent;
+import codex.codex.api.model.event.ContentItemDeletedEvent;
 import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.event.ContentItemRestoredEvent;
 import codex.codex.api.model.event.ContentItemUnpublishedEvent;
@@ -77,9 +78,9 @@ class ChroniconRuntimeTest {
     }
 
     @Test
-    void subscribersContainsEightSubscribers() {
+    void subscribersContainsNineSubscribers() {
         final ChroniconRuntime runtime = ChroniconRuntime.inMemory();
-        assertEquals(8, runtime.subscribers().size());
+        assertEquals(9, runtime.subscribers().size());
     }
 
     @Test
@@ -104,10 +105,10 @@ class ChroniconRuntimeTest {
     }
 
     @Test
-    void withRepositoryAlsoExposesEightSubscribers() {
+    void withRepositoryAlsoExposesNineSubscribers() {
         final RecordingChroniconRepository recording = new RecordingChroniconRepository();
         final ChroniconRuntime runtime = ChroniconRuntime.withRepository(recording);
-        assertEquals(8, runtime.subscribers().size());
+        assertEquals(9, runtime.subscribers().size());
     }
 
     // --- close ---
@@ -143,9 +144,11 @@ class ChroniconRuntimeTest {
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
         dispatcher.dispatch(new ContentItemRestoredEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentItemDeletedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
 
-        assertEquals(8, recording.savedRecords().size(),
-                "all eight events should produce audit records");
+        assertEquals(9, recording.savedRecords().size(),
+                "all nine events should produce audit records");
     }
 
     @Test

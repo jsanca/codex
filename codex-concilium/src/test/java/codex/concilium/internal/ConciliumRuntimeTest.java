@@ -100,8 +100,8 @@ class ConciliumRuntimeTest {
     @Test
     void subscribersContainsIndexAndChroniconSubscribers() {
         final ConciliumRuntime runtime = ConciliumRuntime.inMemory();
-        // 1 from IndexRuntime + 8 from ChroniconRuntime
-        assertEquals(9, runtime.subscribers().size());
+        // 4 from IndexRuntime + 9 from ChroniconRuntime
+        assertEquals(13, runtime.subscribers().size());
     }
 
     @Test

@@ -30,6 +30,7 @@ import codex.codex.internal.repository.ContentTypeRepository;
 import codex.codex.internal.repository.ContentTypeVersionRepository;
 import codex.fundamentum.api.exception.NotFoundException;
 import codex.fundamentum.api.model.Actor;
+import codex.fundamentum.api.model.IdentityGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,9 +67,10 @@ public final class CodexContentItemService implements ContentItemService {
     private final ContentTypeRepository contentTypeRepository;
     private final ContentTypeVersionRepository contentTypeVersionRepository;
     private final Clock clock;
+    private final IdentityGenerator<CreateContentItemCommand, ContentItemId> identityGenerator;
 
     /**
-     * Creates a new {@link CodexContentItemService}.
+     * Creates a new {@link CodexContentItemService} using the default identity generator.
      *
      * @param repository                   the content item repository; must not be null
      * @param revisionRepository           the content revision repository; must not be null
@@ -81,11 +83,32 @@ public final class CodexContentItemService implements ContentItemService {
                                     final ContentTypeRepository contentTypeRepository,
                                     final ContentTypeVersionRepository contentTypeVersionRepository,
                                     final Clock clock) {
+        this(repository, revisionRepository, contentTypeRepository, contentTypeVersionRepository,
+                clock, new ContentItemIdentityGenerator());
+    }
+
+    /**
+     * Creates a new {@link CodexContentItemService} with a custom identity generator.
+     *
+     * @param repository                   the content item repository; must not be null
+     * @param revisionRepository           the content revision repository; must not be null
+     * @param contentTypeRepository        the content type repository; must not be null
+     * @param contentTypeVersionRepository the content type version repository; must not be null
+     * @param clock                        the clock for timestamp generation; must not be null
+     * @param identityGenerator            the identity generator for new content items; must not be null
+     */
+    public CodexContentItemService(final ContentItemRepository repository,
+                                    final ContentRevisionRepository revisionRepository,
+                                    final ContentTypeRepository contentTypeRepository,
+                                    final ContentTypeVersionRepository contentTypeVersionRepository,
+                                    final Clock clock,
+                                    final IdentityGenerator<CreateContentItemCommand, ContentItemId> identityGenerator) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.revisionRepository = Objects.requireNonNull(revisionRepository, "revisionRepository must not be null");
         this.contentTypeRepository = Objects.requireNonNull(contentTypeRepository, "contentTypeRepository must not be null");
         this.contentTypeVersionRepository = Objects.requireNonNull(contentTypeVersionRepository, "contentTypeVersionRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.identityGenerator = Objects.requireNonNull(identityGenerator, "identityGenerator must not be null");
     }
 
     @Override
@@ -109,7 +132,7 @@ public final class CodexContentItemService implements ContentItemService {
 
         validateValues(command.values(), version, command.contentTypeKey());
 
-        final ContentItemId itemId = ContentItemId.forItem(command.siteKey(), command.contentTypeKey(), command.key());
+        final ContentItemId itemId = identityGenerator.nextIdentity(command);
         final ContentRevisionId revisionId = ContentRevisionId.forRevision(
                 command.siteKey(), command.contentTypeKey(), command.key(), 1);
         final Instant now = clock.instant();

@@ -39,10 +39,8 @@ public final class ContentItemIndexDocumentMapper {
         Objects.requireNonNull(revision, "revision must not be null");
         validateConsistency(item, revision);
 
-        final IndexDocumentId docId = IndexDocumentId.of(
-                "content-item:" + item.siteKey().value()
-                        + ":" + item.contentTypeKey().value()
-                        + ":" + item.key().value());
+        final IndexDocumentId docId = IndexDocumentIds.contentItem(
+                item.siteKey(), item.contentTypeKey(), item.key());
 
         return IndexDocument.builder()
                 .id(docId)

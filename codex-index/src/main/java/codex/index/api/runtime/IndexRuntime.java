@@ -5,8 +5,11 @@ import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
 import codex.index.api.IndexWriter;
+import codex.index.internal.ContentItemArchivedIndexingSubscriber;
+import codex.index.internal.ContentItemDeletedIndexingSubscriber;
 import codex.index.internal.ContentItemIndexDocumentMapper;
 import codex.index.internal.ContentItemPublishedIndexingSubscriber;
+import codex.index.internal.ContentItemUnpublishedIndexingSubscriber;
 import codex.index.internal.NoOpIndexWriter;
 import codex.index.internal.ReaderContentItemProjectionSource;
 
@@ -132,7 +135,10 @@ public final class IndexRuntime implements CodexModuleRuntime {
                 new ReaderContentItemProjectionSource(projectionReader);
 
         return List.of(
-                new ContentItemPublishedIndexingSubscriber(source, indexWriter, new ContentItemIndexDocumentMapper())
+                new ContentItemPublishedIndexingSubscriber(source, indexWriter, new ContentItemIndexDocumentMapper()),
+                new ContentItemUnpublishedIndexingSubscriber(indexWriter),
+                new ContentItemArchivedIndexingSubscriber(indexWriter),
+                new ContentItemDeletedIndexingSubscriber(indexWriter)
         );
     }
 }
