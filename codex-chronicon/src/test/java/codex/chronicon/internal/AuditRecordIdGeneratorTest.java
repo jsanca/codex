@@ -20,6 +20,88 @@ class AuditRecordIdGeneratorTest {
     private static final ContentItemKey ITEM_KEY = ContentItemKey.of("my-post");
     private static final Instant NOW = Instant.parse("2026-05-01T10:00:00Z");
 
+    // --- siteLifecycle ---
+
+    @Test
+    void siteLifecycleGeneratesExpectedIdForStarted() {
+        final AuditRecordId id = AuditRecordIdGenerator.siteLifecycle("started", SITE_KEY, NOW);
+        assertEquals(
+                "audit:site-started:acme:" + NOW.toEpochMilli(),
+                id.value());
+    }
+
+    @Test
+    void siteLifecycleGeneratesExpectedIdForArchived() {
+        final AuditRecordId id = AuditRecordIdGenerator.siteLifecycle("archived", SITE_KEY, NOW);
+        assertEquals(
+                "audit:site-archived:acme:" + NOW.toEpochMilli(),
+                id.value());
+    }
+
+    @Test
+    void siteLifecycleRejectsNullAction() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.siteLifecycle(null, SITE_KEY, NOW));
+    }
+
+    @Test
+    void siteLifecycleRejectsNullSiteKey() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.siteLifecycle("started", null, NOW));
+    }
+
+    @Test
+    void siteLifecycleRejectsNullOccurredAt() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.siteLifecycle("started", SITE_KEY, null));
+    }
+
+    // --- contentTypeLifecycle ---
+
+    @Test
+    void contentTypeLifecycleGeneratesExpectedIdForActivated() {
+        final AuditRecordId id = AuditRecordIdGenerator.contentTypeLifecycle(
+                "activated", SITE_KEY, CT_KEY, NOW);
+        assertEquals(
+                "audit:content-type-activated:acme:blog-post:" + NOW.toEpochMilli(),
+                id.value());
+    }
+
+    @Test
+    void contentTypeLifecycleGeneratesExpectedIdForArchived() {
+        final AuditRecordId id = AuditRecordIdGenerator.contentTypeLifecycle(
+                "archived", SITE_KEY, CT_KEY, NOW);
+        assertEquals(
+                "audit:content-type-archived:acme:blog-post:" + NOW.toEpochMilli(),
+                id.value());
+    }
+
+    @Test
+    void contentTypeLifecycleRejectsNullAction() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.contentTypeLifecycle(null, SITE_KEY, CT_KEY, NOW));
+    }
+
+    @Test
+    void contentTypeLifecycleRejectsNullSiteKey() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.contentTypeLifecycle("activated", null, CT_KEY, NOW));
+    }
+
+    @Test
+    void contentTypeLifecycleRejectsNullContentTypeKey() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.contentTypeLifecycle("activated", SITE_KEY, null, NOW));
+    }
+
+    @Test
+    void contentTypeLifecycleRejectsNullOccurredAt() {
+        assertThrows(NullPointerException.class, () ->
+                AuditRecordIdGenerator.contentTypeLifecycle("activated", SITE_KEY, CT_KEY, null));
+    }
+
+    // --- contentItemLifecycle ---
+
     @Test
     void generatesExpectedIdForCreated() {
         final AuditRecordId id = AuditRecordIdGenerator.contentItemLifecycle(

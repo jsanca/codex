@@ -8,9 +8,15 @@ import codex.chronicon.internal.ContentItemPublishedChroniconSubscriber;
 import codex.chronicon.internal.ContentItemRestoredChroniconSubscriber;
 import codex.chronicon.internal.ContentItemUnpublishedChroniconSubscriber;
 import codex.chronicon.internal.ContentItemUpdatedChroniconSubscriber;
+import codex.chronicon.internal.ContentTypeActivatedChroniconSubscriber;
+import codex.chronicon.internal.ContentTypeArchivedChroniconSubscriber;
 import codex.chronicon.internal.ContentTypeCreatedChroniconSubscriber;
 import codex.chronicon.internal.MemoryChroniconRepository;
+import codex.chronicon.internal.SiteArchivedChroniconSubscriber;
 import codex.chronicon.internal.SiteCreatedChroniconSubscriber;
+import codex.chronicon.internal.SiteStartedChroniconSubscriber;
+import codex.chronicon.internal.SiteSuspendedChroniconSubscriber;
+import codex.chronicon.internal.SiteUnarchivedChroniconSubscriber;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
@@ -130,7 +136,13 @@ public final class ChroniconRuntime implements CodexModuleRuntime {
 
         return List.of(
                 new SiteCreatedChroniconSubscriber(repository),
+                new SiteStartedChroniconSubscriber(repository),
+                new SiteSuspendedChroniconSubscriber(repository),
+                new SiteArchivedChroniconSubscriber(repository),
+                new SiteUnarchivedChroniconSubscriber(repository),
                 new ContentTypeCreatedChroniconSubscriber(repository),
+                new ContentTypeActivatedChroniconSubscriber(repository),
+                new ContentTypeArchivedChroniconSubscriber(repository),
                 new ContentItemCreatedChroniconSubscriber(repository),
                 new ContentItemUpdatedChroniconSubscriber(repository),
                 new ContentItemPublishedChroniconSubscriber(repository),

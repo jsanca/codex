@@ -9,8 +9,15 @@ import codex.codex.api.model.event.ContentItemPublishedEvent;
 import codex.codex.api.model.event.ContentItemRestoredEvent;
 import codex.codex.api.model.event.ContentItemUnpublishedEvent;
 import codex.codex.api.model.event.ContentItemUpdatedEvent;
+import codex.codex.api.model.event.ContentTypeActivatedEvent;
+import codex.codex.api.model.event.ContentTypeArchivedEvent;
 import codex.codex.api.model.event.ContentTypeCreatedEvent;
+import codex.codex.api.model.value.ContentTypeStatus;
+import codex.codex.api.model.event.SiteArchivedEvent;
 import codex.codex.api.model.event.SiteCreatedEvent;
+import codex.codex.api.model.event.SiteStartedEvent;
+import codex.codex.api.model.event.SiteSuspendedEvent;
+import codex.codex.api.model.event.SiteUnarchivedEvent;
 import codex.codex.api.model.identity.ContentItemId;
 import codex.codex.api.model.identity.ContentItemKey;
 import codex.codex.api.model.identity.ContentRevisionId;
@@ -80,7 +87,7 @@ class ChroniconRuntimeTest {
     @Test
     void subscribersContainsNineSubscribers() {
         final ChroniconRuntime runtime = ChroniconRuntime.inMemory();
-        assertEquals(9, runtime.subscribers().size());
+        assertEquals(15, runtime.subscribers().size());
     }
 
     @Test
@@ -108,7 +115,7 @@ class ChroniconRuntimeTest {
     void withRepositoryAlsoExposesNineSubscribers() {
         final RecordingChroniconRepository recording = new RecordingChroniconRepository();
         final ChroniconRuntime runtime = ChroniconRuntime.withRepository(recording);
-        assertEquals(9, runtime.subscribers().size());
+        assertEquals(15, runtime.subscribers().size());
     }
 
     // --- close ---
@@ -131,7 +138,15 @@ class ChroniconRuntimeTest {
                 new LocalCodexEventDispatcher(runtime.subscribers());
 
         dispatcher.dispatch(new SiteCreatedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new SiteStartedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new SiteSuspendedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new SiteArchivedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new SiteUnarchivedEvent(SITE_ID, SITE_KEY, ACTOR, NOW));
         dispatcher.dispatch(new ContentTypeCreatedEvent(CT_ID, SITE_KEY, CT_KEY, ACTOR, NOW));
+        dispatcher.dispatch(new ContentTypeActivatedEvent(
+                CT_ID, SITE_KEY, CT_KEY, ContentTypeStatus.DRAFT, ContentTypeStatus.ACTIVE, ACTOR, NOW));
+        dispatcher.dispatch(new ContentTypeArchivedEvent(
+                CT_ID, SITE_KEY, CT_KEY, ContentTypeStatus.ACTIVE, ContentTypeStatus.ARCHIVED, ACTOR, NOW));
         dispatcher.dispatch(new ContentItemCreatedEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
         dispatcher.dispatch(new ContentItemUpdatedEvent(
@@ -147,8 +162,8 @@ class ChroniconRuntimeTest {
         dispatcher.dispatch(new ContentItemDeletedEvent(
                 ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, ACTOR, NOW));
 
-        assertEquals(9, recording.savedRecords().size(),
-                "all nine events should produce audit records");
+        assertEquals(15, recording.savedRecords().size(),
+                "all fifteen events should produce audit records");
     }
 
     @Test

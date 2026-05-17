@@ -1,5 +1,7 @@
 package codex.fundamentum.api.event;
 
+import codex.fundamentum.api.observance.Observance;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +29,14 @@ import java.util.Objects;
  * {@link codex.fundamentum.api.tx.TransactionContext}-aware delivery remains the responsibility
  * of {@code DeferredEventDispatcher}. Annotation-based subscriber discovery is future work.
  *
+ * <p>Metrics emitted per dispatch (via the provided {@link Observance}):
+ * <ul>
+ *   <li>{@code events.dispatched.{EventSimpleName}} — incremented once per {@link #dispatch} call</li>
+ *   <li>{@code subscribers.invoked.{SubscriberSimpleName}} — incremented per matching subscriber</li>
+ *   <li>{@code subscribers.duration.{SubscriberSimpleName}} — timed per matching subscriber (success and failure)</li>
+ *   <li>{@code subscribers.failed.{SubscriberSimpleName}} — incremented when a subscriber throws</li>
+ * </ul>
+ *
  * Note:
  * <pre>
  *     Subscribers are fixed at dispatcher construction time.
@@ -36,21 +46,37 @@ import java.util.Objects;
 public final class LocalCodexEventDispatcher implements CodexEventDispatcher {
 
     private final List<CodexEventSubscriber<? extends CodexEvent>> subscribers;
+    private final Observance observance;
 
     /**
-     * Creates a new {@code LocalCodexEventDispatcher} with the given subscribers.
+     * Creates a new {@code LocalCodexEventDispatcher} with the given subscribers and no-op observance.
      *
      * @param subscribers the subscribers to route events to; must not be null; must not contain null entries
      * @throws NullPointerException if {@code subscribers} is null or contains a null entry
      */
     public LocalCodexEventDispatcher(
             final Collection<? extends CodexEventSubscriber<? extends CodexEvent>> subscribers) {
+        this(subscribers, Observance.noop());
+    }
+
+    /**
+     * Creates a new {@code LocalCodexEventDispatcher} with the given subscribers and observance.
+     *
+     * @param subscribers the subscribers to route events to; must not be null; must not contain null entries
+     * @param observance  the observance for metrics collection; must not be null
+     * @throws NullPointerException if {@code subscribers}, any entry, or {@code observance} is null
+     */
+    public LocalCodexEventDispatcher(
+            final Collection<? extends CodexEventSubscriber<? extends CodexEvent>> subscribers,
+            final Observance observance) {
         Objects.requireNonNull(subscribers, "subscribers must not be null");
+        Objects.requireNonNull(observance, "observance must not be null");
         for (final var subscriber : subscribers) {
             Objects.requireNonNull(subscriber, "subscribers must not contain null entries");
             Objects.requireNonNull(subscriber.eventType(), "subscriber eventType must not be null");
         }
         this.subscribers = List.copyOf(subscribers);
+        this.observance = observance;
     }
 
     /**
@@ -62,6 +88,7 @@ public final class LocalCodexEventDispatcher implements CodexEventDispatcher {
     @Override
     public void dispatch(final CodexEvent event) {
         Objects.requireNonNull(event, "event must not be null");
+        observance.counter("events.dispatched." + event.getClass().getSimpleName()).increment();
         for (final CodexEventSubscriber<? extends CodexEvent> subscriber : subscribers) {
             if (subscriber.eventType().isInstance(event)) {
                 dispatchToSubscriber(subscriber, event);
@@ -72,6 +99,18 @@ public final class LocalCodexEventDispatcher implements CodexEventDispatcher {
     @SuppressWarnings("unchecked")
     private <E extends CodexEvent> void dispatchToSubscriber(
             final CodexEventSubscriber<E> subscriber, final CodexEvent event) {
-        subscriber.handle((E) event);
+        final String name = subscriberName(subscriber);
+        observance.counter("subscribers.invoked." + name).increment();
+        try {
+            observance.timer("subscribers.duration." + name).record(() -> subscriber.handle((E) event));
+        } catch (final RuntimeException ex) {
+            observance.counter("subscribers.failed." + name).increment();
+            throw ex;
+        }
+    }
+
+    private static String subscriberName(final CodexEventSubscriber<?> subscriber) {
+        final String name = subscriber.getClass().getSimpleName();
+        return name.isBlank() ? "anonymous" : name;
     }
 }

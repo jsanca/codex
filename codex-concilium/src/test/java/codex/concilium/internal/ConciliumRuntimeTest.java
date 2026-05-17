@@ -100,8 +100,8 @@ class ConciliumRuntimeTest {
     @Test
     void subscribersContainsIndexAndChroniconSubscribers() {
         final ConciliumRuntime runtime = ConciliumRuntime.inMemory();
-        // 4 from IndexRuntime + 9 from ChroniconRuntime
-        assertEquals(13, runtime.subscribers().size());
+        // 4 from IndexRuntime + 15 from ChroniconRuntime
+        assertEquals(19, runtime.subscribers().size());
     }
 
     @Test
@@ -236,9 +236,10 @@ class ConciliumRuntimeTest {
         assertFalse(concilium.coreRuntime().recordedEvents().isEmpty(),
                 "core event recorder should have captured events");
 
-        // Chronicon received: site created, content type created, content item created, content item published
+        // Chronicon received: site created, content type created, content type activated,
+        // content item created, content item published
         final List<AuditRecord> auditRecords = recordingRepo.findAll();
-        assertEquals(4, auditRecords.size(),
+        assertEquals(5, auditRecords.size(),
                 "chronicon should have one audit record per subscribed event type");
 
         // Index received content item published

@@ -1,5 +1,7 @@
 package codex.fundamentum.api.event;
 
+import codex.fundamentum.api.observance.InMemoryObservance;
+import codex.fundamentum.api.observance.Observance;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -147,5 +149,146 @@ class LocalCodexEventDispatcherTest {
     void dispatchWithEmptySubscriberListIsNoOp() {
         final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(List.of());
         assertDoesNotThrow(() -> dispatcher.dispatch(new AlphaEvent(Instant.now())));
+    }
+
+    // --- 10: default constructor uses noop observance (no metrics, no exception) ---
+
+    @Test
+    void defaultConstructorPathWorksWithoutObservance() {
+        final RecordingSubscriber<AlphaEvent> subscriber = new RecordingSubscriber<>(AlphaEvent.class);
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(List.of(subscriber));
+        assertDoesNotThrow(() -> dispatcher.dispatch(new AlphaEvent(Instant.now())));
+        assertEquals(1, subscriber.received().size());
+    }
+
+    @Test
+    void constructorRejectsNullObservance() {
+        assertThrows(NullPointerException.class,
+                () -> new LocalCodexEventDispatcher(List.of(), null));
+    }
+
+    // --- 11: observance — event dispatch counter ---
+
+    @Test
+    void dispatchingEventIncrementsEventsDispatchedCounter() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+
+        assertEquals(1, observance.counterValue("events.dispatched.AlphaEvent"));
+    }
+
+    @Test
+    void dispatchingEventTwiceIncrementsCounterTwice() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+
+        assertEquals(2, observance.counterValue("events.dispatched.AlphaEvent"));
+    }
+
+    @Test
+    void differentEventTypesUseDistinctCounters() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+        dispatcher.dispatch(new BetaEvent(Instant.now()));
+
+        assertEquals(1, observance.counterValue("events.dispatched.AlphaEvent"));
+        assertEquals(1, observance.counterValue("events.dispatched.BetaEvent"));
+    }
+
+    // --- 12: observance — subscriber invocation counter ---
+
+    @Test
+    void matchingSubscriberInvocationIncrementsSubscribersInvokedCounter() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final RecordingSubscriber<AlphaEvent> subscriber = new RecordingSubscriber<>(AlphaEvent.class);
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(subscriber), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+
+        assertEquals(1, observance.counterValue("subscribers.invoked.RecordingSubscriber"));
+    }
+
+    @Test
+    void nonMatchingSubscriberDoesNotIncrementInvokedCounter() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final RecordingSubscriber<BetaEvent> subscriber = new RecordingSubscriber<>(BetaEvent.class);
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(subscriber), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+
+        assertEquals(0, observance.counterValue("subscribers.invoked.RecordingSubscriber"));
+    }
+
+    // --- 13: observance — subscriber duration timer ---
+
+    @Test
+    void subscriberDurationCountIncrements() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final RecordingSubscriber<AlphaEvent> subscriber = new RecordingSubscriber<>(AlphaEvent.class);
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(subscriber), observance);
+
+        dispatcher.dispatch(new AlphaEvent(Instant.now()));
+
+        assertEquals(1, observance.timerCount("subscribers.duration.RecordingSubscriber"));
+    }
+
+    // --- 14: observance — subscriber failure counter ---
+
+    static final class FailingSubscriber implements CodexEventSubscriber<AlphaEvent> {
+        @Override
+        public Class<AlphaEvent> eventType() { return AlphaEvent.class; }
+
+        @Override
+        public void handle(final AlphaEvent event) {
+            throw new RuntimeException("intentional failure");
+        }
+    }
+
+    @Test
+    void failingSubscriberIncrementsSubscribersFailedCounter() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(new FailingSubscriber()), observance);
+
+        assertThrows(RuntimeException.class,
+                () -> dispatcher.dispatch(new AlphaEvent(Instant.now())));
+
+        assertEquals(1, observance.counterValue("subscribers.failed.FailingSubscriber"));
+    }
+
+    @Test
+    void failingSubscriberStillRecordsDuration() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(new FailingSubscriber()), observance);
+
+        assertThrows(RuntimeException.class,
+                () -> dispatcher.dispatch(new AlphaEvent(Instant.now())));
+
+        assertEquals(1, observance.timerCount("subscribers.duration.FailingSubscriber"));
+    }
+
+    @Test
+    void failingSubscriberExceptionStillPropagates() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final LocalCodexEventDispatcher dispatcher =
+                new LocalCodexEventDispatcher(List.of(new FailingSubscriber()), observance);
+
+        final RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> dispatcher.dispatch(new AlphaEvent(Instant.now())));
+        assertEquals("intentional failure", ex.getMessage());
     }
 }
