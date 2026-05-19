@@ -12,8 +12,10 @@ import codex.codex.api.model.value.ContentItemStatus;
 import codex.fundamentum.api.cache.CacheEntry;
 import codex.fundamentum.api.cache.CacheRegion;
 import codex.fundamentum.api.cache.ConcurrentMapCacheRegion;
+import codex.fundamentum.api.cache.ObservingCacheRegion;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
+import codex.fundamentum.api.observance.InMemoryObservance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -97,6 +99,22 @@ class ContentItemCreatedCacheInvalidationSubscriberTest {
     @Test
     void handleOnEmptyCacheDoesNotThrow() {
         assertDoesNotThrow(() -> subscriber.handle(buildEvent()));
+    }
+
+    // --- observance ---
+
+    @Test
+    void handleIncrementsEvictCounterOnObservingCache() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final ObservingCacheRegion<ContentItemCacheKey, ContentItem> observingCache =
+                new ObservingCacheRegion<>(new ConcurrentMapCacheRegion<>(), "contentItem", observance);
+        final ContentItemCreatedCacheInvalidationSubscriber observingSubscriber =
+                new ContentItemCreatedCacheInvalidationSubscriber(observingCache);
+
+        observingSubscriber.handle(buildEvent());
+
+        assertEquals(1L, observance.counterValue("cache.contentItem.evict"),
+                "subscriber must call evict once per event");
     }
 
     // --- helpers ---

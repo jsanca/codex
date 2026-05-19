@@ -214,7 +214,41 @@ sufficient for the MVP single-node deployment.
 
 ---
 
-## 8. Near-Future Implementation Plan
+## 8. Observance Phase 1 — Cache Metrics (Tasks 88–89)
+
+`ObservingCacheRegion<K, V>` (in `codex.fundamentum.api.cache`) is a `CacheRegion` decorator
+that records framework-neutral counters via `Observance`. It wraps any `CacheRegion`
+implementation without changing its semantics.
+
+**Counters recorded** (region name scoped, e.g. `contentItem`):
+
+| Metric name                            | When incremented                                        |
+|----------------------------------------|---------------------------------------------------------|
+| `cache.{region}.get.hit`               | `get` returned a cached entry                           |
+| `cache.{region}.get.miss`              | `get` returned empty (key not cached)                   |
+| `cache.{region}.getOrLoad.hit`         | `getOrLoad` returned a cached entry (loader not called) |
+| `cache.{region}.getOrLoad.miss`        | `getOrLoad` invoked the loader                          |
+| `cache.{region}.put`                   | `put` completed                                         |
+| `cache.{region}.evict`                 | `evict` completed                                       |
+| `cache.{region}.clear`                 | `clear` completed                                       |
+
+Counters are incremented only after the delegate operation succeeds. A loader or delegate that
+throws does not increment any counter.
+
+**Runtime wiring:** `CodexRuntime.assemble()` wraps the `ConcurrentMapCacheRegion` backing
+`CachingContentItemService` with `ObservingCacheRegion("contentItem", observance)`. The same
+reference is passed to all seven cache invalidation subscribers, so evict calls are observable
+through the same `Observance` instance.
+
+**Region name rule:** The `regionName` argument must be a stable, low-cardinality string
+— never a cache key, id, or any value derived from user input or request context.
+
+**Not in Phase 1:** TTL policies, histograms/percentiles, Caffeine stats integration,
+Micrometer/Prometheus/OpenTelemetry adapters, distributed cache metrics.
+
+---
+
+## 9. Near-Future Implementation Plan
 
 The recommended sequence once cache invalidation is explicitly tasked:
 
@@ -245,7 +279,7 @@ For each cache decorator task, the pattern will be:
 
 ---
 
-## 9. Future-Forward Topics
+## 10. Future-Forward Topics
 
 These belong to future tasks. Do not implement.
 
@@ -266,7 +300,7 @@ These belong to future tasks. Do not implement.
 
 ---
 
-## 10. Open Questions
+## 11. Open Questions
 
 These are not resolved here. Do not implement until a task explicitly addresses each one.
 

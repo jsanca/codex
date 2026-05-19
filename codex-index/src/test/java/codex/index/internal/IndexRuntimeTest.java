@@ -19,6 +19,7 @@ import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
+import codex.fundamentum.api.observance.InMemoryObservance;
 import codex.index.api.IndexWriter;
 import org.junit.jupiter.api.Test;
 
@@ -68,9 +69,9 @@ class IndexRuntimeTest {
     }
 
     @Test
-    void inMemoryUsesNoOpIndexWriter() {
+    void inMemoryIndexWriterIsObserved() {
         final IndexRuntime runtime = IndexRuntime.inMemory(stubReader());
-        assertInstanceOf(NoOpIndexWriter.class, runtime.indexWriter());
+        assertInstanceOf(ObservingIndexWriter.class, runtime.indexWriter());
     }
 
     @Test
@@ -100,10 +101,10 @@ class IndexRuntimeTest {
     }
 
     @Test
-    void withWriterUsesProvidedWriter() {
+    void withWriterIndexWriterIsObserved() {
         final RecordingIndexWriter writer = new RecordingIndexWriter();
         final IndexRuntime runtime = IndexRuntime.withWriter(stubReader(), writer);
-        assertSame(writer, runtime.indexWriter());
+        assertInstanceOf(ObservingIndexWriter.class, runtime.indexWriter());
     }
 
     // --- close ---
@@ -185,10 +186,92 @@ class IndexRuntimeTest {
         assertEquals("content-item:acme:blog-post:my-post", writer.deletes().get(0).value());
     }
 
+    // --- observance ---
+
+    @Test
+    void publishFlowIncrementsUpsertCalls() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final StubContentItemProjectionReader reader = new StubContentItemProjectionReader();
+        final RecordingIndexWriter writer = new RecordingIndexWriter();
+        final IndexRuntime runtime = IndexRuntime.withWriter(reader, writer, observance);
+
+        reader.saveItem(sampleItem());
+        reader.saveRevision(sampleRevision());
+
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(runtime.subscribers());
+        dispatcher.dispatch(new ContentItemPublishedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, REVISION_ID,
+                Actor.human(ACTOR_ID, "Test User"), NOW));
+
+        assertEquals(1, observance.counterValue("index.upsert.calls"));
+    }
+
+    @Test
+    void publishFlowRecordsUpsertDuration() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final StubContentItemProjectionReader reader = new StubContentItemProjectionReader();
+        final RecordingIndexWriter writer = new RecordingIndexWriter();
+        final IndexRuntime runtime = IndexRuntime.withWriter(reader, writer, observance);
+
+        reader.saveItem(sampleItem());
+        reader.saveRevision(sampleRevision());
+
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(runtime.subscribers());
+        dispatcher.dispatch(new ContentItemPublishedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY, REVISION_ID,
+                Actor.human(ACTOR_ID, "Test User"), NOW));
+
+        assertEquals(1, observance.timerCount("index.upsert.duration"));
+    }
+
+    @Test
+    void archiveFlowIncrementsDeleteCalls() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final RecordingIndexWriter writer = new RecordingIndexWriter();
+        final IndexRuntime runtime = IndexRuntime.withWriter(stubReader(), writer, observance);
+
+        final LocalCodexEventDispatcher dispatcher = new LocalCodexEventDispatcher(runtime.subscribers());
+        dispatcher.dispatch(new ContentItemArchivedEvent(
+                ITEM_ID, SITE_KEY, CT_KEY, CT_VERSION_ID, ITEM_KEY,
+                Actor.human(ACTOR_ID, "Test User"), NOW));
+
+        assertEquals(1, observance.counterValue("index.delete.calls"));
+    }
+
     // --- private helpers ---
 
     private static ContentItemProjectionReader stubReader() {
         return new StubContentItemProjectionReader();
+    }
+
+    private static ContentItem sampleItem() {
+        return ContentItem.builder()
+                .id(ITEM_ID)
+                .siteKey(SITE_KEY)
+                .contentTypeKey(CT_KEY)
+                .contentTypeVersionId(CT_VERSION_ID)
+                .key(ITEM_KEY)
+                .currentWorkingRevisionId(REVISION_ID)
+                .owner(ACTOR_ID)
+                .createdBy(ACTOR_ID)
+                .updatedBy(ACTOR_ID)
+                .updatedAt(NOW)
+                .build();
+    }
+
+    private static ContentRevision sampleRevision() {
+        return ContentRevision.builder()
+                .id(REVISION_ID)
+                .contentItemId(ITEM_ID)
+                .siteKey(SITE_KEY)
+                .contentTypeKey(CT_KEY)
+                .contentTypeVersionId(CT_VERSION_ID)
+                .contentItemKey(ITEM_KEY)
+                .revisionNumber(1)
+                .status(ContentRevisionStatus.PUBLISHED)
+                .values(Map.of(FieldKey.TITLE, "Hello World"))
+                .createdBy(ACTOR_ID)
+                .build();
     }
 
     // --- inner types ---

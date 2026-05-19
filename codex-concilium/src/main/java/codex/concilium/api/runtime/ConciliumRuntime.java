@@ -6,6 +6,7 @@ import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.event.LocalCodexEventDispatcher;
+import codex.fundamentum.api.observance.Observance;
 import codex.fundamentum.api.runtime.CodexModuleRuntime;
 import codex.index.api.runtime.IndexRuntime;
 import org.slf4j.Logger;
@@ -74,7 +75,8 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
     // --- factories ---
 
     /**
-     * Creates a fully wired in-memory runtime composing all three module runtimes.
+     * Creates a fully wired in-memory runtime composing all three module runtimes with
+     * no-op observance.
      *
      * <p>Uses a forwarding lambda to break the circular dependency between
      * {@code CodexRuntime} creation (which needs the module dispatcher) and
@@ -85,6 +87,31 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
      * @return a new, fully assembled {@code ConciliumRuntime}
      */
     public static ConciliumRuntime inMemory() {
+        return inMemory(Observance.noop());
+    }
+
+    /**
+     * Creates a fully wired in-memory runtime composing all three module runtimes,
+     * wiring the same {@link Observance} instance through the full event stack.
+     *
+     * <p>The provided {@code Observance} is passed to:</p>
+     * <ul>
+     *   <li>{@code DeferredEventDispatcher} — for deferred-event buffering and commit metrics</li>
+     *   <li>{@code LocalCodexEventDispatcher} (module dispatcher) — for dispatch and subscriber metrics</li>
+     *   <li>{@code IndexRuntime} / {@code ObservingIndexWriter} — for index upsert/delete metrics</li>
+     * </ul>
+     *
+     * <p>Uses a forwarding lambda to break the circular dependency between
+     * {@code CodexRuntime} creation (which needs the module dispatcher) and
+     * {@code IndexRuntime} creation (which needs the projection reader from
+     * {@code CodexRuntime}). The forwarding reference is set once before any
+     * service call can occur and is effectively fixed for the lifetime of the runtime.</p>
+     *
+     * @param observance the observance instance to wire through all layers; must not be null
+     * @return a new, fully assembled {@code ConciliumRuntime}
+     */
+    public static ConciliumRuntime inMemory(final Observance observance) {
+        Objects.requireNonNull(observance, "observance must not be null");
         LOGGER.info("Assembling ConciliumRuntime (in-memory)");
 
         // A forwarding dispatcher breaks the circular dependency:
@@ -93,15 +120,16 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
         final AtomicReference<CodexEventDispatcher> placeholder =
                 new AtomicReference<>(event -> {});
         final CodexRuntime core = CodexRuntime.inMemory(
-                event -> placeholder.get().dispatch(event));
+                event -> placeholder.get().dispatch(event), observance);
 
-        final IndexRuntime index = IndexRuntime.inMemory(core.contentItemProjectionReader());
+        final IndexRuntime index = IndexRuntime.inMemory(
+                core.contentItemProjectionReader(), observance);
         final ChroniconRuntime chronicon = ChroniconRuntime.inMemory();
 
         final List<CodexEventSubscriber<? extends CodexEvent>> allSubscribers =
                 buildSubscriberList(index, chronicon);
         final LocalCodexEventDispatcher moduleDispatcher =
-                new LocalCodexEventDispatcher(allSubscribers);
+                new LocalCodexEventDispatcher(allSubscribers, observance);
         placeholder.set(moduleDispatcher);
 
         LOGGER.info("ConciliumRuntime ready: {} subscribers wired", allSubscribers.size());

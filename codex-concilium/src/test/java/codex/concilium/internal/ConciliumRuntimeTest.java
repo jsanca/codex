@@ -9,6 +9,7 @@ import codex.chronicon.api.ChroniconRepository;
 import codex.chronicon.api.runtime.ChroniconRuntime;
 import codex.codex.api.model.command.ActivateContentTypeCommand;
 import codex.codex.api.model.command.AddContentTypeFieldCommand;
+import codex.codex.api.model.command.ArchiveContentItemCommand;
 import codex.codex.api.model.command.CreateContentItemCommand;
 import codex.codex.api.model.command.CreateContentTypeCommand;
 import codex.codex.api.model.command.CreateSiteCommand;
@@ -30,6 +31,8 @@ import codex.fundamentum.api.event.CodexEventSubscriber;
 import codex.fundamentum.api.event.LocalCodexEventDispatcher;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorId;
+import codex.fundamentum.api.observance.InMemoryObservance;
+import codex.fundamentum.api.observance.Observance;
 import codex.index.api.IndexDocument;
 import codex.index.api.IndexDocumentId;
 import codex.index.api.IndexWriter;
@@ -269,7 +272,127 @@ class ConciliumRuntimeTest {
         assertEquals("site", records.get(0).subject().type());
     }
 
+    // --- factory: inMemory(Observance) ---
+
+    @Test
+    void inMemoryWithObservanceCreatesRuntime() {
+        final ConciliumRuntime runtime = ConciliumRuntime.inMemory(new InMemoryObservance());
+        assertNotNull(runtime);
+    }
+
+    @Test
+    void inMemoryWithObservanceRejectsNull() {
+        assertThrows(NullPointerException.class, () -> ConciliumRuntime.inMemory((Observance) null));
+    }
+
+    // --- observance integration: publish flow ---
+
+    @Test
+    void publishFlowCapturesDispatchedImmediatelyMetric() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertTrue(observance.counterValue("deferred.events.dispatchedImmediately.ContentItemPublishedEvent") >= 1,
+                "DeferredEventDispatcher should record ContentItemPublishedEvent dispatched immediately (no tx)");
+    }
+
+    @Test
+    void publishFlowCapturesEventsDispatchedMetric() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertTrue(observance.counterValue("events.dispatched.ContentItemPublishedEvent") >= 1,
+                "LocalCodexEventDispatcher should record events.dispatched for ContentItemPublishedEvent");
+    }
+
+    @Test
+    void publishFlowCapturesSubscriberInvokedMetric() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertTrue(
+                observance.counterValue("subscribers.invoked.ContentItemPublishedIndexingSubscriber") >= 1,
+                "LocalCodexEventDispatcher should record subscribers.invoked for ContentItemPublishedIndexingSubscriber");
+    }
+
+    @Test
+    void publishFlowCapturesSubscriberDurationMetric() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertTrue(
+                observance.timerCount("subscribers.duration.ContentItemPublishedIndexingSubscriber") >= 1,
+                "LocalCodexEventDispatcher should time ContentItemPublishedIndexingSubscriber invocations");
+    }
+
+    @Test
+    void publishFlowCapturesIndexUpsertCalls() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertEquals(1, observance.counterValue("index.upsert.calls"),
+                "ObservingIndexWriter should record one upsert call for the published content item");
+    }
+
+    @Test
+    void publishFlowCapturesIndexUpsertDuration() {
+        final InMemoryObservance observance = runPublishFlow();
+        assertEquals(1, observance.timerCount("index.upsert.duration"),
+                "ObservingIndexWriter should time one upsert for the published content item");
+    }
+
+    // --- observance integration: archive flow ---
+
+    @Test
+    void archiveFlowCapturesIndexDeleteCalls() {
+        final InMemoryObservance observance = runPublishThenArchiveFlow();
+        assertEquals(1, observance.counterValue("index.delete.calls"),
+                "ObservingIndexWriter should record one delete call when content item is archived");
+    }
+
+    @Test
+    void archiveFlowCapturesIndexDeleteDuration() {
+        final InMemoryObservance observance = runPublishThenArchiveFlow();
+        assertEquals(1, observance.timerCount("index.delete.duration"),
+                "ObservingIndexWriter should time the delete call when content item is archived");
+    }
+
     // --- private helpers ---
+
+    private static InMemoryObservance runPublishFlow() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final ConciliumRuntime runtime = ConciliumRuntime.inMemory(observance);
+        setupAndPublish(runtime);
+        return observance;
+    }
+
+    private static InMemoryObservance runPublishThenArchiveFlow() {
+        final InMemoryObservance observance = new InMemoryObservance();
+        final ConciliumRuntime runtime = ConciliumRuntime.inMemory(observance);
+        setupAndPublish(runtime);
+        runtime.coreRuntime().contentItemService().archive(
+                ArchiveContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR);
+        return observance;
+    }
+
+    private static void setupAndPublish(final ConciliumRuntime runtime) {
+        runtime.coreRuntime().siteService().create(
+                CreateSiteCommand.of(SITE_KEY, "Acme"), ACTOR);
+
+        runtime.coreRuntime().contentTypeService().create(
+                CreateContentTypeCommand.of(SITE_KEY, CT_KEY, "Article"), ACTOR);
+
+        runtime.coreRuntime().contentTypeService().addField(
+                AddContentTypeFieldCommand.of(SITE_KEY, CT_KEY,
+                        Field.builder()
+                                .key(FieldKey.TITLE)
+                                .displayName("Title")
+                                .type(FieldType.TEXT)
+                                .required(true)
+                                .build()),
+                ACTOR);
+
+        runtime.coreRuntime().contentTypeService().activate(
+                ActivateContentTypeCommand.of(SITE_KEY, CT_KEY), ACTOR);
+
+        runtime.coreRuntime().contentItemService().create(
+                CreateContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY,
+                        Map.of(FieldKey.TITLE, "First Post")),
+                ACTOR);
+
+        runtime.coreRuntime().contentItemService().publish(
+                PublishContentItemCommand.of(SITE_KEY, CT_KEY, ITEM_KEY), ACTOR);
+    }
 
     private static ContentItemProjectionReader emptyProjectionReader() {
         return new EmptyContentItemProjectionReader();

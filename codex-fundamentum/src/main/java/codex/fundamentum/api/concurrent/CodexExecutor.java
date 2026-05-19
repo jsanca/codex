@@ -2,6 +2,8 @@ package codex.fundamentum.api.concurrent;
 
 import codex.fundamentum.internal.concurrent.BoundedVirtualCodexExecutor;
 
+import java.time.Duration;
+
 /**
  * Submits tasks for asynchronous execution on virtual threads with bounded concurrency.
  *
@@ -12,7 +14,7 @@ import codex.fundamentum.internal.concurrent.BoundedVirtualCodexExecutor;
  * threads.</p>
  *
  * <p>Obtain an instance via {@link #of(CodexExecutorConfig)}.
- * Call {@link #shutdown()} when the executor is no longer needed.</p>
+ * Call {@link #shutdown()} or {@link #shutdownNow()} when the executor is no longer needed.</p>
  *
  * @author jsanca &amp; clio
  */
@@ -28,9 +30,26 @@ public interface CodexExecutor {
 
     /**
      * Initiates a graceful shutdown: no new tasks are accepted, and tasks already
-     * submitted are allowed to complete.
+     * submitted (including those parked on a concurrency permit) are allowed to complete.
      */
     void shutdown();
+
+    /**
+     * Initiates an immediate shutdown: no new tasks are accepted, and virtual threads
+     * waiting on a concurrency permit are interrupted. Running tasks may also be interrupted
+     * depending on the underlying executor policy.
+     */
+    void shutdownNow();
+
+    /**
+     * Waits until all submitted tasks have completed, the timeout expires, or the calling
+     * thread is interrupted.
+     *
+     * @param timeout maximum time to wait; must not be null
+     * @return {@code true} if the executor terminated within the timeout; {@code false} if
+     *         the timeout elapsed before termination
+     */
+    boolean awaitTermination(Duration timeout);
 
     /**
      * Creates a {@link CodexExecutor} backed by virtual threads, bounded by the given config.

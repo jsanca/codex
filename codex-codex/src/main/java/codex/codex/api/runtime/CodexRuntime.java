@@ -28,13 +28,19 @@ import codex.codex.internal.service.EventPublishingContentItemService;
 import codex.codex.internal.service.EventPublishingContentTypeService;
 import codex.codex.internal.service.EventPublishingSiteService;
 import codex.codex.internal.service.SiteIdentityGenerator;
+import codex.codex.internal.service.TimedContentItemService;
+import codex.codex.internal.service.TimedContentTypeService;
+import codex.codex.internal.service.TimedSiteService;
+import codex.fundamentum.api.cache.CacheRegion;
 import codex.fundamentum.api.cache.ConcurrentMapCacheRegion;
+import codex.fundamentum.api.cache.ObservingCacheRegion;
 import codex.fundamentum.api.concurrent.CodexExecutor;
 import codex.fundamentum.api.concurrent.CodexExecutorConfig;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CompositeCodexEventDispatcher;
 import codex.fundamentum.api.event.LocalCodexEventDispatcher;
+import codex.fundamentum.api.observance.Observance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,6 +117,22 @@ public final class CodexRuntime implements AutoCloseable {
     }
 
     /**
+     * Creates a fully wired in-memory runtime with service and deferred-event metrics
+     * captured via the provided {@link Observance}.
+     *
+     * <p>Uses a no-op external event dispatcher — module subscribers (indexing, chronicon)
+     * are not wired. For full module composition with observance, see
+     * {@code ConciliumRuntime.inMemory(Observance)}.</p>
+     *
+     * @param observance observance for service-level and deferred-event metrics; must not be null
+     * @return a new runtime instance; call {@link #shutdown()} when done
+     */
+    public static CodexRuntime inMemory(final Observance observance) {
+        Objects.requireNonNull(observance, "observance must not be null");
+        return inMemory(event -> {}, observance);
+    }
+
+    /**
      * Creates a fully wired in-memory runtime that routes domain events to the provided
      * external dispatcher after the internal {@code EventRecorder}.
      *
@@ -123,12 +145,35 @@ public final class CodexRuntime implements AutoCloseable {
      * @return a new runtime instance; call {@link #shutdown()} when done
      */
     public static CodexRuntime inMemory(final CodexEventDispatcher externalDispatcher) {
-        Objects.requireNonNull(externalDispatcher, "externalDispatcher must not be null");
-        LOGGER.info("Starting CodexRuntime (in-memory)");
-        return assemble(externalDispatcher);
+        return inMemory(externalDispatcher, Observance.noop());
     }
 
-    private static CodexRuntime assemble(final CodexEventDispatcher externalDispatcher) {
+    /**
+     * Creates a fully wired in-memory runtime that routes domain events to the provided
+     * external dispatcher, and captures deferred-dispatch metrics using the provided
+     * {@link Observance}.
+     *
+     * <p>Intended for use by {@code codex-concilium} when a single {@code Observance}
+     * instance should observe both the core deferred-dispatch pipeline and the module
+     * subscriber layer.</p>
+     *
+     * @param externalDispatcher the dispatcher to receive all domain events after recording;
+     *                           must not be null
+     * @param observance         observance for deferred-event metrics; must not be null
+     * @return a new runtime instance; call {@link #shutdown()} when done
+     */
+    public static CodexRuntime inMemory(
+            final CodexEventDispatcher externalDispatcher,
+            final Observance observance) {
+        Objects.requireNonNull(externalDispatcher, "externalDispatcher must not be null");
+        Objects.requireNonNull(observance, "observance must not be null");
+        LOGGER.info("Starting CodexRuntime (in-memory)");
+        return assemble(externalDispatcher, observance);
+    }
+
+    private static CodexRuntime assemble(
+            final CodexEventDispatcher externalDispatcher,
+            final Observance observance) {
         final Clock clock = Clock.systemUTC();
 
         // --- repositories ---
@@ -146,8 +191,8 @@ public final class CodexRuntime implements AutoCloseable {
         final CodexExecutor asyncExecutor = CodexExecutor.of(CodexExecutorConfig.of(50));
 
         // --- content item cache ---
-        final ConcurrentMapCacheRegion<ContentItemCacheKey, ContentItem> contentItemCache =
-                new ConcurrentMapCacheRegion<>();
+        final CacheRegion<ContentItemCacheKey, ContentItem> contentItemCache =
+                new ObservingCacheRegion<>(new ConcurrentMapCacheRegion<>(), "contentItem", observance);
 
         final LocalCodexEventDispatcher cacheDispatcher = new LocalCodexEventDispatcher(List.of(
                 new ContentItemCreatedCacheInvalidationSubscriber(contentItemCache),
@@ -157,7 +202,7 @@ public final class CodexRuntime implements AutoCloseable {
                 new ContentItemArchivedCacheInvalidationSubscriber(contentItemCache),
                 new ContentItemRestoredCacheInvalidationSubscriber(contentItemCache),
                 new ContentItemDeletedCacheInvalidationSubscriber(contentItemCache)
-        ));
+        ), observance);
 
         // --- event pipeline assembly ---
         // Recording first: events are captured even if a subscriber fails.
@@ -166,24 +211,30 @@ public final class CodexRuntime implements AutoCloseable {
         final CompositeCodexEventDispatcher composite =
                 new CompositeCodexEventDispatcher(List.of(recorder, cacheDispatcher, externalDispatcher));
         final DeferredEventDispatcher deferredDispatcher =
-                new DeferredEventDispatcher(composite, asyncExecutor);
+                new DeferredEventDispatcher(composite, asyncExecutor, observance);
 
         // --- services ---
         final SiteIdentityGenerator siteIdentityGenerator = new SiteIdentityGenerator();
-        final SiteService siteService = new EventPublishingSiteService(
-                new CodexSiteService(siteRepository, clock, siteIdentityGenerator),
-                deferredDispatcher, clock);
+        final SiteService siteService = new TimedSiteService(
+                new EventPublishingSiteService(
+                        new CodexSiteService(siteRepository, clock, siteIdentityGenerator),
+                        deferredDispatcher, clock),
+                observance);
 
-        final ContentTypeService contentTypeService = new EventPublishingContentTypeService(
-                new CodexContentTypeService(contentTypeRepository, contentTypeVersionRepository, clock),
-                deferredDispatcher, clock);
+        final ContentTypeService contentTypeService = new TimedContentTypeService(
+                new EventPublishingContentTypeService(
+                        new CodexContentTypeService(contentTypeRepository, contentTypeVersionRepository, clock),
+                        deferredDispatcher, clock),
+                observance);
 
-        final ContentItemService contentItemService = new EventPublishingContentItemService(
-                new CachingContentItemService(
-                        new CodexContentItemService(contentItemRepository, revisionRepository,
-                                contentTypeRepository, contentTypeVersionRepository, clock),
-                        contentItemCache),
-                deferredDispatcher, clock);
+        final ContentItemService contentItemService = new TimedContentItemService(
+                new EventPublishingContentItemService(
+                        new CachingContentItemService(
+                                new CodexContentItemService(contentItemRepository, revisionRepository,
+                                        contentTypeRepository, contentTypeVersionRepository, clock),
+                                contentItemCache),
+                        deferredDispatcher, clock),
+                observance);
 
         return new CodexRuntime(siteService, contentTypeService, contentItemService,
                 projectionReader, deferredDispatcher, recorder, asyncExecutor, clock);

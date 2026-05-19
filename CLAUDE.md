@@ -1,409 +1,153 @@
 # CLAUDE.md — Codex Project Guide
 
-## What is Codex
+## Build & Test Commands
 
-Codex is a headless, multi-tenant, multi-language CMS designed as a disciplined modular monolith.
-It is not a page-centric CMS. The center is the domain: structured content, revision-aware lifecycle,
-workflow-driven operations, and extensibility points that allow the system to evolve without bloating the core.
-
-The system is organized around a lore-inspired module map:
-
-| Module                  | Responsibility                                      |
-|-------------------------|-----------------------------------------------------|
-| `codex-fundamentum`     | Foundational shared abstractions and base types     |
-| `codex-codex`           | Central domain/kernel: content model and lifecycle  |
-| `codex-chronicon`       | History, revision memory, publication narrative     |
-| `codex-archivum`        | Storage abstraction layer (pluggable)               |
-| `codex-index`           | Search and discoverability (pluggable)              |
-| `codex-scriptorium`     | Scripting runtime and dynamic customization         |
-| `codex-illuminarium`    | Enrichment and semantic enhancement                 |
-| `codex-porta`           | External exposure: REST, GraphQL, integrations      |
-| `codex-iter`            | Workflow and orchestration engine                   |
-| `codex-custos`          | Identity, roles, permissions, access control        |
-| `codex-imaginarium`     | AI integration infrastructure                       |
-| `codex-olorin`          | Agent-oriented reasoning (named after Gandalf's Maiar name) |
-
----
-
-## Architecture Principles
-
-### Modular Monolith with Jigsaw
-
-Codex uses Java Module System (Jigsaw). Every module has a `module-info.java`.
-
-- Public contracts live in `codex.<module>.api`
-- Implementation details live in `codex.<module>.internal`
-- Never expose internal packages in `module-info.java`
-- The goal: future extraction to microservices by swapping the binding behind the facade
-
-```
-module codex.codex {
-    requires transitive codex.fundamentum;
-    requires org.slf4j;
-    exports codex.codex.api;
-    exports codex.codex.api.model.identity;
-    exports codex.codex.api.model.value;
-    exports codex.codex.api.model.entity;
-}
+```bash
+mvn clean verify          # full build + tests (all modules)
+mvn test                   # run all tests
+mvn test -pl codex-codex   # run tests in one module
+mvn test -pl codex-codex -Dtest=CodexSiteServiceTest  # single test class
+mvn test -DskipTests       # compile only, skip tests
 ```
 
-### Core Must Stay Clean
+Test framework: **JUnit 5 + AssertJ**. ~1,240 tests across 5 modules. No CI workflows exist yet.
 
-`codex-codex` must not import:
-- Spring Boot, JPA, JDBC, HTTP, or any infrastructure framework
-- Persistence annotations or storage mappings
-- REST controllers or servlet concerns
-- Authentication mechanisms
+## Module Map
 
-Infrastructure belongs in adapters or runtime modules, never in the core.
+Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api` / `codex.<module>.internal` package split.
 
-### Decorator Pipeline for Cross-Cutting Concerns
+| Module                  | Responsibility                                      | Has Tests |
+|-------------------------|-----------------------------------------------------|-----------|
+| `codex-bom`             | Bill of Materials (version management)              | —         |
+| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor | ~192  |
+| `codex-codex`           | Central domain kernel: sites, content types, items, lifecycle | ~607 |
+| `codex-chronicon`       | Audit history, revision memory, event subscribers   | ~281      |
+| `codex-archivum`        | Storage abstraction (skeleton)                      | —         |
+| `codex-index`           | Search/indexing abstractions and subscribers        | ~130      |
+| `codex-concilium`       | Runtime composition: composes CodexRuntime + IndexRuntime + ChroniconRuntime | ~27 |
+| `codex-scriptorium`     | Scripting runtime (skeleton)                        | —         |
+| `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        | —         |
+| `codex-porta`           | REST/GraphQL exposure (skeleton)                    | —         |
+| `codex-iter`            | Workflow engine (skeleton)                          | —         |
+| `codex-custos`          | Identity, roles, permissions (skeleton)             | —         |
+| `codex-imaginarium`     | AI infrastructure (skeleton)                        | —         |
+| `codex-olorin`          | Agent reasoning (skeleton)                          | —         |
 
-Services grow through composition, not inheritance:
+**Dependency direction**: inward only. `codex-codex` depends only on `codex-fundamentum`. It must never depend on any other Codex module. `codex-concilium` composes module runtimes without making the core depend on projection/adapter modules.
 
-```
-TransactionalSiteService
-  -> LockingSiteService
-    -> AuditingSiteService
-      -> EventPublishingSiteService
-        -> CodexSiteService
-```
+## Architecture Rules
 
-Each decorator wraps the interface and adds one concern. The core service stays focused on business logic.
+### Core purity (`codex-codex` and `codex-fundamentum`)
+
+Must never import: Spring Boot, JPA, JDBC, HTTP, REST controllers, persistence annotations, or auth mechanisms. Infrastructure belongs in adapters or runtime modules.
+
+### Package conventions
+
+- Public contracts: `codex.<module>.api`
+- Implementation: `codex.<module>.internal`
+- Never export `internal` packages in `module-info.java`
+- Qualified exports (`exports X.internal.Y to codex.Z`) are accepted as controlled architectural debt
+
+### Decoration, not inheritance
+
+Services grow through decorator composition (e.g. `TransactionalSiteService -> LockingSiteService -> AuditingSiteService -> EventPublishingSiteService -> CodexSiteService`). Each wrapper adds one concern.
 
 ### Events vs Hooks
 
-- **Events** = facts that already happened (`SiteCreatedEvent`, `ContentItemPublished`)
-- **Hooks** = extension points around something happening (`beforeSave`, `afterPublish`)
+- **Events** = facts that already happened (`SiteCreatedEvent`, `ContentItemPublished`). Must implement `CodexEvent`.
+- **Hooks** = extension points around something happening (`beforeSave`, `afterPublish`). Keep them conceptually separate.
 
-Keep them conceptually separate. Both are first-class extensibility mechanisms.
+## Java Conventions
 
----
+### Target version
+Java 25. Prefer virtual threads, `ScopedValue` over `ThreadLocal`, primitives over wrappers.
 
-## Java Style and Coding Standards
+### Records and immutability
+Always use `record` for value objects, identities, commands, and events. Defensive copies (`List.copyOf()`, `Set.copyOf()`) on all collections received from outside.
 
-### Target: Java 25
+### Entity pattern
+Every non-trivial entity needs: `static Builder builder()`, `static Builder copyOf(T source)`, `static T of(...)` for simple types. Canonical constructors do validation.
 
-- Use Java 25 features where appropriate
-- Prefer **virtual threads** over platform threads
-- Use platform threads only when the task is CPU-bound and would waste a carrier thread
-- Use `ScopedValue` instead of `ThreadLocal` whenever possible
-
-### Immutability First
-
-- **Always prefer `record`** for domain objects, value objects, commands, events, and identities
-- Use `List.copyOf()`, `Map.copyOf()`, `Set.copyOf()` in canonical constructors
-- Defensive copies on all collections received from outside
-- Immutable objects do not need synchronization
-
-```java
-public record SiteKey(String value) {
-    public SiteKey {
-        Objects.requireNonNull(value, "site key cannot be null");
-        value = value.trim().toLowerCase();
-        if (value.isBlank()) throw new IllegalArgumentException("site key cannot be blank");
-    }
-
-    public static SiteKey of(final String value) {
-        return new SiteKey(value);
-    }
-}
-```
-
-### Builder + copyOf + from Pattern
-
-Every non-trivial entity or record should provide:
-- `static Builder builder()` — fluent construction
-- `static T copyOf(T source)` — returns a builder pre-populated from an existing instance
-- `static T from(...)` — named factory methods where semantically useful
-- `static T of(...)` — for simple value types
-
-```java
-public static Builder copyOf(final Site site) {
-    Objects.requireNonNull(site, "site cannot be null");
-    return builder()
-            .id(site.id())
-            .key(site.key())
-            .displayName(site.displayName())
-            .status(site.status());
-}
-```
-
-### Primitives Over Wrappers
-
-- Use `int`, `long`, `boolean`, `double` — not `Integer`, `Long`, `Boolean`, `Double`
-- Exception: when `null` is semantically meaningful or required by a generic type
-- This prepares the codebase for Project Valhalla and avoids the Object Tax
-
-### Interfaces Always
-
-- Every service must be an interface
-- Every repository must be an interface
-- Exception: utility classes (pure static methods, no state)
-- Composition over inheritance — use inheritance only when the real-world relationship is IS-A (e.g., `Animal → Dog`)
-
-### Naming
-
-- **No single-letter variable names** except `i` in for loops
-- Variable names must express intent: `siteKey`, `createSiteCommand`, `targetStatus`
-- Method names must express semantics: `findByKey`, `changeStatus`, `throwSiteAlreadyExistException`
-- Enum values when the domain has a closed set of states
-
-### Enums
-
-Use enums for:
-- Lifecycle statuses (`SiteStatus`, `EditorialState`, `ContentTypeVersionStatus`)
-- Field types (`FieldType`, `FieldConstraintType`)
-- Actor types (`ActorType`)
-- Any closed set of domain values
-
-### Validation
-
-- Validate at the boundary: constructors, command handlers, service entry points
-- Use `Objects.requireNonNull(value, "meaningful message")` for required references
-- Throw domain exceptions, not raw `IllegalArgumentException`, for state violations
-- Use `Optional<T>` when absence is a valid domain outcome (not for error signaling)
-
-```java
-public Site create(final CreateSiteCommand createSiteCommand, final Actor actor) {
-    Objects.requireNonNull(createSiteCommand, "createSiteCommand must not be null");
-    Objects.requireNonNull(actor, "actor must not be null");
-    // ...
-}
-```
-
-### Method Size
-
-- **Methods should not exceed ~20 lines of logic** (excluding log statements)
-- If a method grows beyond that, extract a well-named private method
-- Log statements are encouraged and do not count toward the limit
-
-### Logging
-
-- **Always log** at service boundaries and state transitions
-- Use `LOGGER.debug(...)` for operational detail
-- Use `LOGGER.info(...)` for significant state changes
-- Use `LOGGER.warn(...)` for recoverable anomalies
-- Use `LOGGER.error(...)` for failures
-- Logger must be `private static final` using SLF4J
-
-```java
-private static final Logger LOGGER = LoggerFactory.getLogger(CodexSiteService.class);
-```
-
-### JavaDoc
-
-- All public interfaces, records, and classes must have JavaDoc
-- Document intent, not implementation
-- Document parameters and return values for public methods
-- Keep JavaDoc in English
-
----
-
-## Domain Model Conventions
-
-### Identity Types
-
-Every entity has a strongly typed identity record. Pattern:
-
+### Identity types
 ```java
 public record SiteId(String value) {
-    public SiteId {
-        Objects.requireNonNull(value, "SiteId value cannot be null");
-        value = value.trim();
-        if (value.isBlank()) throw new IllegalArgumentException("SiteId value cannot be blank");
-    }
-    public static SiteId of(String value) { return new SiteId(value); }
-    public static SiteId generate() { return new SiteId(UUID.randomUUID().toString()); }
+    public SiteId { /* validate, trim */ }
+    public static SiteId of(String value) { ... }
+    public static SiteId generate() { ... }
 }
 ```
+Prefer deterministic identity (`UUID.nameUUIDFromBytes`) where possible.
 
-Prefer **deterministic identity** where possible (e.g., `UUID.nameUUIDFromBytes`):
+### Enums for closed sets
+Lifecycle statuses, field types, actor types — any domain concept with a fixed set of values.
 
-```java
-// SiteIdentityGenerator: same SiteKey always produces same SiteId
-final UUID uuid = UUID.nameUUIDFromBytes(("site:" + source.key().value())
-        .getBytes(StandardCharsets.UTF_8));
-```
+### Validation
+Validate at boundaries (constructors, command handlers, service entry points). Use `Objects.requireNonNull(value, "message")`. Throw domain exceptions (unchecked, extend `RuntimeException`, live in `codex.<module>.api.exception`). `Optional<T>` for valid absence, not error signaling.
 
-### Commands
+### Logging
+`private static final Logger LOGGER = LoggerFactory.getLogger(MyClass.class)` using SLF4J. Log at service boundaries and state transitions.
 
-Commands are immutable records expressing intent. Not GoF Command pattern — they carry data only:
+### Method size
+≤20 lines of logic (log statements don't count). Extract well-named private methods if exceeding.
 
-```java
-public record CreateSiteCommand(SiteKey key, String displayName, SiteStatus status, Set<SiteAlias> aliases) {
-    public CreateSiteCommand {
-        Objects.requireNonNull(key, "key cannot be null");
-        aliases = Set.copyOf(aliases);
-    }
-    public static CreateSiteCommand of(final SiteKey key, final String displayName) { ... }
-}
-```
+## Repository & Service Conventions
 
-### Events
+- **Repositories are dumb** — CRUD only, no business logic, never call other repositories. Lives in `codex.<module>.internal.repository` (not exported).
+- **Services are smart** — business logic, validation, orchestration. Interface in `codex.<module>.api.model.service` (exported), implementation in `codex.<module>.internal.service`.
+- Every public service method receives an `Actor` for audit context.
+- Constructor injection always; `Objects.requireNonNull` on every constructor parameter.
+- Start with `MemoryXxxRepository` before adding real persistence.
 
-Events are immutable records describing facts that already happened. Must implement `CodexEvent`:
+## State Machines
 
-```java
-public record SiteCreatedEvent(SiteId id, SiteKey key, Actor actor, Instant instant) implements CodexEvent {
-    @Override
-    public Instant occurredAt() { return instant; }
-}
-```
-
-### Entities
-
-Entities are records with a builder, `copyOf`, and validation in the canonical constructor.
-All collections are defensive copies. Timestamps default to `Instant.now()` if null.
-
-### State Machines
-
-State transitions must be explicit and validated. Use a dedicated method:
-
-```java
-private boolean isValidTransition(final SiteStatus current, final SiteStatus target) {
-    return switch (current) {
-        case STARTED  -> target == SiteStatus.SUSPENDED;
-        case SUSPENDED -> target == SiteStatus.STARTED || target == SiteStatus.ARCHIVED;
-        case ARCHIVED  -> target == SiteStatus.SUSPENDED;
-    };
-}
-```
-
-Current `SiteStatus` machine:
+State transitions must be explicit and validated in a dedicated method. Current `SiteStatus` machine:
 ```
 STARTED ⟷ SUSPENDED ⟷ ARCHIVED
 ```
 No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 
----
+## Code Quality Constraints
 
-## Repository Conventions
-
-- Repositories are **dumb** — CRUD only, no business logic
-- Repositories never call other repositories
-- Services are **smart** — business logic, validation, orchestration
-- Services may call repositories and other services
-- Start with `MemoryXxxRepository` before adding real persistence
-- Repository interface lives in `codex.<module>.internal.repository` (internal, not exported)
-
-```java
-public interface SiteRepository {
-    Site save(Site site);
-    Optional<Site> findByKey(SiteKey siteKey);
-    Optional<Site> findByAlias(SiteAlias alias);
-    boolean existsByKey(SiteKey siteKey);
-    List<Site> findAll();
-    boolean deleteByKey(SiteKey siteKey);
-}
-```
-
----
-
-## Service Conventions
-
-- Service interface lives in `codex.<module>.api.model.service` (exported)
-- Implementation lives in `codex.<module>.internal.service` (not exported)
-- Every public method receives an `Actor` for audit context
-- Constructor injection always, no field injection
-- `Objects.requireNonNull` for every constructor parameter
-
-```java
-public final class CodexSiteService implements SiteService {
-    private final SiteRepository siteRepository;
-    private final Clock clock;
-    private final IdentityGenerator<CreateSiteCommand, SiteId> siteIdentityGenerator;
-
-    protected CodexSiteService(final SiteRepository siteRepository, final Clock clock) {
-        this.siteRepository = Objects.requireNonNull(siteRepository, "siteRepository must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.siteIdentityGenerator = new SiteIdentityGenerator();
-    }
-}
-```
-
----
-
-## Cross-Cutting Values
-
-Every design decision should consider these properties:
-
-| Value               | What it means in practice                                      |
-|---------------------|----------------------------------------------------------------|
-| Scalable            | Stateless services, cluster-safe operations                    |
-| Extensible          | Extension points over modification, open/closed principle      |
-| Customizable        | Hooks, events, scripting (Scriptorium) for custom behavior     |
-| Observable          | SLF4J logs, metrics hooks, structured events                   |
-| Auditable           | Every state change carries an `Actor` and a timestamp          |
-| Cluster Aware       | No JVM-only assumptions, ShedLock or distributed locks         |
-| Event Aware         | Domain events as first-class citizens via `CodexEventDispatcher` |
-| Cacheable           | Caffeine (L1) + Valkey (L2), event-driven invalidation         |
-| Treeable            | Content navigable through site/folder/item paths               |
-| Transactional       | Transactional by default, Sagas where distributed consistency needed |
-
----
-
-## Technology Stack (MVP)
-
-| Layer            | Technology                                      |
-|------------------|-------------------------------------------------|
-| Framework        | Spring Boot (disciplined, adapters only)        |
-| Database         | PostgreSQL (source of truth)                    |
-| Vector search    | pgvector (initial, flexible)                    |
-| Search           | OpenSearch (lexical search)                     |
-| Assets           | S3-compatible object storage                    |
-| Local cache      | Caffeine                                        |
-| Distributed cache| Valkey                                          |
-| Scripting        | GraalJS (future, Scriptorium)                   |
-| Concurrency      | Virtual threads (Java 25)                       |
-
-Spring Boot annotations (`@Transactional`, `@Component`, `@Autowired`) must never appear in `codex-codex` or `codex-fundamentum`. They belong in adapter/runtime modules only.
-
----
-
-## What Claude Should Never Do
-
-- Add Spring annotations to core domain classes
-- Add persistence annotations (JPA, Hibernate) to domain entities
+### Never
+- Add Spring/JPA/Hibernate annotations to core domain classes (`codex-codex`, `codex-fundamentum`)
 - Use `ThreadLocal` when `ScopedValue` is available
 - Use wrapper types (`Integer`, `Long`) when primitives suffice
-- Write repositories with business logic
+- Put business logic in repositories
 - Skip validation in constructors or service entry points
-- Use single-letter variable names (except `i` in loops)
 - Create mutable domain objects
-- Introduce inheritance where composition works
-- Skip logging on state-changing operations
-- Modify existing behavior without being explicitly asked
-- Perform broad refactors unless explicitly requested
+- Use inheritance where composition works
+- Modify existing behavior or perform broad refactors unless explicitly asked
+- Use single-letter variable names (except `i` in loops)
 
----
-
-## What Claude Should Always Do
-
+### Always
 - Read existing code before writing new code
-- Follow the existing package and naming conventions
 - Write JavaDoc for all public types and methods
 - Add `Objects.requireNonNull` for every required parameter
-- Use `record` for new value objects, commands, events, and identities
-- Provide builder + `copyOf` + factory methods for entities
-- Write focused methods (≤20 lines of logic)
 - Log at service entry points and state transitions
-- Prefer `ScopedValue` over `ThreadLocal`
-- Prefer primitives over wrappers
-- Use enums for closed sets of domain values
-- Keep changes small and focused
 - Ask before making architectural decisions that affect module boundaries
+- Surface follow-up tasks in a post-task report instead of implementing them opportunistically
 
-## Exception style
+## Exception Style
 
-- Prefer unchecked exceptions for Codex domain/application errors.
-- Custom Codex exceptions should extend `RuntimeException` unless a task explicitly says otherwise.
-- Do not add `throws` declarations for domain validation errors.
-- Preserve causes when wrapping infrastructure errors.
-- Use semantic exception types instead of generic `RuntimeException` when the error belongs to the domain.
+- Unchecked exceptions, extend `RuntimeException`
+- Domain exceptions in `codex.<module>.api.exception` (exported). No common base class — direct subtypes with specific names.
+- Constructors: `(String message)` + `(String message, Throwable cause)`. Optional domain-specific factory.
+- No `throws` declarations for domain validation errors
+- `IllegalStateException` for subscriber/projection failures (system invariant violation)
 
-## Author's agent feedback
-See @codex-docs/agents/AGENT-CALIBRATION.md for extra feedback.
+## Key Documentation Files
 
-## Author's Coding Identity
-See [CODING_IDENTITY.md](link) for the broader design fingerprint that informs all decisions in this project.
+- `codex-docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
+- `codex-docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
+- `CODING_IDENTITY.md` — broader design fingerprint
+- `CLAUDE.md` — identical copy of this file (kept for Claude compatibility); keep in sync
+
+## Fundamentum Rule
+
+A type belongs in `codex-fundamentum` only if it is generic, framework-agnostic, reusable by multiple modules, free of CMS/domain concepts, and small enough to remain stable. If a type mentions Site, ContentItem, ContentType, IndexDocument, AuditRecord, Workflow, User, Role, REST, AI, or persistence backend details, it does not belong in fundamentum.
+
+## Backlog Classification
+
+- **Active**: may implement when explicitly tasked
+- **Near-future**: be aware, do not implement unless task says so
+- **Future-forward**: document only, do not add code

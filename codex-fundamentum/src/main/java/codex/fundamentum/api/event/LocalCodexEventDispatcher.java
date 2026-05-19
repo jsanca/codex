@@ -88,7 +88,7 @@ public final class LocalCodexEventDispatcher implements CodexEventDispatcher {
     @Override
     public void dispatch(final CodexEvent event) {
         Objects.requireNonNull(event, "event must not be null");
-        observance.counter("events.dispatched." + event.getClass().getSimpleName()).increment();
+        observance.counter(EventDispatchMetricNames.eventsDispatched(event.getClass().getSimpleName())).increment();
         for (final CodexEventSubscriber<? extends CodexEvent> subscriber : subscribers) {
             if (subscriber.eventType().isInstance(event)) {
                 dispatchToSubscriber(subscriber, event);
@@ -100,11 +100,11 @@ public final class LocalCodexEventDispatcher implements CodexEventDispatcher {
     private <E extends CodexEvent> void dispatchToSubscriber(
             final CodexEventSubscriber<E> subscriber, final CodexEvent event) {
         final String name = subscriberName(subscriber);
-        observance.counter("subscribers.invoked." + name).increment();
+        observance.counter(EventDispatchMetricNames.subscribersInvoked(name)).increment();
         try {
-            observance.timer("subscribers.duration." + name).record(() -> subscriber.handle((E) event));
+            observance.timer(EventDispatchMetricNames.subscribersDuration(name)).record(() -> subscriber.handle((E) event));
         } catch (final RuntimeException ex) {
-            observance.counter("subscribers.failed." + name).increment();
+            observance.counter(EventDispatchMetricNames.subscribersFailed(name)).increment();
             throw ex;
         }
     }
