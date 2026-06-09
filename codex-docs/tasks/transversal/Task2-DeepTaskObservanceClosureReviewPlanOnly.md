@@ -25,7 +25,7 @@ Review:
 * remaining blind spots
 
 ## Questions to answer
-
+  
 1. Is the same runtime `Observance` instance propagated consistently?
 2. Are there any places still using `Observance.noop()` accidentally?
 3. Are metric names consistent across services, events, index, and cache?

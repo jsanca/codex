@@ -43,4 +43,12 @@ public record Actor(
     public static Actor apiClient(final String name) {
         return new Actor(ActorId.of("api-client:" + name), name, ActorType.API_CLIENT);
     }
+
+    public static Actor anonymous() {
+        return new Actor(ActorId.of("anonymous"), "Anonymous", ActorType.ANONYMOUS);
+    }
+
+    public static Actor cronJob(final String name) {
+        return new Actor(ActorId.of("cron:" + name), name, ActorType.CRON_JOB);
+    }
 }

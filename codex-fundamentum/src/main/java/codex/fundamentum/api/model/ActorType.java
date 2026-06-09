@@ -23,5 +23,15 @@ public enum ActorType {
     /**
      * An external API client or integration.
      */
-    API_CLIENT
+    API_CLIENT,
+
+    /**
+     * An unauthenticated public actor.
+     */
+    ANONYMOUS,
+
+    /**
+     * A scheduled job or cron-driven execution.
+     */
+    CRON_JOB
 }

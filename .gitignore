@@ -1,6 +1,6 @@
 # Compiled class file
 *.class
-
+.idea/
 # IntelliJ IDEA
 .idea/misc.xml
 # O mejor aún, ignora todo lo que no sea esencial

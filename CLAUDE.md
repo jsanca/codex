@@ -1,4 +1,8 @@
-# CLAUDE.md — Codex Project Guide
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Codex Project Guide
 
 ## Build & Test Commands
 
@@ -10,7 +14,7 @@ mvn test -pl codex-codex -Dtest=CodexSiteServiceTest  # single test class
 mvn test -DskipTests       # compile only, skip tests
 ```
 
-Test framework: **JUnit 5 + AssertJ**. ~1,240 tests across 5 modules. No CI workflows exist yet.
+Test framework: **JUnit 5 + AssertJ**. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
 
 ## Module Map
 
@@ -29,7 +33,7 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 | `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        | —         |
 | `codex-porta`           | REST/GraphQL exposure (skeleton)                    | —         |
 | `codex-iter`            | Workflow engine (skeleton)                          | —         |
-| `codex-custos`          | Identity, roles, permissions (skeleton)             | —         |
+| `codex-custos`          | Domain authorization: Actor, Permission, AccessDecision (Phase 0) | ~21 |
 | `codex-imaginarium`     | AI infrastructure (skeleton)                        | —         |
 | `codex-olorin`          | Agent reasoning (skeleton)                          | —         |
 
@@ -47,6 +51,7 @@ Must never import: Spring Boot, JPA, JDBC, HTTP, REST controllers, persistence a
 - Implementation: `codex.<module>.internal`
 - Never export `internal` packages in `module-info.java`
 - Qualified exports (`exports X.internal.Y to codex.Z`) are accepted as controlled architectural debt
+- Use `requires transitive` only when the module's own API surface exposes the depended-on module's types (e.g., if `codex.index.api` exposes `codex-codex` types, `requires transitive codex.codex` is correct). Otherwise prefer plain `requires`.
 
 ### Decoration, not inheritance
 
@@ -90,6 +95,12 @@ Validate at boundaries (constructors, command handlers, service entry points). U
 ### Method size
 ≤20 lines of logic (log statements don't count). Extract well-named private methods if exceeding.
 
+### Idempotent methods
+If a method is idempotent (e.g., `activate` when the entity is already active), do not update `updatedAt`/`updatedBy`. Only state-changing operations advance the audit timestamps.
+
+### Schema field collections
+Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
+
 ## Repository & Service Conventions
 
 - **Repositories are dumb** — CRUD only, no business logic, never call other repositories. Lives in `codex.<module>.internal.repository` (not exported).
@@ -97,6 +108,11 @@ Validate at boundaries (constructors, command handlers, service entry points). U
 - Every public service method receives an `Actor` for audit context.
 - Constructor injection always; `Objects.requireNonNull` on every constructor parameter.
 - Start with `MemoryXxxRepository` before adding real persistence.
+
+## Concurrency Conventions
+
+- When using `Collections.synchronizedList`, always synchronize explicitly on the list when iterating or copying: `synchronized (list) { return List.copyOf(list); }`. Individual `add()` calls are safe without explicit sync, but `List.copyOf()` iterates internally and is not protected by the wrapper's per-method lock.
+- Same rule applies to `clearRecording()`-style bulk clears: `synchronized (list) { list.clear(); }`.
 
 ## State Machines
 
@@ -140,11 +156,36 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 - `codex-docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
 - `codex-docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
 - `CODING_IDENTITY.md` — broader design fingerprint
-- `CLAUDE.md` — identical copy of this file (kept for Claude compatibility); keep in sync
 
 ## Fundamentum Rule
 
 A type belongs in `codex-fundamentum` only if it is generic, framework-agnostic, reusable by multiple modules, free of CMS/domain concepts, and small enough to remain stable. If a type mentions Site, ContentItem, ContentType, IndexDocument, AuditRecord, Workflow, User, Role, REST, AI, or persistence backend details, it does not belong in fundamentum.
+
+## Custos / Authorization Rules
+
+`codex-custos` owns domain authorization — not HTTP security. The core question it answers:
+```
+May this Actor perform this Permission on this Codex Resource under this Context?
+```
+
+### Key types (Phase 0)
+- `PermissionKey` — domain permission name (e.g., `contentItem.publish`)
+- `ResourceRef` — sealed hierarchy: `GlobalResourceRef`, `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`
+- `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
+- `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
+- `AccessDeniedException` — thrown by `AccessDecision.Denied.requireGranted()`
+- `SecurityEvaluationContext` — request-level context passed to evaluators
+- `PermissionEvaluator` — low-level evaluation port (interface)
+- `AccessDecisionService` — application-level service wrapping the evaluator
+
+### Hard rules
+- `AgentActor` must never be granted permission-management capabilities (hardcoded, not configurable).
+- Permission lookup never crosses site boundaries.
+- Authorization evaluates domain operations, not endpoints. Prefer `contentItemPermissionsService.canPublish(actor, resource)` over checking roles directly.
+- `SUPER_ADMIN` bypasses scoped grants but still respects structural invariants.
+
+### ADR
+Full specification in `codex-docs/future-forward/ADR-009.md`.
 
 ## Backlog Classification
 
