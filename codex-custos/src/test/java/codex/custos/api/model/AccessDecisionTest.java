@@ -35,18 +35,31 @@ class AccessDecisionTest {
     }
 
     @Test
-    @DisplayName("Denied.requireGranted throws AccessDeniedException")
-    void deniedThrowsOnRequireGranted() {
-        AccessDecision decision = AccessDecision.denied(ACTOR, PERMISSION, RESOURCE, "no matching grant");
+    @DisplayName("Denied.requireGranted throws AccessDeniedException carrying the same Denied instance")
+    void deniedThrowsAndCarriesDecision() {
+        AccessDecision.Denied denied = AccessDecision.denied(ACTOR, PERMISSION, RESOURCE, "no matching grant");
 
-        assertThatThrownBy(decision::requireGranted)
+        AccessDeniedException thrown = org.junit.jupiter.api.Assertions.assertThrows(
+                AccessDeniedException.class, denied::requireGranted);
+
+        assertThat(thrown).hasMessageContaining("Access denied");
+        assertThat(thrown.decision()).isPresent();
+        assertThat(thrown.decision().get()).isSameAs(denied);
+    }
+
+    @Test
+    @DisplayName("Denied preserves the reason in the thrown exception message")
+    void deniedReasonAppearsInMessage() {
+        AccessDecision.Denied denied = AccessDecision.denied(ACTOR, PERMISSION, RESOURCE, "rate limit exceeded");
+
+        assertThatThrownBy(denied::requireGranted)
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Access denied");
+                .hasMessageContaining("rate limit exceeded");
     }
 
     @Test
     @DisplayName("AccessDecision carries actor, permission, resource, and reason")
-    void carriessPayload() {
+    void carriesPayload() {
         AccessDecision decision = AccessDecision.granted(ACTOR, PERMISSION, RESOURCE, "granted by policy");
 
         assertThat(decision.actor()).isEqualTo(ACTOR);
@@ -56,22 +69,42 @@ class AccessDecisionTest {
     }
 
     @Test
-    @DisplayName("Granted rejects null arguments")
-    void grantedRejectsNulls() {
+    @DisplayName("Granted rejects null and blank reason")
+    void grantedRejectsInvalidReason() {
+        assertThatThrownBy(() -> AccessDecision.granted(ACTOR, PERMISSION, RESOURCE, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AccessDecision.granted(ACTOR, PERMISSION, RESOURCE, "   "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Denied rejects null and blank reason")
+    void deniedRejectsInvalidReason() {
+        assertThatThrownBy(() -> AccessDecision.denied(ACTOR, PERMISSION, RESOURCE, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AccessDecision.denied(ACTOR, PERMISSION, RESOURCE, "   "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Granted rejects null actor, permission, and resource")
+    void grantedRejectsNullFields() {
         assertThatThrownBy(() -> AccessDecision.granted(null, PERMISSION, RESOURCE, "reason"))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> AccessDecision.granted(ACTOR, null, RESOURCE, "reason"))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> AccessDecision.granted(ACTOR, PERMISSION, null, "reason"))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> AccessDecision.granted(ACTOR, PERMISSION, RESOURCE, null))
-                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    @DisplayName("Denied rejects null arguments")
-    void deniedRejectsNulls() {
+    @DisplayName("Denied rejects null actor, permission, and resource")
+    void deniedRejectsNullFields() {
         assertThatThrownBy(() -> AccessDecision.denied(null, PERMISSION, RESOURCE, "reason"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AccessDecision.denied(ACTOR, null, RESOURCE, "reason"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AccessDecision.denied(ACTOR, PERMISSION, null, "reason"))
                 .isInstanceOf(NullPointerException.class);
     }
 }

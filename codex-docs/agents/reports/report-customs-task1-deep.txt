@@ -1,0 +1,195 @@
+Custos Phase 0 Hardening — Deep Review Report
+================================================
+
+Date: 2026-06-09
+Reviewer: opencode (deep task)
+Scope: Clio's Custos Phase 0 hardening diff (uncommitted)
+Verdict: SOLID — all checks pass. No regressions. No Phase 1 leakage.
+
+---
+
+1. PUBLIC API vs ADR-009 — PASS
+-------------------------------
+
+All 11 Phase 0 types from ADR-009 (lines 740-753) are accounted for:
+
+  Type                        Status   Location
+  ──────────────────────────  ───────  ────────────────────────────────────
+  Actor / ActorId / ActorType  OK      codex-fundamentum.api.model
+  PermissionKey                OK      codex.custos.api.model.PermissionKey
+  ResourceRef (sealed)         OK      codex.custos.api.model.ResourceRef
+    ├─ GlobalResourceRef       OK      — singleton, zero-arg record
+    ├─ SiteResourceRef         OK      — carries SiteKey
+    ├─ ContentTypeResourceRef  OK      — carries SiteKey + ContentTypeKey
+    └─ ContentItemResourceRef  OK      — carries SiteKey + ContentTypeKey + ContentItemKey
+  ResourceScope (sealed)       OK      codex.custos.api.model.ResourceScope
+    ├─ GlobalScope             OK      — singleton, zero-arg record
+    ├─ SiteScope               OK      — carries SiteKey
+    ├─ ContentTypeScope        OK      — carries SiteKey + ContentTypeKey
+    └─ ContentItemScope        OK      — carries SiteKey + ContentTypeKey + ContentItemKey
+  AccessDecision (sealed)      OK      codex.custos.api.model.AccessDecision
+    ├─ Granted                 OK      — validates all fields + blank reason
+    └─ Denied                  OK      — validates all fields + blank reason
+  AccessDeniedException        OK      codex.custos.api.exception.AccessDeniedException
+  SecurityEvaluationContext    OK      codex.custos.api.model.SecurityEvaluationContext
+  PermissionEvaluator          OK      codex.custos.api.service.PermissionEvaluator (interface)
+  AccessDecisionService        OK      codex.custos.api.service.AccessDecisionService (interface)
+
+ActorType enum has all 6 values from ADR-009: HUMAN, SYSTEM, API_CLIENT, ANONYMOUS, AGENT, CRON_JOB.
+
+Actor record has all 6 factory methods: human(), system(), agent(), apiClient(), anonymous(), cronJob().
+
+Key hardening changes in this diff:
+  - AccessDecision.Granted / Denied compact constructors now reject blank reason
+    (was: only null-checked; now: + isBlank() IllegalArgumentException)
+  - AccessDeniedException now carries the full AccessDecision.Denied record
+    (was: inline message; now: decision() accessor via Optional)
+  - requireGranted() delegates to new AccessDeniedException(Denied) constructor
+    (was: manually formatting Access denied message)
+
+
+2. TEST COVERAGE — MOSTLY ADEQUATE
+-----------------------------------
+
+37 tests, 6 test classes, all passing (BUILD SUCCESS).
+
+  Test Class                       Tests  Focus
+  ───────────────────────────────  ─────  ──────────────────────────────────
+  PermissionKeyTest                 6     valid creation, trim, null/blank
+                                           rejection, toString, equality
+  ResourceRefTest                   7     all 4 subtypes, field access,
+                                           null rejection per subtype
+  ResourceScopeTest                 7     all 4 subtypes, field access,
+                                           null rejection per subtype
+  AccessDecisionTest                9     Granted/Denied behavior, isGranted,
+                                           requireGranted, payload carry,
+                                           null/blank validation, Denied
+                                           instance preservation in exception
+  SecurityEvaluationContextTest     3     non-null, singleton, interface impl
+  AccessDeniedExceptionTest         5     all 3 constructors, decision()
+                                           accessor, null-decision rejection
+
+Tests added by hardening:
+  - Denied.requireGranted throws and preserves Denied instance (AccessDecisionTest)
+  - Denied reason appears in exception message (AccessDecisionTest)
+  - Blank reason rejected for both Granted and Denied (AccessDecisionTest)
+  - Null actor/permission/resource rejected for both Granted and Denied (AccessDecisionTest)
+  - decision() empty for raw-message constructor (AccessDeniedExceptionTest)
+  - Constructor with AccessDecision.Denied (AccessDeniedExceptionTest)
+  - Constructor with null decision rejects (AccessDeniedExceptionTest)
+
+POTENTIAL GAPS (worth adding):
+  1. Sealed type exhaustiveness: no test verifies exhaustive pattern matching
+     over ResourceRef or ResourceScope subtypes (switch/case). This is the
+     primary use pattern for these sealed hierarchies.
+  2. AccessDecisionService.evaluate(Actor, PermissionKey, ResourceRef) default
+     method: no test exercises the 3-arg -> 4-arg delegation. Needs a stub
+     PermissionEvaluator to verify the default passes empty() context.
+  3. Structural alignment between ResourceRef and ResourceScope: no test
+     confirms that e.g. ContentItemResourceRef(s, ct, ci) corresponds to
+     ContentItemScope(s, ct, ci) — same keys, same ordering.
+  4. Adversarial construction: no test for edge cases like PermissionKey
+     with empty string (""), only blank ("   ") and null.
+  5. ResourceRef/ResourceScope Cross-site isolation: no test demonstrates
+     two SiteScopes with different SiteKeys are not equal.
+  6. PermissionEvaluator and AccessDecisionService are interfaces with no
+     implementations — no tests possible until Phase 1+.
+
+
+3. MODULE-INFO.JAVA — PASS
+---------------------------
+
+  module codex.custos {
+      requires transitive codex.fundamentum;   // justified (below)
+      requires transitive codex.codex;         // justified (below)
+      exports codex.custos.api.exception;
+      exports codex.custos.api.model;
+      exports codex.custos.api.service;
+  }
+
+  requires transitive codex.fundamentum:
+    JUSTIFIED. Public API types expose Actor from codex-fundamentum:
+    - AccessDecision.actor() returns Actor
+    - PermissionEvaluator.evaluate(Actor, ...)
+    - AccessDecisionService.evaluate(Actor, ...)
+    - AccessDeniedException (references Actor in JavaDoc)
+
+  requires transitive codex.codex:
+    JUSTIFIED. Public API types expose identity types from codex-codex:
+    - SiteResourceRef has SiteKey component
+    - ContentTypeResourceRef has SiteKey + ContentTypeKey
+    - ContentItemResourceRef has SiteKey + ContentTypeKey + ContentItemKey
+    - SiteScope has SiteKey component
+    - ContentTypeScope has SiteKey + ContentTypeKey
+    - ContentItemScope has SiteKey + ContentTypeKey + ContentItemKey
+
+  No internal package exports — acceptable for Phase 0 (no impl yet).
+  No qualified exports — correct, none needed.
+
+
+4. TRANSPORT-AGNOSTIC — PASS
+-----------------------------
+
+Full text search across all 17 source files + 6 test files for:
+  spring, javax.servlet, jakarta.servlet, oauth, jwt, saml, oidc,
+  password, BCrypt, @Entity, @Table, @Repository, @RestController,
+  @GetMapping, @PostMapping, HttpServlet, SecurityFilter
+
+Result: ZERO MATCHES.
+
+Custos remains clean of:
+  - REST/HTTP frameworks
+  - Servlet APIs
+  - Authentication mechanisms (JWT, SAML, OIDC, passwords)
+  - Persistence annotations / frameworks
+  - User management (no User entity, no password hashing)
+
+
+5. NO PHASE 1 LEAKAGE — PASS
+-----------------------------
+
+Full text search across all production source files for:
+  Role, RoleKey, RoleAssignment, PermissionGrant, PermissionResolver,
+  BuiltInRoles
+
+Result: ZERO MATCHES.
+
+Notable restraint: AccessDecisionService JavaDoc mentions "Phase 2 will
+introduce resource-specific sub-services" but does not implement them.
+
+
+6. ARCHITECTURE OBSERVATIONS
+-----------------------------
+
+POSITIVE:
+  - requireGranted() now delegates to new AccessDeniedException(this)
+    instead of formatting the message inline. This is the correct pattern:
+    callers get the full Denied record, not a parsed string.
+  - AccessDeniedException.decision() returns Optional<AccessDecision.Denied>
+    — proper use of Optional for valid absence (raw-message constructors).
+  - Blank-reason validation added to both Granted and Denied compact
+    constructors — good hardening, prevents meaningless decisions.
+  - SecurityEvaluationContext.empty() uses a private record singleton
+    (EmptyContext) — no exposed mutable state.
+  - ResourceRef and ResourceScope are independent sealed hierarchies with
+    the same 4-shape structure. This matches ADR-009's explicit
+    differentiation between "resource being evaluated" vs "where permission
+    is assigned."
+  - ContentItemResourceRef carries all 3 keys (siteKey, contentTypeKey,
+    contentItemKey) — no cross-site lookup risk. ADR-009 rule satisfied.
+
+MINOR (not blocking):
+  1. No internal package exists yet. For Phase 0 this is acceptable
+     (only interfaces and model types). When PermissionEvaluator or
+     MemoryGrantStore implementations are added, they should go into
+     codex.custos.internal.
+  2. Identity naming in codex-codex: both SiteKey and SiteId exist.
+     Custos uses *Key variants consistently. An unfamiliar agent might
+     use SiteId by mistake. Worth documenting that Custos uses *Key types.
+  3. The AccessDecision interface exposes isGranted() boolean alongside
+     the sealed hierarchy. ADR-009 recommends preferring pattern matching.
+     The JavaDoc echoes this — no action needed, but worth noting this is
+     a potential anti-pattern if callers use isGranted() bypassing the
+     sealed switch pattern.
+
+NO CHANGE REQUIRED. The hardening diff is clean and ready.

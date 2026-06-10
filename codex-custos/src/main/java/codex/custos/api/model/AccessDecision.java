@@ -18,6 +18,7 @@ import java.util.Objects;
  *     case AccessDecision.Denied  d -> d.requireGranted(); // throws
  * }
  * }</pre>
+ * @author jsanca & elo & clio
  */
 public sealed interface AccessDecision permits AccessDecision.Granted, AccessDecision.Denied {
 
@@ -61,6 +62,9 @@ public sealed interface AccessDecision permits AccessDecision.Granted, AccessDec
             Objects.requireNonNull(permission, "permission must not be null");
             Objects.requireNonNull(resource, "resource must not be null");
             Objects.requireNonNull(reason, "reason must not be null");
+            if (reason.isBlank()) {
+                throw new IllegalArgumentException("reason must not be blank");
+            }
         }
 
         @Override
@@ -85,6 +89,9 @@ public sealed interface AccessDecision permits AccessDecision.Granted, AccessDec
             Objects.requireNonNull(permission, "permission must not be null");
             Objects.requireNonNull(resource, "resource must not be null");
             Objects.requireNonNull(reason, "reason must not be null");
+            if (reason.isBlank()) {
+                throw new IllegalArgumentException("reason must not be blank");
+            }
         }
 
         @Override
@@ -94,8 +101,7 @@ public sealed interface AccessDecision permits AccessDecision.Granted, AccessDec
 
         @Override
         public void requireGranted() {
-            throw new AccessDeniedException(
-                    "Access denied: " + actor.id().value() + " may not perform [" + permission + "] on [" + resource + "]. Reason: " + reason);
+            throw new AccessDeniedException(this);
         }
     }
 }
