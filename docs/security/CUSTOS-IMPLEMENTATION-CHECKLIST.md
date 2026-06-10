@@ -13,30 +13,30 @@ Authentication, transport adapters, persistence, REST, JWT, SAML, OIDC, Spring S
 ## Status
 
 - [x] Phase 0 primitives implemented.
-- [ ] Phase 0 pending review after Clio Task C.
-- [ ] Phase 0 hardening active.
-- [ ] Phase 1 not started.
+- [x] Phase 0 hardened and reviewed after Clio Task C.
+- [x] Permissions catalog added.
+- [x] Phase 1 roles and resolver primitives implemented.
 - [ ] Phase 2 not started.
 - [ ] Phase 3 not started.
 - [ ] Phase 4 not started.
 
-## Current Active Task: Phase 0 Hardening
+## Phase 0 Hardening
 
-Phase 0 exists in `codex-custos` and should be hardened before adding roles, grants, permission resolution, or secured service decorators.
+Complete and reviewed.
 
-- [ ] Harden `PermissionKey` validation.
-- [ ] Harden `ResourceRef` invariants.
-- [ ] Harden `ResourceScope` invariants.
-- [ ] Confirm `AccessDecision` behavior and denial handling.
-- [ ] Confirm `SecurityEvaluationContext` null and empty handling.
-- [ ] Confirm `PermissionEvaluator` and `AccessDecisionService` API alignment with ADR-009.
-- [ ] Confirm module hygiene remains transport-agnostic and persistence-free.
+- [x] Harden `PermissionKey` validation.
+- [x] Harden `ResourceRef` invariants.
+- [x] Harden `ResourceScope` invariants.
+- [x] Confirm `AccessDecision` behavior and denial handling.
+- [x] Confirm `SecurityEvaluationContext` null and empty handling.
+- [x] Confirm `PermissionEvaluator` and `AccessDecisionService` API alignment with ADR-009.
+- [x] Confirm module hygiene remains transport-agnostic and persistence-free.
 
-Do not add Phase 1 concepts during Phase 0 hardening.
+Phase 1 work may proceed from these hardened primitives.
 
 ## Phase 0: Authorization Kernel
 
-Implemented, pending review after Clio Task C.
+Implemented and reviewed.
 
 - [x] `Actor`
 - [x] `ActorId`
@@ -50,16 +50,48 @@ Implemented, pending review after Clio Task C.
 - [x] `PermissionEvaluator`
 - [x] `AccessDecisionService`
 
+## Permissions Catalog
+
+Added.
+
+- [x] `Permissions`
+
 ## Phase 1: Roles and Grants
 
-Not started.
+Started.
 
-- [ ] `Role`
-- [ ] `RoleKey`
-- [ ] `RoleAssignment`
-- [ ] `PermissionGrant`
-- [ ] `PermissionResolver`
-- [ ] `BuiltInRoles`
+- [x] `RoleKey`
+- [x] `Role`
+- [x] `PermissionGrant`
+- [x] `RoleAssignment`
+- [x] `BuiltInRoles`
+- [x] `PermissionResolver`
+
+Phase 1 notes:
+
+- `RoleKey` names a role.
+- `Role` is a blueprint for permissions.
+- `Role` must not contain an `Actor`.
+- `Role` must not contain a `ResourceScope`.
+- `PermissionGrant` pairs a `PermissionKey` with a `ResourceScope`. It does not carry an actor or role.
+- `RoleAssignment` connects an actor to a role at a scope.
+- `BuiltInRoles` is a catalog of `Role` blueprints.
+- `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
+- `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
+- Hard invariants must run before any `SUPER_ADMIN` bypass.
+- `PermissionResolver` API exists.
+- `DefaultPermissionResolver` exists as the internal implementation.
+- `DefaultPermissionResolver` computes effective permissions from `RoleAssignment` plus the `Role` registry.
+- `DefaultPermissionResolver` enforces the AGENT + SUPER_ADMIN hard invariant before bypass.
+- `DefaultPermissionResolver` applies scoped `SUPER_ADMIN` bypass for valid non-agent actors.
+- `DefaultPermissionResolver` walks the scope hierarchy without crossing site boundaries.
+- `DefaultPermissionResolver` implements `contentItem.update` -> `contentItem.read` and `contentItem.publish` -> `contentItem.read` implications.
+
+Phase 1 pending follow-up:
+
+- [ ] Direct actor `PermissionGrant` support.
+- [ ] Explanation trace.
+- [ ] `AccessDecisionService` wiring over `PermissionResolver`.
 
 ## Phase 2: Domain Permission Services
 
@@ -95,7 +127,7 @@ Not started.
 
 ### PermissionKey vs RoleKey
 
-`PermissionKey` names a domain permission such as a content or site action. `RoleKey` will name a role in Phase 1; roles are not part of Phase 0 hardening.
+`PermissionKey` names a domain permission such as a content or site action. `RoleKey` names a role.
 
 ### ResourceRef vs ResourceScope
 
@@ -115,5 +147,4 @@ Olorin may propose or prepare permission changes. Olorin must not execute privil
 
 ## Open Questions
 
-- What exact review checklist should close Clio Task C?
-- Which Phase 1 type should be introduced first after Phase 0 hardening is accepted?
+- Which pending Phase 1 follow-up should come first: direct grants, explanation trace, or `AccessDecisionService` wiring?

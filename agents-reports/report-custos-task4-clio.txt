@@ -1,0 +1,32 @@
+TASK: custos-task4
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Introduced PermissionGrant as the next Phase 1 primitive. No other types were added.
+PermissionGrant is a two-field record: PermissionKey + ResourceScope. It carries no actor,
+no role, no implication logic, no site-boundary resolution, and no persistence metadata.
+
+11 tests cover all items from the task spec. Test count grew from 64 to 75. Build green
+across full reactor.
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/PermissionGrant.java
++ codex-custos/src/test/java/codex/custos/api/model/PermissionGrantTest.java
+
+OBSERVATIONS
+------------
+- PermissionGrant is intentionally minimal. It is a data record, not a decision. The
+  JavaDoc states this explicitly and names PermissionResolver as the future home for
+  implication and resolution logic.
+
+- Structural tests (no Actor field, no Role field, no evaluate/isGranted method) use
+  getDeclaredFields() and getDeclaredMethods() as guards against accidental scope creep
+  in future tasks. Same technique used in RoleTest and PermissionsTest.
+
+- isSameAs used for Permissions constants in the preservesPermission test — record
+  components are stored by reference, so the same static constant should come back
+  identical. This is a slightly stronger assertion than isEqualTo and documents the
+  expected identity behavior.

@@ -1,0 +1,48 @@
+TASK: custos-task7
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Introduced BuiltInRoles — a non-instantiable catalog of 6 canonical Role blueprints:
+SUPER_ADMIN, SITE_ADMIN, EDITOR, COPYWRITER, REVIEWER, VIEWER. Each constant is a Role
+instance built from RoleKey and Permissions constants. No scopes, actors, bypass logic,
+or resolution semantics were introduced.
+
+15 tests cover canonical keys, permission sets, blueprint purity (no actor/scope), utility
+class structure, and an explicit guard that SUPER_ADMIN bypass is not encoded in the
+blueprint. Test count grew from 88 to 103. Build green across full reactor.
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/BuiltInRoles.java
++ codex-custos/src/test/java/codex/custos/api/model/BuiltInRolesTest.java
+
+FINAL ROLE LIST
+---------------
+SUPER_ADMIN   — all 20 permissions from the Permissions catalog
+SITE_ADMIN    — 17 permissions (full content + type lifecycle + permission.read + role mgmt; excludes site.create, permission.grant, permission.revoke)
+EDITOR        — 6 permissions (contentItem: read, create, update, publish, unpublish, archive)
+COPYWRITER    — 3 permissions (contentItem: read, create, update)
+REVIEWER      — 3 permissions (contentItem: read, publish, unpublish)
+VIEWER        — 1 permission  (contentItem: read)
+
+OBSERVATIONS
+------------
+- SUPER_ADMIN holds all 20 built-in permissions. This makes it a complete permission
+  blueprint without encoding bypass semantics. The JavaDoc explicitly states that bypass
+  logic (skipping scoped lookup) belongs in the future PermissionResolver or policy layer.
+  A test guards this: SUPER_ADMIN is a regular Role instance with no bypass/isAdmin method.
+
+- SITE_ADMIN does not include site.create. Site creation is a platform-level operation
+  (creating a new site, not managing an existing one), which fits SUPER_ADMIN rather than
+  a site-scoped admin. It also does not include permission.grant or permission.revoke —
+  only permission.read, role.assign, and role.revoke, reflecting that a site admin manages
+  role assignments but does not grant raw permissions directly.
+
+- REVIEWER does not have contentItem.update by design (from ADR-009: publish does not
+  imply update). The test explicitly asserts doesNotContain(CONTENT_ITEM_UPDATE) to
+  document this distinction.
+
+- COPYWRITER does not have contentItem.publish by design (from ADR-009). The test
+  explicitly asserts doesNotContain(CONTENT_ITEM_PUBLISH).

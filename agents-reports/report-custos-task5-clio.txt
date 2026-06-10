@@ -1,0 +1,32 @@
+TASK: custos-task5
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Introduced RoleAssignment as the final Phase 1 structural primitive. It is a three-field
+record: Actor + RoleKey + ResourceScope. It carries no Role blueprint, no PermissionKey,
+no evaluation logic, and no agent-type restrictions. Those belong in the future
+PermissionResolver and policy engine.
+
+13 tests cover all items from the task spec. Test count grew from 75 to 88. Build green
+across full reactor.
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/RoleAssignment.java
++ codex-custos/src/test/java/codex/custos/api/model/RoleAssignmentTest.java
+
+OBSERVATIONS
+------------
+- RoleAssignment holds RoleKey, not Role. This is intentional: the assignment records
+  which role an actor holds; resolving what permissions that role grants requires looking
+  up the Role blueprint, which belongs in PermissionResolver. Embedding the full Role
+  here would couple assignment storage to permission definitions.
+
+- isSameAs used for actor preservation — records store component references, so the same
+  Actor instance should come back identical. Consistent with how PermissionGrantTest
+  asserts isSameAs on Permissions constants.
+
+- Structural guards (no PermissionKey field, no Role field, no evaluate/isGranted method)
+  use getDeclaredFields/getDeclaredMethods as in prior tasks.

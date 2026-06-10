@@ -1,0 +1,105 @@
+TASK: custos-task9
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Refactored PermissionResolver from a boolean helper into a semantic Custos API:
+  PermissionResolution resolve(PermissionResolutionRequest, PermissionResolutionSnapshot)
+
+Three new model types, a three-level exception hierarchy, and two extracted internal strategies
+(ResourceScopeHierarchy, PermissionImplicationRules) make DefaultPermissionResolver significantly
+easier to read. All existing behavior is preserved. Test count grew from 145 to 183.
+Full reactor BUILD SUCCESS (1,314 total).
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/PermissionResolutionRequest.java
++ codex-custos/src/main/java/codex/custos/api/model/PermissionResolutionSnapshot.java
++ codex-custos/src/main/java/codex/custos/api/model/PermissionResolution.java
++ codex-custos/src/main/java/codex/custos/api/exception/CustosSecurityException.java
++ codex-custos/src/main/java/codex/custos/api/exception/CustosInvariantViolationException.java
++ codex-custos/src/main/java/codex/custos/api/exception/CustosAgentSuperAdminInvariantViolationException.java
++ codex-custos/src/main/java/codex/custos/internal/service/ResourceScopeHierarchy.java
++ codex-custos/src/main/java/codex/custos/internal/service/DefaultResourceScopeHierarchy.java
++ codex-custos/src/main/java/codex/custos/internal/service/PermissionImplicationRules.java
++ codex-custos/src/main/java/codex/custos/internal/service/DefaultPermissionImplicationRules.java
+~ codex-custos/src/main/java/codex/custos/api/service/PermissionResolver.java
+~ codex-custos/src/main/java/codex/custos/internal/service/DefaultPermissionResolver.java
+~ codex-custos/src/test/java/codex/custos/internal/service/DefaultPermissionResolverTest.java
++ codex-custos/src/test/java/codex/custos/internal/service/DefaultResourceScopeHierarchyTest.java
++ codex-custos/src/test/java/codex/custos/internal/service/DefaultPermissionImplicationRulesTest.java
+~ CLAUDE.md
+
+NEW TYPES
+---------
+PermissionResolutionRequest — record(Actor, PermissionKey, ResourceScope); validates all fields;
+  of() factory. Encodes "who wants to do what on which scope."
+
+PermissionResolutionSnapshot — record(Collection<RoleAssignment>, Map<RoleKey, Role>); both
+  fields defensively copied (List.copyOf / Map.copyOf — rejects null elements at construction);
+  of() factory. Carries the data the resolver needs without coupling to a persistence mechanism.
+
+PermissionResolution — sealed interface (same style as AccessDecision) with inner Granted and
+  Denied records. Each carries actor, permission, target (ResourceScope), and a non-blank reason.
+  Factory methods: PermissionResolution.granted(...) / .denied(...). isGranted() on both subtypes.
+
+Exception hierarchy:
+  CustosSecurityException (base, extends RuntimeException)
+  └─ CustosInvariantViolationException — hard invariant violated; callers must treat as fatal
+     └─ CustosAgentSuperAdminInvariantViolationException — carries the offending Actor
+
+INTERNAL STRATEGIES
+-------------------
+ResourceScopeHierarchy (package-private interface):
+  parentOf(ResourceScope) → ResourceScope|null
+  covers(assignmentScope, targetScope) → boolean
+
+DefaultResourceScopeHierarchy (package-private final class):
+  Implements the sealed-switch parent walk and coverage rules. Extracted from DefaultPermissionResolver.
+
+PermissionImplicationRules (package-private interface):
+  permits(Set<PermissionKey> rolePermissions, PermissionKey requested) → boolean
+
+DefaultPermissionImplicationRules (package-private final class):
+  Encodes: update→read, publish→read, no other implications. Extracted from DefaultPermissionResolver.
+
+UPDATED DefaultPermissionResolver
+----------------------------------
+Public default constructor: new DefaultPermissionResolver() — wires DefaultResourceScopeHierarchy
+  and DefaultPermissionImplicationRules internally.
+Package-private constructor: accepts strategy interfaces for injection (used by strategy unit tests
+  and future callers that want to swap rules without subclassing).
+
+Evaluation order preserved:
+  1. enforceAgentSuperAdminInvariant → throws CustosAgentSuperAdminInvariantViolationException
+  2. hasCoveringSuperAdmin → returns PermissionResolution.Granted("SUPER_ADMIN bypass")
+  3. resolveByScope → walks scope hierarchy; returns Granted with role+scope in reason, or Denied
+
+TESTS
+-----
+DefaultPermissionResolverTest — updated from boolean assertions to PermissionResolution type checks.
+  assertGranted/assertDenied helpers verify: correct subtype, isGranted(), non-blank reason.
+  New sections: request null guards, snapshot null guards (including null-element rejection),
+  Granted/Denied reason presence, CustosAgentSuperAdminInvariantViolationException with actor
+  carried on exception.
+
+DefaultResourceScopeHierarchyTest (21 tests) — covers all parentOf() transitions and all
+  covers() combinations including site-boundary and upward-coverage cases.
+
+DefaultPermissionImplicationRulesTest (11 tests) — covers direct match, empty set, all ADR-009
+  implications (both positive and negative), and custom permission keys.
+
+PRESERVED BEHAVIOR (no regression)
+------------------------------------
+All 41 test scenarios from task8 are preserved under the new API shape. The evaluation order
+(hard guard → SUPER_ADMIN bypass → scope walk) is identical. Scope hierarchy walk, site boundary
+enforcement, and permission implication rules are unchanged in semantics — only extracted into
+named strategy classes.
+
+DEFERRED (still not implemented)
+---------------------------------
+- Direct actor PermissionGrant support
+- Explanation trace / resolution log
+- AccessDecisionService wiring to PermissionResolver
+- Step-up approval hooks

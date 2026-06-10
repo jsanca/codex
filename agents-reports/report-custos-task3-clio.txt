@@ -1,0 +1,49 @@
+TASK: custos-task3
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Introduced RoleKey and Role as the first Phase 1 primitives in codex-custos. No other
+Phase 1 types (RoleAssignment, PermissionGrant, PermissionResolver, BuiltInRoles) were
+added. No new module dependencies required.
+
+RoleKey follows the exact same style as PermissionKey: record, trimming not applied
+(canonical value preserved as-is), null/blank rejection, of() factory, toString returns
+value. RoleKey does not normalize casing because role names are not domain-slug identifiers
+— they carry editorial meaning (EDITOR, SITE_ADMIN) and should be preserved exactly.
+
+Role is an immutable record holding a RoleKey and an immutable Set<PermissionKey>.
+Set.copyOf() in the compact constructor handles both the defensive copy and null-element
+rejection in a single call. Two factory overloads exist: Set-based and varargs. Empty
+roles are allowed (documented in JavaDoc).
+
+Test count grew from 45 to 64 (all passing). Build green across full reactor.
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/RoleKey.java
++ codex-custos/src/main/java/codex/custos/api/model/Role.java
++ codex-custos/src/test/java/codex/custos/api/model/RoleKeyTest.java
++ codex-custos/src/test/java/codex/custos/api/model/RoleTest.java
+
+OBSERVATIONS
+------------
+- RoleKey does not trim or lowercase the value, unlike SiteKey/ContentTypeKey. Role names
+  are not slug identifiers — they carry case-sensitive editorial meaning. This is a
+  deliberate divergence from the *Key pattern in codex-codex.
+
+- Empty roles are allowed. The task recommendation was accepted. An empty Role means
+  "no permissions granted through this role." This is useful during gradual assembly of
+  custom roles and avoids forcing callers to always provide permissions at creation time.
+  Documented in JavaDoc and covered by a dedicated test.
+
+- Set.copyOf() rejects null elements with NullPointerException automatically, so no
+  explicit null-element loop is needed. The behavior is verified by test.
+
+- The varargs factory (Role.of(RoleKey, PermissionKey...)) uses Set.of(permissions) which
+  also rejects null elements. Consistent with the Set-based factory.
+
+- Role.class structural tests (no scope, no actor fields) use getDeclaredFields() to guard
+  against future accidental additions. Mirrors the approach used in PermissionsTest for
+  catalog-size invariants.

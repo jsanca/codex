@@ -1,0 +1,110 @@
+TASK: custos-task8
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Introduced PermissionResolver — the interface that computes effective permissions from role
+assignments and role blueprints — and DefaultPermissionResolver, the first in-memory
+implementation. The resolver walks the scope hierarchy, enforces the AGENT+SUPER_ADMIN hard
+invariant, applies SUPER_ADMIN bypass for non-agent actors, and resolves permission implication
+rules from ADR-009. 41 new tests cover all specified behaviours. Test count grew from 104 to
+145. Full reactor BUILD SUCCESS.
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/service/PermissionResolver.java
++ codex-custos/src/main/java/codex/custos/internal/service/DefaultPermissionResolver.java
++ codex-custos/src/test/java/codex/custos/internal/service/DefaultPermissionResolverTest.java
+
+INTERFACE SHAPE
+---------------
+PermissionResolver (api, exported):
+  boolean hasPermission(Actor actor, PermissionKey permission, ResourceScope target,
+                        Collection<RoleAssignment> assignments, Map<RoleKey, Role> roleRegistry)
+
+DefaultPermissionResolver (internal, not exported):
+  Implements PermissionResolver. Stateless, final. No persistence, no transport, no mutation.
+
+EVALUATION ORDER
+----------------
+1. Hard guard — if actor.type == AGENT and any assignment for that actor has SUPER_ADMIN key:
+   throw IllegalStateException (system invariant violation, fires before all other logic).
+2. SUPER_ADMIN bypass — if actor.type != AGENT and actor has a SUPER_ADMIN assignment whose
+   scope covers the target: return true immediately (no role lookup needed).
+3. Scope hierarchy walk — starting at target, walk to parent scopes (ContentItemScope →
+   ContentTypeScope → SiteScope → GlobalScope), never crossing site boundaries. At each scope,
+   find actor's assignments, look up Role in registry, check permissions with implication rules.
+
+SCOPE HIERARCHY
+---------------
+parentOf() is computed from the child scope's own fields, preserving site identity:
+  ContentItemScope(site, type, item) → ContentTypeScope(site, type)
+  ContentTypeScope(site, type)       → SiteScope(site)
+  SiteScope(site)                    → GlobalScope.INSTANCE
+  GlobalScope                        → null (stop)
+
+Site boundary enforcement is structural: the parent walk inherits the same siteKey from the
+child scope. An assignment in SiteScope(site-b) can never match a resource in site-a during
+a walk rooted at site-a.
+
+SUPER_ADMIN SCOPE COVERAGE
+---------------------------
+scopeCovers(assignmentScope, targetScope):
+  GlobalScope          → covers everything
+  SiteScope(site-A)    → covers SiteScope(site-A), ContentTypeScope(site-A, *), ContentItemScope(site-A, *, *)
+                         does NOT cover GlobalScope or any scope in site-B
+  ContentTypeScope(s,t)→ covers ContentTypeScope(s,t) and ContentItemScope(s,t,*)
+  ContentItemScope     → covers only the exact same ContentItemScope
+
+PERMISSION IMPLICATION (ADR-009)
+---------------------------------
+roleGrantsPermission() applies implication after direct contains() check:
+  contentItem.read is also granted if the role contains contentItem.update OR contentItem.publish
+  No other implication rules exist.
+  contentItem.publish does NOT imply contentItem.update (asymmetric, tested explicitly).
+
+TEST COVERAGE (41 tests, 8 nested classes)
+------------------------------------------
+NullGuards (5)         — null on each of the 5 parameters
+AgentSuperAdminInvariant (4) — AGENT+SUPER_ADMIN at GlobalScope and SiteScope throws;
+                               AGENT without SUPER_ADMIN resolves normally;
+                               hard guard only fires for the requested actor
+SuperAdminBypass (5)   — GlobalScope bypass; SiteScope bypass within same site; SiteScope
+                         does NOT bypass different site; SiteScope does NOT cover GlobalScope target;
+                         bypass fires on key match alone (no registry lookup needed)
+ExactScopeMatch (5)    — direct grant; permission not in role; no assignments; wrong actor; wrong scope
+ScopeHierarchyWalk (6) — ContentItemScope falls to ContentType, Site, and Global;
+                         ContentTypeScope falls to Site; SiteScope falls to Global;
+                         walk stops at first granting scope
+SiteBoundary (5)       — assignment in site-a not applied to site-b; ContentItemScope in site-a
+                         ignores ContentTypeScope from site-b; SiteScope from site-b;
+                         different ContentType in same site; GlobalScope applies across all sites
+PermissionImplication (5) — update→read; publish→read; publish!→update; update!→publish;
+                             implication limited to contentItem.read
+RegistryMiss (2)       — absent key silently skipped; valid and unknown assignments coexist
+BuiltInRoleSpotChecks (4) — VIEWER read-only; REVIEWER read via publish implication;
+                             COPYWRITER cannot publish; SITE_ADMIN cannot site.create
+
+OBSERVATIONS
+------------
+- The internal package (codex.custos.internal.service) is not exported in module-info.java.
+  Maven Surefire 3.5.0 automatically patches the module for tests, consistent with how
+  codex-codex handles internal repository and cache subscriber tests.
+
+- SUPER_ADMIN bypass does not require a registry lookup. The bypass fires on the RoleKey alone
+  (SUPER_ADMIN_KEY match + scope coverage). This is intentional: the blueprint provides
+  introspection value but the bypass semantics are encoded in the evaluator, not the blueprint.
+
+- The resolver is stateless and instantiable without dependencies. Callers are responsible for
+  assembling the assignments and registry snapshots. This is sufficient for the current in-memory
+  model; a future store-backed resolver can implement the same interface without changing callers.
+
+DEFERRED (NOT IMPLEMENTED)
+---------------------------
+- Direct actor PermissionGrant support (PermissionGrant has no actor field yet)
+- Explanation trace / resolution log
+- Step-up approval hooks
+- Policy engine / XACML-style rule sets
+- PermissionEvaluator integration (translates ResourceRef → ResourceScope before calling resolver)
+- AccessDecisionService wiring to DefaultPermissionResolver
