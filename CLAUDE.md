@@ -33,7 +33,7 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 | `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        | —         |
 | `codex-porta`           | REST/GraphQL exposure (skeleton)                    | —         |
 | `codex-iter`            | Workflow engine (skeleton)                          | —         |
-| `codex-custos`          | Domain authorization: Actor, Permission, AccessDecision (Phase 0) | ~21 |
+| `codex-custos`          | Domain authorization: Phase 0 complete/hardened; early Phase 1 primitives | Yes |
 | `codex-imaginarium`     | AI infrastructure (skeleton)                        | —         |
 | `codex-olorin`          | Agent reasoning (skeleton)                          | —         |
 
@@ -95,6 +95,13 @@ Validate at boundaries (constructors, command handlers, service entry points). U
 ### Method size
 ≤20 lines of logic (log statements don't count). Extract well-named private methods if exceeding.
 
+### Domain lambda names
+In domain/security code, do not use one-letter lambda names like `r`, `a`, `s`, or `x` when the value represents a domain concept. Prefer meaningful names such as `roleAssignment`, `role`, `permission`, `scope`, `actor`, `targetScope`, or `assignmentScope`.
+
+Short lambda names are acceptable only for trivial local transformations where the meaning is obvious and not domain-sensitive.
+
+Custos authorization logic must read like domain language. Lambda names should preserve explainability, especially in resolver, policy, audit, and security code.
+
 ### Idempotent methods
 If a method is idempotent (e.g., `activate` when the entity is already active), do not update `updatedAt`/`updatedBy`. Only state-changing operations advance the audit timestamps.
 
@@ -153,8 +160,8 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 
 ## Key Documentation Files
 
-- `codex-docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
-- `codex-docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
+- `docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
+- `docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
 - `CODING_IDENTITY.md` — broader design fingerprint
 
 ## Fundamentum Rule
@@ -165,11 +172,12 @@ A type belongs in `codex-fundamentum` only if it is generic, framework-agnostic,
 
 `codex-custos` owns domain authorization — not HTTP security. The core question it answers:
 ```
-May this Actor perform this Permission on this Codex Resource under this Context?
+May this Actor perform this PermissionKey on this Codex resource under this Context?
 ```
 
-### Key types (Phase 0)
+### Key types (Phase 0 + early Phase 1)
 - `PermissionKey` — domain permission name (e.g., `contentItem.publish`)
+- `Permissions` — catalog of built-in domain permission keys
 - `ResourceRef` — sealed hierarchy: `GlobalResourceRef`, `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`
 - `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
 - `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
@@ -177,15 +185,32 @@ May this Actor perform this Permission on this Codex Resource under this Context
 - `SecurityEvaluationContext` — request-level context passed to evaluators
 - `PermissionEvaluator` — low-level evaluation port (interface)
 - `AccessDecisionService` — application-level service wrapping the evaluator
+- `RoleKey` — role identifier
+- `Role` — permission blueprint; it does not contain actors or scopes
+- `PermissionGrant` — pairs a permission with a resource scope
+- `RoleAssignment` — pairs an `Actor` with a `RoleKey` at a `ResourceScope`
+- `BuiltInRoles` — catalog of role blueprints
+- `PermissionResolutionRequest` — record: actor + permission + target scope for a single check
+- `PermissionResolutionSnapshot` — record: immutable snapshot of assignments + role registry (defensively copied)
+- `PermissionResolution` — sealed: `Granted` / `Denied`; carries actor, permission, target scope, reason
+- `PermissionResolver` — resolves `PermissionResolution` from request + snapshot
+- `DefaultPermissionResolver` — internal; uses `DefaultResourceScopeHierarchy` and `DefaultPermissionImplicationRules`
+- `CustosSecurityException` — base exception for authorization failures and invariant violations
+- `CustosInvariantViolationException extends CustosSecurityException` — hard security invariant violated
+- `CustosAgentSuperAdminInvariantViolationException` — AGENT actor holds SUPER_ADMIN (carries offending actor)
 
 ### Hard rules
 - `AgentActor` must never be granted permission-management capabilities (hardcoded, not configurable).
 - Permission lookup never crosses site boundaries.
 - Authorization evaluates domain operations, not endpoints. Prefer `contentItemPermissionsService.canPublish(actor, resource)` over checking roles directly.
-- `SUPER_ADMIN` bypasses scoped grants but still respects structural invariants.
+- `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
+- `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
+- Hard invariants must run before any `SUPER_ADMIN` bypass.
+- `PermissionResolver.resolve()` returns `PermissionResolution`; `AccessDecisionService` wiring is still pending.
+- Direct actor `PermissionGrant` support and explanation trace are still pending.
 
 ### ADR
-Full specification in `codex-docs/future-forward/ADR-009.md`.
+Full specification in `docs/future-forward/ADR-009.md`.
 
 ## Backlog Classification
 

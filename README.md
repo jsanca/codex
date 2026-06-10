@@ -111,7 +111,7 @@ mvn clean verify
 
 ## Documentation
 
-Architectural notes, lore, specs, and future ADRs live in `codex-docs`.
+Architectural notes, lore, specs, and future ADRs live in `docs`.
 
 This root README is intended to remain an entry point: concise, repository-oriented, and focused on helping readers understand what Codex is, how the repository is organized, and what phase of the project is currently in progress.
 

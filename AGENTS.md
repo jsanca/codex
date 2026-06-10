@@ -12,8 +12,6 @@ mvn test -DskipTests       # compile only, skip tests
 
 Test framework: **JUnit 5 + AssertJ**. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
 
-**Known issue**: `codex-custos` has a compilation error (mismatched accessor return types in `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`). Build with `mvn test -pl '!codex-custos' -DskipTests` to skip it.
-
 ## Module Map
 
 Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api` / `codex.<module>.internal` package split.
@@ -31,7 +29,7 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 | `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        |
 | `codex-porta`           | REST/GraphQL exposure (skeleton)                    |
 | `codex-iter`            | Workflow engine (skeleton)                          |
-| `codex-custos`          | Identity, roles, permissions (skeleton)             |
+| `codex-custos`          | Domain authorization: Phase 0 complete/hardened; early Phase 1 roles and resolver primitives |
 | `codex-imaginarium`     | AI infrastructure (skeleton)                        |
 | `codex-olorin`          | Agent reasoning (skeleton)                          |
 
@@ -153,11 +151,12 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 
 `codex-custos` owns domain authorization — not HTTP security. The core question it answers:
 ```
-May this Actor perform this Permission on this Codex Resource under this Context?
+May this Actor perform this PermissionKey on this Codex resource under this Context?
 ```
 
-### Key types (Phase 0)
+### Key types (Phase 0 + early Phase 1)
 - `PermissionKey` — domain permission name (e.g., `contentItem.publish`)
+- `Permissions` — catalog of built-in domain permission keys
 - `ResourceRef` — sealed hierarchy: `GlobalResourceRef`, `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`
 - `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
 - `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
@@ -165,20 +164,31 @@ May this Actor perform this Permission on this Codex Resource under this Context
 - `SecurityEvaluationContext` — request-level context passed to evaluators
 - `PermissionEvaluator` — low-level evaluation port (interface)
 - `AccessDecisionService` — application-level service wrapping the evaluator
+- `RoleKey` — role identifier
+- `Role` — permission blueprint; it does not contain actors or scopes
+- `PermissionGrant` — pairs a permission with a resource scope
+- `RoleAssignment` — pairs an `Actor` with a `RoleKey` at a `ResourceScope`
+- `BuiltInRoles` — catalog of role blueprints
+- `PermissionResolver` — computes effective permissions from role assignments, role registry, scopes, and implication rules
+- `DefaultPermissionResolver` — internal implementation of `PermissionResolver`
 
 ### Hard rules
 - `AgentActor` must never be granted permission-management capabilities (hardcoded, not configurable).
 - Permission lookup never crosses site boundaries.
 - Authorization evaluates domain operations, not endpoints. Prefer `contentItemPermissionsService.canPublish(actor, resource)` over checking roles directly.
-- `SUPER_ADMIN` bypasses scoped grants but still respects structural invariants.
+- `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
+- `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
+- Hard invariants must run before any `SUPER_ADMIN` bypass.
+- `PermissionResolver` does not produce `AccessDecision` yet; `AccessDecisionService` wiring is still pending.
+- Direct actor `PermissionGrant` support and explanation trace are still pending.
 
 ### ADR
-Full specification in `codex-docs/future-forward/ADR-009.md`.
+Full specification in `docs/future-forward/ADR-009.md`.
 
 ## Key Documentation Files
 
-- `codex-docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
-- `codex-docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
+- `docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
+- `docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
 - `CODING_IDENTITY.md` — broader design fingerprint
 - `CLAUDE.md` — snapshot of this file for Claude Code; update both when conventions change
 
