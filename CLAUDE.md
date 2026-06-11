@@ -9,12 +9,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 mvn clean verify          # full build + tests (all modules)
 mvn test                   # run all tests
-mvn test -pl codex-codex   # run tests in one module
-mvn test -pl codex-codex -Dtest=CodexSiteServiceTest  # single test class
+mvn test -pl codex-codex                                    # run tests in one module
+mvn test -pl codex-custos                                   # run tests in custos module
+mvn test -pl codex-codex -Dtest=CodexSiteServiceTest        # single test class
+mvn test -pl codex-custos -Dtest=DefaultPermissionResolverTest  # single test class in custos
 mvn test -DskipTests       # compile only, skip tests
 ```
 
 Test framework: **JUnit 5 + AssertJ**. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
+
+Test structure convention (follow codex-custos tests as the reference):
+- Group with `@Nested` inner classes per scenario family
+- Declare shared fixtures as `private static final` constants (e.g., `ALICE`, `SITE_A`, `BLOG_TYPE`)
+- Use `@DisplayName` on every test method — name the observable behaviour, not the implementation
 
 ## Module Map
 
@@ -105,6 +112,21 @@ Custos authorization logic must read like domain language. Lambda names should p
 ### Idempotent methods
 If a method is idempotent (e.g., `activate` when the entity is already active), do not update `updatedAt`/`updatedBy`. Only state-changing operations advance the audit timestamps.
 
+### Sealed interfaces
+Use `sealed` interfaces with `record` permits for domain discriminated unions. Pattern-match at call sites — never `instanceof` chains.
+
+```java
+sealed interface AccessDecision permits AccessDecision.Granted, AccessDecision.Denied {
+    record Granted(...) implements AccessDecision {}
+    record Denied(...) implements AccessDecision { void requireGranted() { throw ...; } }
+}
+// call site:
+switch (decision) {
+    case AccessDecision.Granted g -> ...;
+    case AccessDecision.Denied  d -> d.requireGranted();
+}
+```
+
 ### Schema field collections
 Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
 
@@ -184,7 +206,9 @@ May this Actor perform this PermissionKey on this Codex resource under this Cont
 - `AccessDeniedException` — thrown by `AccessDecision.Denied.requireGranted()`
 - `SecurityEvaluationContext` — request-level context passed to evaluators
 - `PermissionEvaluator` — low-level evaluation port (interface)
-- `AccessDecisionService` — application-level service wrapping the evaluator
+- `AccessDecisionRequest` — record: actor + permission + `ResourceRef` (decision output) + `ResourceScope` (resolver input); both ref and scope are explicit
+- `AccessDecisionService` — evaluates `AccessDecisionRequest + PermissionResolutionSnapshot` → `AccessDecision`; delegates to `PermissionResolver`
+- `DefaultAccessDecisionService` — internal implementation; translates `PermissionResolution` → `AccessDecision`, preserving `ResourceRef`
 - `RoleKey` — role identifier
 - `Role` — permission blueprint; it does not contain actors or scopes
 - `PermissionGrant` — pairs a permission with a resource scope
@@ -206,8 +230,22 @@ May this Actor perform this PermissionKey on this Codex resource under this Cont
 - `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
 - `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
 - Hard invariants must run before any `SUPER_ADMIN` bypass.
-- `PermissionResolver.resolve()` returns `PermissionResolution`; `AccessDecisionService` wiring is still pending.
+- `AccessDecisionService.evaluate(AccessDecisionRequest, PermissionResolutionSnapshot)` delegates to `PermissionResolver` and maps `PermissionResolution` → `AccessDecision`; `ResourceRef` in the decision comes from the request, not from the scope walk.
+- `CustosAgentSuperAdminInvariantViolationException` is never converted to `Denied` — it propagates as a fatal error.
 - Direct actor `PermissionGrant` support and explanation trace are still pending.
+
+### Scope hierarchy walk
+`DefaultResourceScopeHierarchy` resolves grants bottom-up:
+```
+ContentItemResourceScope → ContentTypeResourceScope → SiteResourceScope → GlobalResourceScope
+```
+The first scope level that yields a grant wins; absence at all levels → `Denied`.
+
+### Permission implication rules
+Encoded in `DefaultPermissionImplicationRules` (not in role blueprints):
+- `update` implies `read`
+- `publish` implies `read`
+- `publish` does **not** imply `update` (authoring and publishing are separate capabilities)
 
 ### ADR
 Full specification in `docs/future-forward/ADR-009.md`.

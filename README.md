@@ -4,7 +4,7 @@ Codex is a headless, multi-tenant, multi-language CMS conceived as a disciplined
 
 It is not intended to be a traditional page-centric CMS. The center of Codex is the domain: structured content, revision-aware lifecycle, workflow-driven operations, and extensibility points that allow the system to evolve without bloating the core.
 
-This repository is being built in phases. The current phase establishes the modular skeleton, naming, and architectural boundaries before deeper implementation work begins.
+The Maven/Jigsaw modular foundation is established. Implementation is progressing incrementally — hardening the core domain model before expanding outward into exposure, persistence, and workflow layers.
 
 ## Current Direction
 
@@ -20,7 +20,7 @@ At a high level:
 - **Illuminarium** is the future domain of enrichment and semantic enhancement.
 - **Porta** is the external boundary of the system.
 - **Iter** governs workflow and orchestration.
-- **Custos** is the identity and access-control boundary.
+- **Custos** is the authorization boundary. It models actors, permissions, resource refs and scopes, roles, role assignments, permission grants, built-in roles, and permission resolution. Custos authorizes domain operations — not HTTP endpoints — and remains authentication-agnostic.
 - **Imaginarium** is the AI integration layer.
 - **Olórin** is the agent layer.
 
@@ -28,40 +28,41 @@ This separation is intentional.
 
 Imaginarium is not the domain agent itself. It exists to provide the infrastructure required for AI integration, orchestration, and interoperability. Olórin is the component responsible for reasoning over the Codex domain, planning meaningful actions, and operating through explicit capabilities.
 
-## Phase 1
+## Current Phase
 
-Phase 1 is intentionally limited.
+Codex is moving from architectural foundation into early domain implementation. The current priority is hardening the internal model before REST/API exposure or persistence.
 
-Its purpose is to establish:
+Current focus:
 
-- the Maven multi-module structure,
-- Java module descriptors (Jigsaw),
-- package roots,
-- public vs internal module boundaries,
-- and naming consistency aligned with the Codex lore.
+- domain lifecycle (sites, content types, content items, revisions)
+- domain events
+- service decorators
+- cache and index foundations
+- Observance
+- authorization via Custos
+- auditability via Chronicon
+- module boundary enforcement
 
-Phase 1 does **not** yet implement the Codex MVP behavior.
+Still deferred:
 
-It also does **not** settle deeper technical decisions such as:
-
-- persistence strategy,
-- JPA vs JDBC vs other data access approaches,
-- JSONB mappings,
-- REST controllers,
-- OpenSearch integration,
-- S3 integration,
-- workflow engine behavior,
-- and full business use cases.
+- REST/API exposure through Porta
+- persistence strategy
+- production authentication integration
+- full workflow engine behavior
+- step-up approval
+- Olórin permission proposal execution
 
 ## Module Map
 
 The current conceptual and technical modules are:
 
+- `codex-bom`
 - `codex-fundamentum`
 - `codex-codex`
 - `codex-chronicon`
 - `codex-archivum`
 - `codex-index`
+- `codex-concilium`
 - `codex-scriptorium`
 - `codex-illuminarium`
 - `codex-porta`
@@ -84,18 +85,17 @@ The intent is to make public contracts explicit and keep implementation details 
 
 ## Architecture
 
-Codex is currently organized into the following Phase 1 Jigsaw modules:
-
 - **Fundamentum** (`codex-fundamentum`) — Foundational shared abstractions and cross-cutting base types.
 - **Codex** (`codex-codex`) — The central domain/kernel of the system.
 - **Chronicon** (`codex-chronicon`) — History, revision memory, and publication narrative.
 - **Archivum** (`codex-archivum`) — Storage abstraction layer.
 - **Index** (`codex-index`) — Search and discoverability.
+- **Concilium** (`codex-concilium`) — Runtime composition layer; assembles module runtimes.
 - **Scriptorium** (`codex-scriptorium`) — Scripting and dynamic customization.
 - **Illuminarium** (`codex-illuminarium`) — Enrichment and semantic enhancement.
 - **Porta** (`codex-porta`) — External exposure layer, including APIs and integrations.
 - **Iter** (`codex-iter`) — Workflow and orchestration.
-- **Custos** (`codex-custos`) — Identity, roles, permissions, and access control.
+- **Custos** (`codex-custos`) — Domain authorization: actors, roles, permissions, resource scopes, and resolution.
 - **Imaginarium** (`codex-imaginarium`) — AI integration infrastructure.
 - **Olórin** (`codex-olorin`) — Agent-oriented reasoning and domain-aware interaction.
 
@@ -103,7 +103,7 @@ Codex is currently organized into the following Phase 1 Jigsaw modules:
 
 This project uses **Maven** and **Java Modules (Jigsaw)**.
 
-To verify the current multi-module skeleton from the repository root:
+To build and test from the repository root:
 
 ```bash
 mvn clean verify
@@ -111,7 +111,7 @@ mvn clean verify
 
 ## Documentation
 
-Architectural notes, lore, specs, and future ADRs live in `docs`.
+Architectural notes, lore, specs, ADRs, and implementation roadmaps live in `docs/`.
 
 This root README is intended to remain an entry point: concise, repository-oriented, and focused on helping readers understand what Codex is, how the repository is organized, and what phase of the project is currently in progress.
 
@@ -119,6 +119,4 @@ Module-specific intent and architectural details should live in the correspondin
 
 ## Status
 
-Codex is in an early architectural phase.
-
-The structure now exists so that implementation can proceed incrementally and deliberately, with decisions documented as they become stable.
+Codex is in early implementation. The modular structure is established. Core domain foundations — lifecycle, events, authorization, and auditability — are progressing deliberately. The system is not yet ready for production use.
