@@ -14,6 +14,9 @@ import codex.custos.api.service.PermissionResolver;
 import codex.fundamentum.api.model.Actor;
 import codex.fundamentum.api.model.ActorType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 import java.util.Optional;
 
@@ -32,6 +35,7 @@ import java.util.Optional;
  */
 public final class DefaultPermissionResolver implements PermissionResolver {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPermissionResolver.class);
     private static final RoleKey SUPER_ADMIN_KEY = BuiltInRoles.SUPER_ADMIN.key();
 
     private final ResourceScopeHierarchy scopeHierarchy;
@@ -71,10 +75,12 @@ public final class DefaultPermissionResolver implements PermissionResolver {
         if (actor.type() != ActorType.AGENT) {
             return;
         }
-        boolean agentHoldsSuperAdmin = snapshot.assignments().stream()
+        final boolean agentHoldsSuperAdmin = snapshot.assignments().stream()
                 .filter(roleAssignment -> roleAssignment.actor().equals(actor))
                 .anyMatch(roleAssignment -> SUPER_ADMIN_KEY.equals(roleAssignment.role()));
         if (agentHoldsSuperAdmin) {
+            LOGGER.warn("Security invariant violation: AGENT actor [{}] holds SUPER_ADMIN",
+                    actor.id().value());
             throw new CustosAgentSuperAdminInvariantViolationException(actor);
         }
     }
@@ -91,7 +97,7 @@ public final class DefaultPermissionResolver implements PermissionResolver {
                                                 final PermissionResolutionSnapshot snapshot) {
         ResourceScope current = request.target();
         while (current != null) {
-            Optional<Role> grantingRole = findGrantingRoleAtScope(request.actor(), request.permission(),
+            final Optional<Role> grantingRole = findGrantingRoleAtScope(request.actor(), request.permission(),
                     current, snapshot);
             if (grantingRole.isPresent()) {
                 return PermissionResolution.granted(request.actor(), request.permission(),
