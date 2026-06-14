@@ -30,7 +30,7 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 | Module                  | Responsibility                                      | Has Tests |
 |-------------------------|-----------------------------------------------------|-----------|
 | `codex-bom`             | Bill of Materials (version management)              | —         |
-| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor | ~192  |
+| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor, CodexExecutor (virtual-thread pool), Observance (Counter/Timer), TransactionContext | ~192  |
 | `codex-codex`           | Central domain kernel: sites, content types, items, lifecycle | ~607 |
 | `codex-chronicon`       | Audit history, revision memory, event subscribers   | ~281      |
 | `codex-archivum`        | Storage abstraction (skeleton)                      | —         |
@@ -68,6 +68,10 @@ Services grow through decorator composition (e.g. `TransactionalSiteService -> L
 
 - **Events** = facts that already happened (`SiteCreatedEvent`, `ContentItemPublished`). Must implement `CodexEvent`.
 - **Hooks** = extension points around something happening (`beforeSave`, `afterPublish`). Keep them conceptually separate.
+
+### Deferred event dispatch
+
+`codex-codex` services use `DeferredEventDispatcher` to accumulate events during a service operation and flush them as a batch at the end. When adding a new service method that emits events, follow the same defer-then-flush pattern used in `EventPublishingSiteService` and its siblings.
 
 ## Java Conventions
 
@@ -145,11 +149,25 @@ Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
 
 ## State Machines
 
-State transitions must be explicit and validated in a dedicated method. Current `SiteStatus` machine:
+State transitions must be explicit and validated in a dedicated method.
+
+`SiteStatus`:
 ```
 STARTED ⟷ SUSPENDED ⟷ ARCHIVED
 ```
 No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
+
+`ContentTypeStatus`:
+```
+DRAFT → ACTIVE → DEPRECATED
+```
+Only one `ACTIVE` version per `(siteId, key)` at a time.
+
+`ContentItemStatus`:
+```
+DRAFT → LIVE → ARCHIVED
+```
+`LIVE` is reached via `publish`; `unarchive` returns to `DRAFT`.
 
 ## Code Quality Constraints
 
@@ -180,11 +198,16 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 - No `throws` declarations for domain validation errors
 - `IllegalStateException` for subscriber/projection failures (system invariant violation)
 
+**Note**: `codex-codex` is an exception — its service-level exceptions (e.g., `InvalidContentTypeStatusTransitionException`, `SiteAlreadyExistException`) live in `codex.codex.internal.service` (unexported). Only `codex-fundamentum` and `codex-custos` currently follow the `api.exception` pattern.
+
 ## Key Documentation Files
 
 - `docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
 - `docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
+- `docs/security/CUSTOS-MODEL.md` — full Custos authorization model
+- `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — implementation progress checklist for Custos phases
 - `CODING_IDENTITY.md` — broader design fingerprint
+- `AGENTS.md` — human-facing companion to this file; keep both in sync when conventions change
 
 ## Fundamentum Rule
 

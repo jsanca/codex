@@ -2,36 +2,51 @@
 
 ## Build & Test Commands
 
+No Maven wrapper — `mvn` must be on PATH. All commands run from repo root.
+
 ```bash
-mvn clean verify          # full build + tests (all modules)
-mvn test                   # run all tests
-mvn test -pl codex-codex   # run tests in one module
-mvn test -pl codex-codex -Dtest=CodexSiteServiceTest  # single test class
-mvn test -DskipTests       # compile only, skip tests
+mvn clean verify                                  # full build + tests (all modules)
+mvn test                                          # run all tests
+mvn test -pl codex-codex                          # tests in one module
+mvn test -pl codex-custos                         # tests in custos module
+mvn test -pl codex-codex -Dtest=CodexSiteServiceTest   # single test class
+mvn test -DskipTests                              # compile only, skip tests
 ```
 
-Test framework: **JUnit 5 + AssertJ**. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
+Test framework: **JUnit 5 + AssertJ**. `assertThatThrownBy` / `assertThatNullPointerException` for exception assertions; avoid JUnit 5's own `assertThrows`. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
+
+`spring-boot-starter-test` is allowed in `<scope>test</scope>` even in `codex-codex` — it does not leak into production code and does not violate core purity.
+
+## Test Conventions
+
+Use `codex-custos` tests as the reference for style. `codex-codex` tests predate these conventions and are a divergent, flatter style — prefer `codex-custos` patterns for new work.
+
+- Group with `@Nested` inner classes per scenario family, each with its own `@DisplayName`
+- `@DisplayName` on every test method — name the observable behaviour, not the implementation
+- Shared fixtures as `private static final` constants in `UPPER_SNAKE_CASE` (e.g. `ALICE`, `SITE_A`, `BLOG_TYPE`)
+- Test classes are package-private
+- For skeleton or documentation-only tasks, make zero code changes — no Java, no pom.xml, no module-info, no wiring, no tests
 
 ## Module Map
 
 Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api` / `codex.<module>.internal` package split.
 
-| Module                  | Responsibility                                      |
-|-------------------------|-----------------------------------------------------|
-| `codex-bom`             | Bill of Materials (version management)              |
-| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor, CodexExecutor |
-| `codex-codex`           | Central domain kernel: sites, content types, items, lifecycle |
-| `codex-chronicon`       | Audit history, revision memory, event subscribers   |
-| `codex-archivum`        | Storage abstraction (skeleton)                      |
-| `codex-index`           | Search/indexing abstractions and subscribers        |
-| `codex-concilium`       | Runtime composition: composes CodexRuntime + IndexRuntime + ChroniconRuntime |
-| `codex-scriptorium`     | Scripting runtime (skeleton)                        |
-| `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        |
-| `codex-porta`           | REST/GraphQL exposure (skeleton)                    |
-| `codex-iter`            | Workflow engine (skeleton)                          |
-| `codex-custos`          | Domain authorization: Phase 0 complete/hardened; early Phase 1 roles and resolver primitives |
-| `codex-imaginarium`     | AI infrastructure (skeleton)                        |
-| `codex-olorin`          | Agent reasoning (skeleton)                          |
+| Module                  | Responsibility                                      | Tests |
+|-------------------------|-----------------------------------------------------|-------|
+| `codex-bom`             | Bill of Materials (version management)              | —     |
+| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor, CodexExecutor | ✓     |
+| `codex-codex`           | Central domain kernel: sites, content types, items, lifecycle | ✓     |
+| `codex-chronicon`       | Audit history, revision memory, event subscribers   | ✓     |
+| `codex-archivum`        | Storage abstraction (skeleton)                      | —     |
+| `codex-index`           | Search/indexing abstractions and subscribers        | ✓     |
+| `codex-concilium`       | Runtime composition: composes CodexRuntime + IndexRuntime + ChroniconRuntime | ✓     |
+| `codex-scriptorium`     | Scripting runtime (skeleton)                        | —     |
+| `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        | —     |
+| `codex-porta`           | REST/GraphQL exposure (skeleton)                    | —     |
+| `codex-iter`            | Workflow engine (skeleton)                          | —     |
+| `codex-custos`          | Domain authorization: Phase 0 complete/hardened; early Phase 1 roles and resolver primitives | ✓     |
+| `codex-imaginarium`     | AI infrastructure (skeleton)                        | —     |
+| `codex-olorin`          | Agent reasoning (skeleton)                          | —     |
 
 **Dependency direction**: inward only. `codex-codex` depends only on `codex-fundamentum`. It must never depend on any other Codex module. `codex-concilium` composes module runtimes without making the core depend on projection/adapter modules.
 
@@ -94,6 +109,26 @@ Validate at boundaries (constructors, command handlers, service entry points). U
 ### Idempotent methods
 If a method is idempotent (e.g., `activate` when the entity is already active), do not update `updatedAt`/`updatedBy`. Only state-changing operations advance the audit timestamps.
 
+### Sealed interfaces
+
+Use `sealed` interfaces with `record` permits for domain discriminated unions. Pattern-match at call sites — never `instanceof` chains.
+
+```java
+sealed interface AccessDecision permits AccessDecision.Granted, AccessDecision.Denied {
+    record Granted(...) implements AccessDecision {}
+    record Denied(...) implements AccessDecision { void requireGranted() { throw ...; } }
+}
+// call site:
+switch (decision) {
+    case AccessDecision.Granted g -> ...;
+    case AccessDecision.Denied  d -> d.requireGranted();
+}
+```
+
+### Domain lambda names
+
+In domain/security code, do not use one-letter lambda names (`r`, `a`, `s`, `x`) when the value represents a domain concept. Prefer meaningful names: `roleAssignment`, `role`, `permission`, `scope`, `actor`. Custos authorization logic must read like domain language.
+
 ### Schema field collections
 Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
 
@@ -144,8 +179,10 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 - Unchecked exceptions, extend `RuntimeException`
 - Domain exceptions in `codex.<module>.api.exception` (exported). No common base class — direct subtypes with specific names.
 - Constructors: `(String message)` + `(String message, Throwable cause)`. Optional domain-specific factory.
+- Do NOT use Java's legacy four-argument exception constructors (`suppression`, `writableStackTrace`)
 - No `throws` declarations for domain validation errors
 - `IllegalStateException` for subscriber/projection failures (system invariant violation)
+- Keep `NotFoundException` generic in `codex.fundamentum.api.exception`; add typed subclasses only when a caller needs to discriminate
 
 ## Custos / Authorization Rules
 
@@ -171,6 +208,21 @@ May this Actor perform this PermissionKey on this Codex resource under this Cont
 - `BuiltInRoles` — catalog of role blueprints
 - `PermissionResolver` — computes effective permissions from role assignments, role registry, scopes, and implication rules
 - `DefaultPermissionResolver` — internal implementation of `PermissionResolver`
+
+### Scope hierarchy walk
+
+`DefaultResourceScopeHierarchy` resolves grants bottom-up:
+```
+ContentItemResourceScope → ContentTypeResourceScope → SiteResourceScope → GlobalResourceScope
+```
+The first scope level that yields a grant wins; absence at all levels → `Denied`.
+
+### Permission implication rules
+
+Encoded in `DefaultPermissionImplicationRules` (not in role blueprints):
+- `update` implies `read`
+- `publish` implies `read`
+- `publish` does **not** imply `update` (authoring and publishing are separate capabilities)
 
 ### Hard rules
 - `AgentActor` must never be granted permission-management capabilities (hardcoded, not configurable).
