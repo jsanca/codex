@@ -16,8 +16,13 @@ Authentication, transport adapters, persistence, REST, JWT, SAML, OIDC, Spring S
 - [x] Phase 0 hardened and reviewed after Clio Task C.
 - [x] Permissions catalog added.
 - [x] Phase 1 roles and resolver primitives implemented.
-- [ ] Phase 2 not started.
-- [ ] Phase 3 not started.
+- [x] AccessDecisionService wiring over PermissionResolver implemented.
+- [x] Domain permission services implemented.
+- [x] ContentType lifecycle permission vocabulary aligned to archive.
+- [x] SecuredContentItemService implemented.
+- [x] Service-level authorization matrix test added.
+- [x] Phase 2 domain permission services complete.
+- [x] Phase 3 secured service decorators started.
 - [ ] Phase 4 not started.
 
 ## Phase 0 Hardening
@@ -89,26 +94,46 @@ Phase 1 notes:
 
 Phase 1 pending follow-up:
 
-- [ ] Direct actor `PermissionGrant` support.
+- [ ] Direct actor `PermissionGrant` support. DEFERRED
 - [ ] Explanation trace.
-- [ ] `AccessDecisionService` wiring over `PermissionResolver`.
+- [x] `AccessDecisionService` wiring over `PermissionResolver`.
 
 ## Phase 2: Domain Permission Services
 
-Not started.
+Implemented.
 
-- [ ] `SitePermissionsService`
-- [ ] `ContentTypePermissionsService`
-- [ ] `ContentItemPermissionsService`
-- [ ] `RoleAssignmentPermissionsService`
+- [x] `SitePermissionsService`
+- [x] `ContentTypePermissionsService`
+- [x] `ContentItemPermissionsService`
+- [x] `RoleAssignmentPermissionsService`
+
+### ContentType Lifecycle Vocabulary Alignment
+
+Done.
+
+- [x] `CONTENT_TYPE_DELETE` removed.
+- [x] `contentType.delete` removed.
+- [x] `canDeleteContentType` removed.
+- [x] `CONTENT_TYPE_ARCHIVE` added.
+- [x] `contentType.archive` added.
+- [x] `canArchiveContentType` added.
 
 ## Phase 3: Secured Service Decorators
 
-Not started.
+Started.
 
-- [ ] `SecuredSiteService`
-- [ ] `SecuredContentTypeService`
-- [ ] `SecuredContentItemService`
+- [ ] `SecuredSiteService` pending.
+- [ ] `SecuredContentTypeService` pending.
+- [x] `SecuredContentItemService`
+- [x] `SecuredContentItemServiceAuthorizationMatrixTest`
+
+SecuredContentItemService notes:
+
+- create/findByKey/update/publish/unpublish/archive are gated.
+- delete/restore are fail-closed until permission semantics are defined.
+- findByContentType/findAll remain pass-through pending read filtering strategy.
+- SecuredContentItemServiceAuthorizationMatrixTest uses the real Custos chain with `BuiltInRoles`, `RoleAssignment`, `PermissionResolver`, `AccessDecisionService`, `ContentItemPermissionsService`, and `SecuredContentItemService`.
+- The authorization matrix covers viewer, copywriter, reviewer, editor, site boundary, and AGENT + SUPER_ADMIN invariant scenarios.
 
 ## Phase 4: Permission Change Workflow
 

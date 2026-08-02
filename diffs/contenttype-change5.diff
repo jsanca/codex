@@ -999,10 +999,10 @@ index a17bbab..37c8686 100644
      // --- addField ---
  
      @Test
-diff --git a/codex-docs/tasks/Task12-ContentType-Version-Foundation.md b/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
+diff --git a/docs/tasks/Task12-ContentType-Version-Foundation.md b/docs/tasks/Task12-ContentType-Version-Foundation.md
 index e69de29..dc81ca6 100644
---- a/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
-+++ b/codex-docs/tasks/Task12-ContentType-Version-Foundation.md
+--- a/docs/tasks/Task12-ContentType-Version-Foundation.md
++++ b/docs/tasks/Task12-ContentType-Version-Foundation.md
 @@ -0,0 +1,578 @@
 +# Task12: ContentType Version Foundation
 +

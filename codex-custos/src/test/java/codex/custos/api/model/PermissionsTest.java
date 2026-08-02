@@ -30,7 +30,7 @@ class PermissionsTest {
         assertThat(Permissions.CONTENT_TYPE_READ.value()).isEqualTo("contentType.read");
         assertThat(Permissions.CONTENT_TYPE_CREATE.value()).isEqualTo("contentType.create");
         assertThat(Permissions.CONTENT_TYPE_UPDATE.value()).isEqualTo("contentType.update");
-        assertThat(Permissions.CONTENT_TYPE_DELETE.value()).isEqualTo("contentType.delete");
+        assertThat(Permissions.CONTENT_TYPE_ARCHIVE.value()).isEqualTo("contentType.archive");
     }
 
     @Test

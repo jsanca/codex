@@ -608,10 +608,10 @@ index edd42d6..dd6bdcd 100644
 +        runtime.clearRecordedEvents();
      }
  }
-diff --git a/codex-docs/tasks/Task6-Codex-Runtime.md b/codex-docs/tasks/Task6-Codex-Runtime.md
+diff --git a/docs/tasks/Task6-Codex-Runtime.md b/docs/tasks/Task6-Codex-Runtime.md
 index e69de29..054f292 100644
---- a/codex-docs/tasks/Task6-Codex-Runtime.md
-+++ b/codex-docs/tasks/Task6-Codex-Runtime.md
+--- a/docs/tasks/Task6-Codex-Runtime.md
++++ b/docs/tasks/Task6-Codex-Runtime.md
 @@ -0,0 +1,85 @@
 +# Task: Implement CodexRuntime as the composition root for codex-codex
 +
@@ -699,10 +699,10 @@ index e69de29..054f292 100644
 +- Proper JavaDoc on all public methods
 +- Logs on startup and shutdown
 \ No newline at end of file
-diff --git a/codex-docs/tasks/Task7-Content-Typess.md b/codex-docs/tasks/Task7-Content-Typess.md
+diff --git a/docs/tasks/Task7-Content-Typess.md b/docs/tasks/Task7-Content-Typess.md
 index e69de29..42c8cec 100644
---- a/codex-docs/tasks/Task7-Content-Typess.md
-+++ b/codex-docs/tasks/Task7-Content-Typess.md
+--- a/docs/tasks/Task7-Content-Typess.md
++++ b/docs/tasks/Task7-Content-Typess.md
 @@ -0,0 +1,400 @@
 +# Task7: Content Types Foundation
 +

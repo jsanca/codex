@@ -50,6 +50,8 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 
 **Dependency direction**: inward only. `codex-codex` depends only on `codex-fundamentum`. It must never depend on any other Codex module. `codex-concilium` composes module runtimes without making the core depend on projection/adapter modules.
 
+The root `src/` directory is unused — all source lives in modules.
+
 ## Architecture Rules
 
 ### Core purity (`codex-codex` and `codex-fundamentum`)
@@ -72,6 +74,10 @@ Services grow through decorator composition (e.g. `TransactionalSiteService -> L
 
 - **Events** = facts that already happened (`SiteCreatedEvent`, `ContentItemPublished`). Must implement `CodexEvent`.
 - **Hooks** = extension points around something happening (`beforeSave`, `afterPublish`). Keep them conceptually separate.
+
+### Deferred event dispatch
+
+`codex-codex` services use `DeferredEventDispatcher` to accumulate events during a service operation and flush them as a batch at the end. When adding a new service method that emits events, follow the same defer-then-flush pattern used in `EventPublishingSiteService` and `EventPublishingContentItemService`.
 
 ## Java Conventions
 
@@ -147,11 +153,33 @@ Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
 
 ## State Machines
 
-State transitions must be explicit and validated in a dedicated method. Current `SiteStatus` machine:
+State transitions must be explicit and validated in a dedicated method.
+
+**SiteStatus** (`STARTED ⟷ SUSPENDED ⟷ ARCHIVED`):
 ```
-STARTED ⟷ SUSPENDED ⟷ ARCHIVED
+STARTED → SUSPENDED
+SUSPENDED → STARTED or ARCHIVED
+ARCHIVED → SUSPENDED
 ```
 No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
+
+**ContentTypeStatus** (`DRAFT → ACTIVE → ARCHIVED`):
+```
+DRAFT → ACTIVE (activate)
+ACTIVE → ARCHIVED (archive)
+DRAFT → ARCHIVED (archive)
+```
+Only one `ACTIVE` version per `(siteId, key)` at a time.
+
+**ContentItemStatus** (`DRAFT → PUBLISHED → ARCHIVED`):
+```
+DRAFT → PUBLISHED (publish)
+PUBLISHED → DRAFT (unpublish)
+DRAFT → ARCHIVED (archive)
+PUBLISHED → ARCHIVED (archive)
+ARCHIVED → DRAFT (restore)
+```
+Delete requires `ARCHIVED` status.
 
 ## Code Quality Constraints
 
@@ -184,6 +212,8 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 - `IllegalStateException` for subscriber/projection failures (system invariant violation)
 - Keep `NotFoundException` generic in `codex.fundamentum.api.exception`; add typed subclasses only when a caller needs to discriminate
 
+**Note**: `codex-codex` is a current exception — its service-level exceptions (e.g., `InvalidContentTypeStatusTransitionException`, `SiteAlreadyExistException`) live in `codex.codex.internal.service` (unexported). Only `codex-fundamentum` and `codex-custos` follow the `api.exception` pattern. Do not add new exceptions to `internal.service` — use `api.exception`.
+
 ## Custos / Authorization Rules
 
 `codex-custos` owns domain authorization — not HTTP security. The core question it answers:
@@ -191,23 +221,28 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 May this Actor perform this PermissionKey on this Codex resource under this Context?
 ```
 
-### Key types (Phase 0 + early Phase 1)
+### Key types
 - `PermissionKey` — domain permission name (e.g., `contentItem.publish`)
 - `Permissions` — catalog of built-in domain permission keys
 - `ResourceRef` — sealed hierarchy: `GlobalResourceRef`, `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`
 - `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
 - `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
 - `AccessDeniedException` — thrown by `AccessDecision.Denied.requireGranted()`
-- `SecurityEvaluationContext` — request-level context passed to evaluators
-- `PermissionEvaluator` — low-level evaluation port (interface)
-- `AccessDecisionService` — application-level service wrapping the evaluator
+- `AccessDecisionRequest` — record: actor + permission + `ResourceRef` (decision output) + `ResourceScope` (resolver input)
+- `AccessDecisionService` — evaluates `AccessDecisionRequest + PermissionResolutionSnapshot` → `AccessDecision`
 - `RoleKey` — role identifier
 - `Role` — permission blueprint; it does not contain actors or scopes
 - `PermissionGrant` — pairs a permission with a resource scope
 - `RoleAssignment` — pairs an `Actor` with a `RoleKey` at a `ResourceScope`
 - `BuiltInRoles` — catalog of role blueprints
-- `PermissionResolver` — computes effective permissions from role assignments, role registry, scopes, and implication rules
-- `DefaultPermissionResolver` — internal implementation of `PermissionResolver`
+- `PermissionResolutionRequest` — record: actor + permission + target scope
+- `PermissionResolutionSnapshot` — record: immutable snapshot of assignments + role registry (defensively copied)
+- `PermissionResolution` — sealed: `Granted` / `Denied`; carries actor, permission, target scope, reason
+- `PermissionResolver` — resolves `PermissionResolution` from request + snapshot
+- `DefaultPermissionResolver` — internal; uses `DefaultResourceScopeHierarchy` and `DefaultPermissionImplicationRules`
+- `CustosSecurityException` — base exception for authorization failures and invariant violations
+- `CustosInvariantViolationException extends CustosSecurityException` — hard security invariant violated
+- `CustosAgentSuperAdminInvariantViolationException` — AGENT actor holds SUPER_ADMIN (carries offending actor)
 
 ### Scope hierarchy walk
 
@@ -231,7 +266,8 @@ Encoded in `DefaultPermissionImplicationRules` (not in role blueprints):
 - `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
 - `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
 - Hard invariants must run before any `SUPER_ADMIN` bypass.
-- `PermissionResolver` does not produce `AccessDecision` yet; `AccessDecisionService` wiring is still pending.
+- `AccessDecisionService.evaluate(...)` delegates to `PermissionResolver` and maps `PermissionResolution` → `AccessDecision`; `ResourceRef` in the decision comes from the request, not from the scope walk.
+- `CustosAgentSuperAdminInvariantViolationException` is never converted to `Denied` — it propagates as a fatal error.
 - Direct actor `PermissionGrant` support and explanation trace are still pending.
 
 ### ADR
@@ -241,6 +277,8 @@ Full specification in `docs/future-forward/ADR-009.md`.
 
 - `docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
 - `docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
+- `docs/security/CUSTOS-MODEL.md` — full Custos authorization model
+- `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — implementation progress checklist for Custos phases
 - `CODING_IDENTITY.md` — broader design fingerprint
 - `CLAUDE.md` — snapshot of this file for Claude Code; update both when conventions change
 

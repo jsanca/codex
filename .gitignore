@@ -7,6 +7,9 @@
 .idea/**
 !.idea/vcs.xml
 !.idea/runConfigurations/
+.idea/*
+*.DSStore.*
+
 
 # Log file
 *.log

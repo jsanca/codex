@@ -1,92 +1,101 @@
-# The Codex
+# Imaginarium Philosophy
 
-## Prologue
+Imaginarium exists so Codex can use AI deliberately without letting provider
+details, model behavior, or agentic ambition leak into business domains.
 
-Throughout history, knowledge has always needed a structure.
+It is the conceptual home for reusable AI infrastructure. It gives Codex a place
+to reason about models, providers, contexts, capabilities, tools, skills,
+supervision, and runtime behavior before any consuming agent platform decides what
+to do with them.
 
-In ancient times, knowledge lived in scrolls: long, continuous, difficult to navigate.
-Later came the codex — a bound collection of pages that allowed ideas to be organized, indexed, referenced, and preserved.
+## Why Imaginarium Exists
 
-The codex changed how knowledge was stored and transmitted.
-It transformed information into something structured, navigable, and extensible.
+Codex needs AI infrastructure that can be shared by different future systems.
 
-Centuries later, digital systems face a similar challenge.
+Some AI features will be simple: summarize a document, classify content, enrich
+metadata, or generate a draft. Other AI features may become collaborative or
+agentic: plan work, propose changes, coordinate workers, or evaluate mission
+progress.
 
-Modern content management systems were built for a different era — one dominated by templated websites and tightly coupled rendering engines.
-Over time they accumulated responsibilities: storage, presentation, business logic, integrations, workflows, search, caching, and more.
+Those capabilities should not be scattered across business modules. They need a
+shared conceptual foundation that is independent from any one provider, model,
+framework, or agent.
 
-The result is often a monolith where content, infrastructure, and behavior are intertwined.
+Imaginarium provides that foundation.
 
-But content itself is not the problem.
+## Problems It Solves
 
-Content is simply structured knowledge.
+Imaginarium solves infrastructure-level AI problems:
 
-What modern systems lack is not another CMS, but a clear and minimal kernel capable of managing knowledge in a structured way while allowing infrastructure, behavior, and intelligence to evolve independently.
+* how Codex talks about AI providers and models
+* how runtime context is assembled and bounded
+* how capabilities, tools, skills, policies, and knowledge can be discovered
+* how AI work can be grouped into missions and sessions
+* how planning and supervision can be described without becoming business logic
+* how future agentic systems can consume reusable AI infrastructure
 
-That is the purpose of Codex.
+It helps Codex avoid treating every AI feature as an agent.
 
-Codex is not merely a CMS.
+It also helps Codex avoid coupling domain modules to model-specific or
+provider-specific behavior.
 
-Codex is a content platform kernel — a small, extensible core designed to manage structured knowledge while delegating infrastructure and intelligence to modular extensions.
+## Problems It Intentionally Does Not Solve
 
-Just like the codices of the past organized manuscripts into pages and chapters, Codex organizes digital knowledge into types, items, and versions.
+Imaginarium does not own Codex business behavior.
 
-But unlike traditional systems, Codex is designed to live comfortably in modern architectures:
-•	as a microservice
-•	as a containerized component
-•	as a headless content engine
-•	as a platform ready for automation and artificial intelligence
+It does not:
 
-Codex is intentionally minimal.
+* own canonical content
+* approve privileged actions
+* bypass Custos authorization
+* perform site, content type, or content item lifecycle decisions
+* replace Illuminarium enrichment responsibilities
+* replace Olorin or any future agentic platform
+* define persistence, transport, or provider-specific implementation details
 
-Its core responsibility is simple:
+When a future system needs to decide what Codex operation should happen, that is
+not Imaginarium acting as a business actor. Imaginarium supplies infrastructure.
+The consuming domain or agentic layer owns the domain intent.
 
-to manage structured content and its lifecycle.
+## Why AI Infrastructure Is Separate From Business Domains
 
-Everything else — storage, search, caching, integrations, and AI — belongs outside the core.
+Business domains should remain stable even when AI infrastructure changes.
 
-This philosophy ensures that Codex remains small, stable, and adaptable as technology evolves.
+Providers will change. Models will change. Prompting strategies will change.
+Runtime context strategies will change. Supervision concepts will evolve.
 
-⸻
+Site lifecycle, content lifecycle, audit semantics, authorization semantics, and
+canonical data ownership should not churn because an AI provider or agentic
+pattern changes.
 
-Why Codex Exists
+Separating AI infrastructure from business domains keeps Codex explainable:
 
-Codex exists because modern systems often confuse content management with application infrastructure.
+* domain modules describe what Codex means
+* Imaginarium describes how AI infrastructure can be used
+* future agentic platforms describe how AI-assisted work is coordinated
+* Custos remains the authorization gate
 
-A content platform should not dictate:
-•	where content is stored
-•	how it is searched
-•	how it is cached
-•	how it is rendered
+## Why Conceptual Clarity Comes First
 
-Those are implementation choices that change over time.
+Implementation-first design is risky in AI infrastructure.
 
-Codex separates what content is from how systems operate around it.
+If Codex starts with provider APIs, agent frameworks, or convenient class names,
+the architecture may inherit accidental assumptions: one model shape, one tool
+protocol, one orchestration style, or one idea of what an agent is.
 
-By doing so, it allows organizations to integrate content management into their architecture rather than forcing their architecture around a CMS.
+Conceptual clarity gives Codex a better sequence:
 
-⸻
+* name the responsibility
+* draw the boundary
+* understand what it is not
+* only then let APIs emerge
 
-What Codex Intends to Become
+The language should be simple enough to teach before it becomes code.
 
-Codex begins as a small kernel.
+## Guiding Principle
 
-But its ambition is larger.
+Discover the domain first.
 
-Over time Codex aims to become a platform capable of supporting:
-•	structured knowledge management
-•	distributed content systems
-•	automated publishing pipelines
-•	semantic search
-•	AI-assisted content processing
-•	integration with external authoring tools
-•	artifact-based content deployments
+Design the API second.
 
-In other words, Codex aspires to be a foundation for knowledge systems, not merely a website tool.
-
-Like the manuscripts that inspired its name, Codex is intended to grow over time — page by page, chapter by chapter.
-
-Each extension, plugin, and integration becomes another page in the system.
-
-And together they form a living book of structured knowledge.
-
+Write the code last.

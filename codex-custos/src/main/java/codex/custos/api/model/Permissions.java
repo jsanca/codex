@@ -45,8 +45,8 @@ public final class Permissions {
     /** Modify an existing content type schema. */
     public static final PermissionKey CONTENT_TYPE_UPDATE = PermissionKey.of("contentType.update");
 
-    /** Delete a content type. */
-    public static final PermissionKey CONTENT_TYPE_DELETE = PermissionKey.of("contentType.delete");
+    /** Archive a content type, removing it from active use. */
+    public static final PermissionKey CONTENT_TYPE_ARCHIVE = PermissionKey.of("contentType.archive");
 
     // --- Content Item ---
 

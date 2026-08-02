@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /**
  * Refers to a content type within a site as the resource being evaluated.
- * Used for permissions such as {@code contentType.update} or {@code contentType.delete}.
+ * Used for permissions such as {@code contentType.update} or {@code contentType.archive}.
  */
 public record ContentTypeResourceRef(SiteKey siteKey, ContentTypeKey contentTypeKey) implements ResourceRef {
 

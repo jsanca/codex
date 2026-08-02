@@ -328,16 +328,12 @@ class DefaultAccessDecisionServiceTest {
         @DisplayName("invariant exception is not converted to Denied — it propagates as-is")
         void invariantExceptionIsNotDenied() {
             RoleAssignment assignment = RoleAssignment.of(BOT, BuiltInRoles.SUPER_ADMIN.key(), GlobalScope.INSTANCE);
-            try {
-                service.evaluate(
-                        AccessDecisionRequest.of(BOT, Permissions.CONTENT_ITEM_READ,
-                                ITEM_REF, new SiteScope(SITE_A)),
-                        snapshot(List.of(assignment), registry(BuiltInRoles.SUPER_ADMIN)));
-            } catch (CustosAgentSuperAdminInvariantViolationException ex) {
-                assertThat(ex).isNotInstanceOf(codex.custos.api.exception.AccessDeniedException.class);
-                return;
-            }
-            throw new AssertionError("Expected CustosAgentSuperAdminInvariantViolationException");
+            assertThatExceptionOfType(CustosAgentSuperAdminInvariantViolationException.class)
+                    .isThrownBy(() -> service.evaluate(
+                            AccessDecisionRequest.of(BOT, Permissions.CONTENT_ITEM_READ,
+                                    ITEM_REF, new SiteScope(SITE_A)),
+                            snapshot(List.of(assignment), registry(BuiltInRoles.SUPER_ADMIN))))
+                    .isNotInstanceOf(codex.custos.api.exception.AccessDeniedException.class);
         }
     }
 

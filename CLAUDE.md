@@ -159,15 +159,15 @@ No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 
 `ContentTypeStatus`:
 ```
-DRAFT → ACTIVE → DEPRECATED
+DRAFT → ACTIVE → ARCHIVED
 ```
 Only one `ACTIVE` version per `(siteId, key)` at a time.
 
 `ContentItemStatus`:
 ```
-DRAFT → LIVE → ARCHIVED
+DRAFT → PUBLISHED → ARCHIVED
 ```
-`LIVE` is reached via `publish`; `unarchive` returns to `DRAFT`.
+`PUBLISHED` returns to `DRAFT` via `unpublish`; `ARCHIVED` returns to `DRAFT` via `restore`.
 
 ## Code Quality Constraints
 
@@ -227,8 +227,6 @@ May this Actor perform this PermissionKey on this Codex resource under this Cont
 - `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
 - `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
 - `AccessDeniedException` — thrown by `AccessDecision.Denied.requireGranted()`
-- `SecurityEvaluationContext` — request-level context passed to evaluators
-- `PermissionEvaluator` — low-level evaluation port (interface)
 - `AccessDecisionRequest` — record: actor + permission + `ResourceRef` (decision output) + `ResourceScope` (resolver input); both ref and scope are explicit
 - `AccessDecisionService` — evaluates `AccessDecisionRequest + PermissionResolutionSnapshot` → `AccessDecision`; delegates to `PermissionResolver`
 - `DefaultAccessDecisionService` — internal implementation; translates `PermissionResolution` → `AccessDecision`, preserving `ResourceRef`

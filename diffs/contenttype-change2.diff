@@ -622,10 +622,10 @@ index e79f0d4..8f745e1 100644
      private CreateSiteCommand createSiteCommand(SiteKey key, SiteStatus status) {
          return new CreateSiteCommand(
                  key,
-diff --git a/codex-docs/tasks/Task8-Content-Types-Step2.md b/codex-docs/tasks/Task8-Content-Types-Step2.md
+diff --git a/docs/tasks/Task8-Content-Types-Step2.md b/docs/tasks/Task8-Content-Types-Step2.md
 index e69de29..195e470 100644
---- a/codex-docs/tasks/Task8-Content-Types-Step2.md
-+++ b/codex-docs/tasks/Task8-Content-Types-Step2.md
+--- a/docs/tasks/Task8-Content-Types-Step2.md
++++ b/docs/tasks/Task8-Content-Types-Step2.md
 @@ -0,0 +1,357 @@
 +# Task8: System Site and Lifecycle Participation
 +

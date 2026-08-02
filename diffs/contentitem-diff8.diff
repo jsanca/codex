@@ -482,10 +482,10 @@ index b7266e0..57600d3 100644
          @Override
          public Optional<ContentItem> findByKey(final SiteKey siteKey, final ContentTypeKey contentTypeKey,
                                                  final ContentItemKey key, final Actor actor) {
-diff --git a/codex-docs/tasks/Task17-Publish-Content-Revision-Foundation.md b/codex-docs/tasks/Task17-Publish-Content-Revision-Foundation.md
+diff --git a/docs/tasks/Task17-Publish-Content-Revision-Foundation.md b/docs/tasks/Task17-Publish-Content-Revision-Foundation.md
 index e69de29..9122ae3 100644
---- a/codex-docs/tasks/Task17-Publish-Content-Revision-Foundation.md
-+++ b/codex-docs/tasks/Task17-Publish-Content-Revision-Foundation.md
+--- a/docs/tasks/Task17-Publish-Content-Revision-Foundation.md
++++ b/docs/tasks/Task17-Publish-Content-Revision-Foundation.md
 @@ -0,0 +1,497 @@
 +# Task17: Publish Content Revision Foundation
 +

@@ -55,10 +55,10 @@ index dd6bdcd..01c1fd6 100644
      /**
       * Returns all events dispatched so far.
       *
-diff --git a/codex-docs/tasks/Task10-ContentType-Events.md b/codex-docs/tasks/Task10-ContentType-Events.md
+diff --git a/docs/tasks/Task10-ContentType-Events.md b/docs/tasks/Task10-ContentType-Events.md
 index e69de29..5c44d02 100644
---- a/codex-docs/tasks/Task10-ContentType-Events.md
-+++ b/codex-docs/tasks/Task10-ContentType-Events.md
+--- a/docs/tasks/Task10-ContentType-Events.md
++++ b/docs/tasks/Task10-ContentType-Events.md
 @@ -0,0 +1,500 @@
 +# Task10: ContentType Event Publishing Pipeline
 +

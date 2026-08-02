@@ -67,7 +67,7 @@ class BuiltInRolesTest {
         assertThat(BuiltInRoles.SITE_ADMIN.permissions()).hasSize(17);
         assertThat(BuiltInRoles.SITE_ADMIN.permissions()).contains(
                 Permissions.SITE_READ,
-                Permissions.CONTENT_TYPE_DELETE,
+                Permissions.CONTENT_TYPE_ARCHIVE,
                 Permissions.CONTENT_ITEM_PUBLISH,
                 Permissions.PERMISSION_READ,
                 Permissions.ROLE_ASSIGN,

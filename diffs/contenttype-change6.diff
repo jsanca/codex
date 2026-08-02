@@ -576,10 +576,10 @@ index 76e73d0..d26809c 100644
      /**
       * Returns the {@link CodexEventDispatcher} used by this runtime.
       * In the in-memory configuration this is a {@link DeferredEventDispatcher}.
-diff --git a/codex-docs/tasks/Task13-contentitems.md b/codex-docs/tasks/Task13-contentitems.md
+diff --git a/docs/tasks/Task13-contentitems.md b/docs/tasks/Task13-contentitems.md
 index e69de29..769cfaa 100644
---- a/codex-docs/tasks/Task13-contentitems.md
-+++ b/codex-docs/tasks/Task13-contentitems.md
+--- a/docs/tasks/Task13-contentitems.md
++++ b/docs/tasks/Task13-contentitems.md
 @@ -0,0 +1,770 @@
 +# Task13: ContentItem Foundation
 +
