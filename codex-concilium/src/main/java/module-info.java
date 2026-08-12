@@ -9,6 +9,7 @@ module codex.concilium {
     requires codex.codex;
     requires codex.index;
     requires codex.chronicon;
+    requires codex.custos;
     requires org.slf4j;
     exports codex.concilium.api.runtime;
 }

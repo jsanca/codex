@@ -15,6 +15,8 @@ This document is a mental model companion to ADR-009. It does not introduce impl
 - `BuiltInRoles` is a catalog of role blueprints.
 - `PermissionResolver` computes effective permissions from role assignments, the role registry, scopes, and permission rules.
 - `PermissionEvaluator` and `AccessDecisionService` answer whether an actor can perform a permission on a resource.
+- Domain permission services translate domain operation intent into permission checks.
+- Secured service decorators enforce `AccessDecision` before delegating to raw domain services.
 - `AccessDecision` is the explained result: granted or denied, with the relevant actor, permission, resource, and reason.
 
 Keep the data objects simple:
@@ -66,24 +68,48 @@ classDiagram
     AccessDecisionService ..> AccessDecision : returns
 ```
 
-## Authorization Flow
+## Current Authorization Flow
 
 ```mermaid
-flowchart LR
-    input["Actor + PermissionKey + ResourceRef + Context"]
-    evaluator["PermissionEvaluator / AccessDecisionService"]
+flowchart TD
+    actor["Actor"]
+    assignment["RoleAssignment"]
+    role["Role"]
+    grant["Effective PermissionGrant"]
     resolver["PermissionResolver"]
+    resolution["PermissionResolution"]
+    decisionService["AccessDecisionService"]
     decision["AccessDecision"]
+    domainPermissions["Domain permission service"]
+    securedDecorator["Secured service decorator"]
+    delegate["Raw domain service"]
 
-    input --> evaluator
-    evaluator --> resolver
-    resolver --> evaluator
-    evaluator --> decision
+    actor --> assignment
+    assignment --> role
+    role --> grant
+    grant --> resolver
+    resolver --> resolution
+    resolution --> decisionService
+    decisionService --> decision
+    domainPermissions --> decisionService
+    decision --> securedDecorator
+    securedDecorator --> delegate
 ```
 
-The evaluator/service is the caller-facing authorization API. The resolver is the policy computation layer that determines effective permissions. `AccessDecisionService` wiring over the resolver is still pending, so the resolver does not produce `AccessDecision` yet.
+The domain permission service is the caller-facing authorization adapter for a domain
+operation. It builds the `PermissionKey`, `ResourceRef`, and `ResourceScope` needed for the
+check, then delegates to `AccessDecisionService`.
 
-## Current Resolver Status
+`AccessDecisionService` is implemented. The default implementation delegates scope-based
+resolution to `PermissionResolver`, receives a `PermissionResolution`, and maps it to an
+`AccessDecision` while preserving the original `ResourceRef` from the request.
+
+The diagram shows an effective `PermissionGrant` because resolution combines a
+`RoleAssignment` scope with permissions from the assigned `Role`. The current `Role` record
+still stores `Set<PermissionKey>` directly; `PermissionGrant` itself remains a simple
+`PermissionKey + ResourceScope` data object and does not carry an actor or role.
+
+## Current Custos Status
 
 - `PermissionResolver` API exists.
 - `DefaultPermissionResolver` exists as the internal implementation.
@@ -92,9 +118,99 @@ The evaluator/service is the caller-facing authorization API. The resolver is th
 - It applies scoped `SUPER_ADMIN` bypass for valid non-agent actors.
 - It walks the scope hierarchy without crossing site boundaries.
 - It implements `contentItem.update` -> `contentItem.read` and `contentItem.publish` -> `contentItem.read` implications.
-- It does not produce `AccessDecision` yet.
+- `AccessDecisionService` API exists.
+- `DefaultAccessDecisionService` exists as the internal implementation.
+- `DefaultAccessDecisionService` delegates to `PermissionResolver`.
+- `DefaultAccessDecisionService` translates `PermissionResolution` into `AccessDecision`.
+- Domain permission services exist: `SitePermissionsService`, `ContentTypePermissionsService`, and `ContentItemPermissionsService`.
+- Secured decorators exist: `SecuredSiteService`, `SecuredContentTypeService`, and `SecuredContentItemService`.
+- `ConciliumRuntime.secured(...)` composes the secured runtime and exposes secured top-level services.
+- `ConciliumRuntime.inMemory()` remains the unsecured/back-compat runtime path.
+- Denied operations fail before delegation, so they do not mutate state, emit domain events, update index projections, or accidentally create Chronicon audit records.
 - Direct actor `PermissionGrant` support is still pending.
-- Explanation trace is still pending.
+- `AccessDecision` trace is still pending.
+- Security audit consumers/sinks are still pending.
+
+## Domain Permission Services
+
+Domain permission services keep authorization checks readable at the domain-operation level:
+
+- `SitePermissionsService`
+- `ContentTypePermissionsService`
+- `ContentItemPermissionsService`
+
+They translate operation intent into:
+
+```text
+PermissionKey + ResourceRef + ResourceScope + PermissionResolutionSnapshot
+```
+
+and then delegate to `AccessDecisionService`.
+
+They do not authenticate actors, persist permissions, expose transport concerns, mutate domain
+state, or produce audit records.
+
+## Secured Decorators
+
+Secured decorators enforce authorization before delegating:
+
+- `SecuredSiteService`
+- `SecuredContentTypeService`
+- `SecuredContentItemService`
+
+The rule is:
+
+```text
+check permission
+  -> require AccessDecision.Granted
+  -> delegate only after authorization succeeds
+```
+
+If the decision is denied, `AccessDeniedException` is thrown and the raw domain service is not
+called.
+
+## Runtime Composition
+
+`ConciliumRuntime.secured(...)` composes the current in-memory secured runtime:
+
+```text
+ConciliumRuntime.secured(...)
+  -> exposes secured SiteService
+  -> exposes secured ContentTypeService
+  -> exposes secured ContentItemService
+```
+
+Runtime rule:
+
+- `ConciliumRuntime.secured(...)` is the recommended path for adapter, external, and domain entrypoints.
+- `ConciliumRuntime.inMemory()` remains unsecured by design for tests, low-level scenarios, and backward compatibility.
+- `coreRuntime()` exposes the raw core runtime.
+- External and domain entrypoints should use `runtime.siteService()`, `runtime.contentTypeService()`, and `runtime.contentItemService()`.
+- External and domain entrypoints should not use `runtime.coreRuntime().siteService()`, `runtime.coreRuntime().contentTypeService()`, or `runtime.coreRuntime().contentItemService()` because those are raw services.
+
+## Authorization Audit Direction
+
+CODEX-018 separates authorization facts from domain audit:
+
+- denied authorization attempts are security facts, not domain facts
+- Chronicon's domain audit stream should remain focused on applied business/domain facts
+- a future Chronicon-like security audit stream may exist, but it should remain meaningfully separate from domain audit
+- Observance may receive PI-safe aggregate authorization metrics
+- logs remain diagnostic and are not the durable audit source of truth
+- `AccessDecision` may become a future source of authorization decision records/events
+- future decision consumers/sinks may include security audit, Observance metrics, diagnostic logs, alerting, or no-op consumers
+
+Custos should not directly depend on Chronicon, Observance, logging sinks, or security audit
+storage.
+
+## Accepted Gaps
+
+- Collection read filtering is pending.
+- Alias-to-`SiteKey` authorization is pending.
+- Restore/delete/unarchive/purge permission vocabulary is pending.
+- Direct actor grants are pending.
+- `AccessDecision` trace is pending.
+- Security audit consumers/sinks are pending.
 
 ## Example: Juan as Copywriter
 

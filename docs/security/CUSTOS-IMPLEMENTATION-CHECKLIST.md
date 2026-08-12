@@ -120,20 +120,37 @@ Done.
 
 ## Phase 3: Secured Service Decorators
 
-Started.
+Phase 1.4 secured decorators are done.
 
-- [ ] `SecuredSiteService` pending.
-- [ ] `SecuredContentTypeService` pending.
+- [x] `SecuredSiteService`
+- [x] `SecuredContentTypeService`
 - [x] `SecuredContentItemService`
 - [x] `SecuredContentItemServiceAuthorizationMatrixTest`
 
-SecuredContentItemService notes:
+Secured decorator notes:
 
-- create/findByKey/update/publish/unpublish/archive are gated.
-- delete/restore are fail-closed until permission semantics are defined.
-- findByContentType/findAll remain pass-through pending read filtering strategy.
+- ContentItem create/findByKey/update/publish/unpublish/archive are gated.
+- ContentType keyed read and mutating operations are gated.
+- Site keyed read and lifecycle operations are gated.
+- ContentItem delete/restore are fail-closed until permission semantics are defined.
+- Site unarchive is fail-closed until permission semantics are defined.
+- ContentItem findByContentType/findAll remain pass-through pending read filtering strategy.
+- ContentType findBySiteKey/findAll remain pass-through pending read filtering strategy.
+- Site findByAlias/findAll remain pass-through pending read filtering strategy.
+- alias-to-SiteKey authorization remains pending/future.
+- secure runtime composition is done through `ConciliumRuntime.secured(...)`.
+- restore/purge/unarchive permission semantics remain pending/future.
 - SecuredContentItemServiceAuthorizationMatrixTest uses the real Custos chain with `BuiltInRoles`, `RoleAssignment`, `PermissionResolver`, `AccessDecisionService`, `ContentItemPermissionsService`, and `SecuredContentItemService`.
 - The authorization matrix covers viewer, copywriter, reviewer, editor, site boundary, and AGENT + SUPER_ADMIN invariant scenarios.
+
+Secured runtime composition notes:
+
+- `ConciliumRuntime.secured(...)` exposes authorization-enforcing services.
+- `ConciliumRuntime.inMemory()` remains an explicit unsecured/back-compat path.
+- secured runtimes report `SECURED`; unsecured runtimes report `UNSECURED`.
+- runtime metadata is diagnostic only; security is enforced by the exposed service graph.
+- adapter, external, and domain entrypoints should call `runtime.siteService()`, `runtime.contentTypeService()`, and `runtime.contentItemService()`.
+- callers should not use `runtime.coreRuntime().siteService()`, `runtime.coreRuntime().contentTypeService()`, or `runtime.coreRuntime().contentItemService()` for adapter, external, or domain entrypoints.
 
 ## Phase 4: Permission Change Workflow
 

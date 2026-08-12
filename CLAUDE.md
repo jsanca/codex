@@ -1,27 +1,33 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Codex Project Guide
+> **`AGENTS.md` is the canonical source for this file.** When conventions change, update both.
 
 ## Build & Test Commands
 
+No Maven wrapper — `mvn` must be on PATH. All commands run from repo root.
+
 ```bash
-mvn clean verify          # full build + tests (all modules)
-mvn test                   # run all tests
-mvn test -pl codex-codex                                    # run tests in one module
-mvn test -pl codex-custos                                   # run tests in custos module
-mvn test -pl codex-codex -Dtest=CodexSiteServiceTest        # single test class
-mvn test -pl codex-custos -Dtest=DefaultPermissionResolverTest  # single test class in custos
-mvn test -DskipTests       # compile only, skip tests
+mvn clean verify                                          # full build + tests (all modules)
+mvn test                                                  # run all tests
+mvn test -pl codex-codex                                  # tests in one module
+mvn test -pl codex-codex -Dtest=CodexSiteServiceTest      # single test class
+mvn test -pl codex-custos -Dtest=DefaultPermissionResolverTest  # single test in custos
+mvn test -DskipTests                                      # compile only, skip tests
 ```
 
-Test framework: **JUnit 5 + AssertJ**. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
+Test framework: **JUnit 5 + AssertJ**. `assertThatThrownBy` / `assertThatNullPointerException` for exception assertions; avoid JUnit 5's own `assertThrows`. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
 
-Test structure convention (follow codex-custos tests as the reference):
-- Group with `@Nested` inner classes per scenario family
-- Declare shared fixtures as `private static final` constants (e.g., `ALICE`, `SITE_A`, `BLOG_TYPE`)
-- Use `@DisplayName` on every test method — name the observable behaviour, not the implementation
+`spring-boot-starter-test` is allowed in `<scope>test</scope>` even in `codex-codex` — it does not leak into production code and does not violate core purity.
+
+## Test Conventions
+
+Use `codex-custos` tests as the reference for style. `codex-codex` tests predate these conventions and are a divergent, flatter style — prefer `codex-custos` patterns for new work.
+
+- Group with `@Nested` inner classes per scenario family, each with its own `@DisplayName`
+- `@DisplayName` on every test method — name the observable behaviour, not the implementation
+- Shared fixtures as `private static final` constants in `UPPER_SNAKE_CASE` (e.g. `ALICE`, `SITE_A`, `BLOG_TYPE`)
+- Test classes are package-private
+- For skeleton or documentation-only tasks, make zero code changes — no Java, no pom.xml, no module-info, no wiring, no tests
 
 ## Module Map
 
@@ -45,6 +51,8 @@ Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api
 | `codex-olorin`          | Agent reasoning (skeleton)                          | —         |
 
 **Dependency direction**: inward only. `codex-codex` depends only on `codex-fundamentum`. It must never depend on any other Codex module. `codex-concilium` composes module runtimes without making the core depend on projection/adapter modules.
+
+The root `src/` directory is unused — all source lives in modules.
 
 ## Architecture Rules
 
@@ -71,7 +79,7 @@ Services grow through decorator composition (e.g. `TransactionalSiteService -> L
 
 ### Deferred event dispatch
 
-`codex-codex` services use `DeferredEventDispatcher` to accumulate events during a service operation and flush them as a batch at the end. When adding a new service method that emits events, follow the same defer-then-flush pattern used in `EventPublishingSiteService` and its siblings.
+`codex-codex` services use `DeferredEventDispatcher` to accumulate events during a service operation and flush them as a batch at the end. When adding a new service method that emits events, follow the same defer-then-flush pattern used in `EventPublishingSiteService` and `EventPublishingContentItemService`.
 
 ## Java Conventions
 
@@ -151,23 +159,31 @@ Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
 
 State transitions must be explicit and validated in a dedicated method.
 
-`SiteStatus`:
+**SiteStatus** (`STARTED ⟷ SUSPENDED ⟷ ARCHIVED`):
 ```
-STARTED ⟷ SUSPENDED ⟷ ARCHIVED
+STARTED → SUSPENDED
+SUSPENDED → STARTED or ARCHIVED
+ARCHIVED → SUSPENDED
 ```
 No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
 
-`ContentTypeStatus`:
+**ContentTypeStatus** (`DRAFT → ACTIVE → ARCHIVED`):
 ```
-DRAFT → ACTIVE → ARCHIVED
+DRAFT → ACTIVE (activate)
+ACTIVE → ARCHIVED (archive)
+DRAFT → ARCHIVED (archive)
 ```
 Only one `ACTIVE` version per `(siteId, key)` at a time.
 
-`ContentItemStatus`:
+**ContentItemStatus** (`DRAFT → PUBLISHED → ARCHIVED`):
 ```
-DRAFT → PUBLISHED → ARCHIVED
+DRAFT → PUBLISHED (publish)
+PUBLISHED → DRAFT (unpublish)
+DRAFT → ARCHIVED (archive)
+PUBLISHED → ARCHIVED (archive)
+ARCHIVED → DRAFT (restore)
 ```
-`PUBLISHED` returns to `DRAFT` via `unpublish`; `ARCHIVED` returns to `DRAFT` via `restore`.
+Delete requires `ARCHIVED` status.
 
 ## Code Quality Constraints
 
@@ -195,10 +211,12 @@ DRAFT → PUBLISHED → ARCHIVED
 - Unchecked exceptions, extend `RuntimeException`
 - Domain exceptions in `codex.<module>.api.exception` (exported). No common base class — direct subtypes with specific names.
 - Constructors: `(String message)` + `(String message, Throwable cause)`. Optional domain-specific factory.
+- Do NOT use Java's legacy four-argument exception constructors (`suppression`, `writableStackTrace`).
 - No `throws` declarations for domain validation errors
 - `IllegalStateException` for subscriber/projection failures (system invariant violation)
+- Keep `NotFoundException` generic in `codex.fundamentum.api.exception`; add typed subclasses only when a caller needs to discriminate.
 
-**Note**: `codex-codex` is an exception — its service-level exceptions (e.g., `InvalidContentTypeStatusTransitionException`, `SiteAlreadyExistException`) live in `codex.codex.internal.service` (unexported). Only `codex-fundamentum` and `codex-custos` currently follow the `api.exception` pattern.
+**Note**: `codex-codex` is a current exception — its service-level exceptions (e.g., `InvalidContentTypeStatusTransitionException`, `SiteAlreadyExistException`) live in `codex.codex.internal.service` (unexported). Only `codex-fundamentum` and `codex-custos` follow the `api.exception` pattern. Do not add new exceptions to `internal.service` — use `api.exception`.
 
 ## Key Documentation Files
 
@@ -207,7 +225,6 @@ DRAFT → PUBLISHED → ARCHIVED
 - `docs/security/CUSTOS-MODEL.md` — full Custos authorization model
 - `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — implementation progress checklist for Custos phases
 - `CODING_IDENTITY.md` — broader design fingerprint
-- `AGENTS.md` — human-facing companion to this file; keep both in sync when conventions change
 
 ## Fundamentum Rule
 

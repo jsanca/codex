@@ -1,16 +1,18 @@
 # AGENTS.md — Codex Project Guide
 
+> **`CLAUDE.md` is a mirror of this file.** When conventions change, update both.
+
 ## Build & Test Commands
 
 No Maven wrapper — `mvn` must be on PATH. All commands run from repo root.
 
 ```bash
-mvn clean verify                                  # full build + tests (all modules)
-mvn test                                          # run all tests
-mvn test -pl codex-codex                          # tests in one module
-mvn test -pl codex-custos                         # tests in custos module
-mvn test -pl codex-codex -Dtest=CodexSiteServiceTest   # single test class
-mvn test -DskipTests                              # compile only, skip tests
+mvn clean verify                                          # full build + tests (all modules)
+mvn test                                                  # run all tests
+mvn test -pl codex-codex                                  # tests in one module
+mvn test -pl codex-codex -Dtest=CodexSiteServiceTest      # single test class
+mvn test -pl codex-custos -Dtest=DefaultPermissionResolverTest  # single test in custos
+mvn test -DskipTests                                      # compile only, skip tests
 ```
 
 Test framework: **JUnit 5 + AssertJ**. `assertThatThrownBy` / `assertThatNullPointerException` for exception assertions; avoid JUnit 5's own `assertThrows`. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
@@ -280,7 +282,6 @@ Full specification in `docs/future-forward/ADR-009.md`.
 - `docs/security/CUSTOS-MODEL.md` — full Custos authorization model
 - `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — implementation progress checklist for Custos phases
 - `CODING_IDENTITY.md` — broader design fingerprint
-- `CLAUDE.md` — snapshot of this file for Claude Code; update both when conventions change
 
 ## Fundamentum Rule
 

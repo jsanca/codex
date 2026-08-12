@@ -36,6 +36,11 @@
             <artifactId>codex-chronicon</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>codex</groupId>
+            <artifactId>codex-custos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>

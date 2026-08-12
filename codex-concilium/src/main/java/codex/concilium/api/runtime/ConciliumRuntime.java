@@ -1,7 +1,16 @@
 package codex.concilium.api.runtime;
 
 import codex.chronicon.api.runtime.ChroniconRuntime;
+import codex.codex.api.model.service.ContentItemService;
+import codex.codex.api.model.service.ContentTypeService;
+import codex.codex.api.model.service.SiteService;
 import codex.codex.api.runtime.CodexRuntime;
+import codex.custos.api.model.PermissionResolutionSnapshot;
+import codex.custos.api.service.AccessDecisionService;
+import codex.custos.api.service.ContentItemPermissionsService;
+import codex.custos.api.service.ContentTypePermissionsService;
+import codex.custos.api.service.SecuredServiceComposer;
+import codex.custos.api.service.SitePermissionsService;
 import codex.fundamentum.api.event.CodexEvent;
 import codex.fundamentum.api.event.CodexEventDispatcher;
 import codex.fundamentum.api.event.CodexEventSubscriber;
@@ -17,6 +26,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Local runtime council for Codex.
@@ -26,11 +36,18 @@ import java.util.concurrent.atomic.AtomicReference;
  * module subscribers share a unified event dispatcher so that domain events emitted by
  * core services are automatically delivered to Index and Chronicon.</p>
  *
- * <p>Usage (in-memory, suitable for tests and early development):</p>
+ * <p>Usage (unsecured in-memory, suitable for tests and early development):</p>
  * <pre>{@code
  * ConciliumRuntime runtime = ConciliumRuntime.inMemory();
- * runtime.coreRuntime().siteService().create(..., actor);
+ * runtime.siteService().create(..., actor);
  * // SiteCreatedEvent reaches ChroniconRuntime subscribers automatically
+ * }</pre>
+ *
+ * <p>Usage (secured with Custos authorization):</p>
+ * <pre>{@code
+ * Supplier<PermissionResolutionSnapshot> snapshotProvider = () -> currentSnapshot();
+ * ConciliumRuntime runtime = ConciliumRuntime.secured(snapshotProvider);
+ * runtime.siteService().create(..., actor); // enforces domain authorization
  * }</pre>
  *
  * <p>Usage with custom child runtimes (e.g. recording writers/repositories in tests):</p>
@@ -53,30 +70,43 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
     private static final String MODULE_NAME = "codex-concilium";
 
     private final CodexRuntime coreRuntime;
+    private final SiteService siteService;
+    private final ContentTypeService contentTypeService;
+    private final ContentItemService contentItemService;
     private final IndexRuntime indexRuntime;
     private final ChroniconRuntime chroniconRuntime;
     private final List<CodexEventSubscriber<? extends CodexEvent>> subscribers;
     private final CodexEventDispatcher eventDispatcher;
+    private final RuntimeSecurityMode securityMode;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private ConciliumRuntime(
             final CodexRuntime coreRuntime,
+            final SiteService siteService,
+            final ContentTypeService contentTypeService,
+            final ContentItemService contentItemService,
             final IndexRuntime indexRuntime,
             final ChroniconRuntime chroniconRuntime,
             final List<CodexEventSubscriber<? extends CodexEvent>> subscribers,
-            final CodexEventDispatcher eventDispatcher) {
+            final CodexEventDispatcher eventDispatcher,
+            final RuntimeSecurityMode securityMode) {
         this.coreRuntime = coreRuntime;
+        this.siteService = siteService;
+        this.contentTypeService = contentTypeService;
+        this.contentItemService = contentItemService;
         this.indexRuntime = indexRuntime;
         this.chroniconRuntime = chroniconRuntime;
         this.subscribers = subscribers;
         this.eventDispatcher = eventDispatcher;
+        this.securityMode = securityMode;
     }
 
     // --- factories ---
 
     /**
      * Creates a fully wired in-memory runtime composing all three module runtimes with
-     * no-op observance.
+     * no-op observance. Services are <strong>unsecured</strong>; no authorization checks
+     * are applied. Use {@link #secured(Supplier)} for production or authorization-sensitive paths.
      *
      * <p>Uses a forwarding lambda to break the circular dependency between
      * {@code CodexRuntime} creation (which needs the module dispatcher) and
@@ -93,6 +123,7 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
     /**
      * Creates a fully wired in-memory runtime composing all three module runtimes,
      * wiring the same {@link Observance} instance through the full event stack.
+     * Services are <strong>unsecured</strong>; no authorization checks are applied.
      *
      * <p>The provided {@code Observance} is passed to:</p>
      * <ul>
@@ -114,9 +145,6 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
         Objects.requireNonNull(observance, "observance must not be null");
         LOGGER.info("Assembling ConciliumRuntime (in-memory)");
 
-        // A forwarding dispatcher breaks the circular dependency:
-        // CodexRuntime needs the module dispatcher at construction time, but IndexRuntime
-        // needs core.contentItemProjectionReader() — which requires CodexRuntime to exist first.
         final AtomicReference<CodexEventDispatcher> placeholder =
                 new AtomicReference<>(event -> {});
         final CodexRuntime core = CodexRuntime.inMemory(
@@ -132,8 +160,67 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
                 new LocalCodexEventDispatcher(allSubscribers, observance);
         placeholder.set(moduleDispatcher);
 
-        LOGGER.info("ConciliumRuntime ready: {} subscribers wired", allSubscribers.size());
-        return new ConciliumRuntime(core, index, chronicon, allSubscribers, moduleDispatcher);
+        LOGGER.info("ConciliumRuntime ready [{}]: {} subscribers wired",
+                RuntimeSecurityMode.UNSECURED, allSubscribers.size());
+        return new ConciliumRuntime(core,
+                core.siteService(), core.contentTypeService(), core.contentItemService(),
+                index, chronicon, allSubscribers, moduleDispatcher, RuntimeSecurityMode.UNSECURED);
+    }
+
+    /**
+     * Creates a fully wired in-memory runtime with Custos authorization enforced on all
+     * service operations. The {@code snapshotProvider} is invoked once per secured operation
+     * to supply the current {@link PermissionResolutionSnapshot}; it is never called eagerly
+     * at runtime creation time.
+     *
+     * <p>The authorization stack uses the default Custos resolver and decision service.
+     * The event pipeline (Index + Chronicon subscribers) is identical to {@link #inMemory()} —
+     * authorized operations that mutate state still emit domain events.</p>
+     *
+     * <p>Use {@link #inMemory()} for unsecured paths (core unit tests, back-compat).</p>
+     *
+     * @param snapshotProvider supplier that returns the active permission snapshot for each
+     *                         operation; must not be null; called per secured service call
+     * @return a new, fully assembled secured {@code ConciliumRuntime}
+     */
+    public static ConciliumRuntime secured(final Supplier<PermissionResolutionSnapshot> snapshotProvider) {
+        Objects.requireNonNull(snapshotProvider, "snapshotProvider must not be null");
+        LOGGER.info("Assembling ConciliumRuntime (secured)");
+
+        final AtomicReference<CodexEventDispatcher> placeholder =
+                new AtomicReference<>(event -> {});
+        final CodexRuntime core = CodexRuntime.inMemory(
+                event -> placeholder.get().dispatch(event), Observance.noop());
+
+        final IndexRuntime index = IndexRuntime.inMemory(
+                core.contentItemProjectionReader(), Observance.noop());
+        final ChroniconRuntime chronicon = ChroniconRuntime.inMemory();
+
+        final List<CodexEventSubscriber<? extends CodexEvent>> allSubscribers =
+                buildSubscriberList(index, chronicon);
+        final LocalCodexEventDispatcher moduleDispatcher =
+                new LocalCodexEventDispatcher(allSubscribers, Observance.noop());
+        placeholder.set(moduleDispatcher);
+
+        final AccessDecisionService decisionService = SecuredServiceComposer.defaultAccessDecisionService();
+        final SitePermissionsService sitePerms =
+                SecuredServiceComposer.defaultSitePermissionsService(decisionService);
+        final ContentTypePermissionsService ctypePerms =
+                SecuredServiceComposer.defaultContentTypePermissionsService(decisionService);
+        final ContentItemPermissionsService citemPerms =
+                SecuredServiceComposer.defaultContentItemPermissionsService(decisionService);
+
+        final SiteService securedSite =
+                SecuredServiceComposer.wrapSiteService(core.siteService(), sitePerms, snapshotProvider);
+        final ContentTypeService securedCtype =
+                SecuredServiceComposer.wrapContentTypeService(core.contentTypeService(), ctypePerms, snapshotProvider);
+        final ContentItemService securedCitem =
+                SecuredServiceComposer.wrapContentItemService(core.contentItemService(), citemPerms, snapshotProvider);
+
+        LOGGER.info("ConciliumRuntime ready [{}]: {} subscribers wired",
+                RuntimeSecurityMode.SECURED, allSubscribers.size());
+        return new ConciliumRuntime(core, securedSite, securedCtype, securedCitem,
+                index, chronicon, allSubscribers, moduleDispatcher, RuntimeSecurityMode.SECURED);
     }
 
     /**
@@ -162,8 +249,9 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
         final LocalCodexEventDispatcher moduleDispatcher =
                 new LocalCodexEventDispatcher(allSubscribers);
 
-        return new ConciliumRuntime(coreRuntime, indexRuntime, chroniconRuntime,
-                allSubscribers, moduleDispatcher);
+        return new ConciliumRuntime(coreRuntime,
+                coreRuntime.siteService(), coreRuntime.contentTypeService(), coreRuntime.contentItemService(),
+                indexRuntime, chroniconRuntime, allSubscribers, moduleDispatcher, RuntimeSecurityMode.UNSECURED);
     }
 
     // --- CodexModuleRuntime ---
@@ -208,12 +296,60 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
         }
     }
 
-    // --- accessors ---
+    // --- service accessors ---
 
     /**
-     * Returns the canonical core runtime.
+     * Returns the active {@link SiteService} for this runtime.
      *
-     * @return the core runtime; never null
+     * <p>For runtimes created with {@link #secured(Supplier)}, this is the
+     * authorization-enforcing decorator. For runtimes created with {@link #inMemory()} or
+     * {@link #compose(CodexRuntime, IndexRuntime, ChroniconRuntime)}, this is the raw
+     * service from the core runtime.</p>
+     *
+     * @return the site service; never null
+     */
+    public SiteService siteService() {
+        return siteService;
+    }
+
+    /**
+     * Returns the active {@link ContentTypeService} for this runtime.
+     *
+     * <p>For runtimes created with {@link #secured(Supplier)}, this is the
+     * authorization-enforcing decorator. For unsecured runtimes, this is the raw service.</p>
+     *
+     * @return the content-type service; never null
+     */
+    public ContentTypeService contentTypeService() {
+        return contentTypeService;
+    }
+
+    /**
+     * Returns the active {@link ContentItemService} for this runtime.
+     *
+     * <p>For runtimes created with {@link #secured(Supplier)}, this is the
+     * authorization-enforcing decorator. For unsecured runtimes, this is the raw service.</p>
+     *
+     * @return the content-item service; never null
+     */
+    public ContentItemService contentItemService() {
+        return contentItemService;
+    }
+
+    // --- module runtime accessors ---
+
+    /**
+     * Returns the underlying raw Codex runtime.
+     *
+     * <p><strong>Security note:</strong> On secured Concilium runtimes, services obtained
+     * through this raw runtime bypass Custos authorization. Domain callers, adapters,
+     * and external entry points should use {@link #siteService()},
+     * {@link #contentTypeService()}, and {@link #contentItemService()} instead.</p>
+     *
+     * <p>This accessor exists for lower-level runtime concerns such as projection
+     * readers, recorded events, lifecycle coordination, and internal composition.</p>
+     *
+     * @return the underlying raw Codex runtime; never null
      */
     public CodexRuntime coreRuntime() {
         return coreRuntime;
@@ -248,6 +384,19 @@ public final class ConciliumRuntime implements CodexModuleRuntime {
      */
     public CodexEventDispatcher eventDispatcher() {
         return eventDispatcher;
+    }
+
+    /**
+     * Returns the security mode of this runtime.
+     *
+     * <p>This is diagnostic metadata only — security is enforced by the service graph
+     * (secured vs. unsecured decorators), not by this value alone.</p>
+     *
+     * @return {@link RuntimeSecurityMode#SECURED} if Custos authorization is active;
+     *         {@link RuntimeSecurityMode#UNSECURED} otherwise
+     */
+    public RuntimeSecurityMode securityMode() {
+        return securityMode;
     }
 
     // --- private helpers ---

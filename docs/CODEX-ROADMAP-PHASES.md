@@ -6,7 +6,9 @@ The purpose of this document is to preserve direction, reduce drift, and provide
 
 ## Operating Model
 
-Codex development uses a triad of agents with distinct responsibilities:
+Codex development uses an OSK-style operating model with distinct responsibilities.
+See [Codex OSK Operating Model Alignment](operations/CODEX-OSK-ALIGNMENT.md) for the
+full collaboration vocabulary and checkpoint discipline.
 
 * **Clio** implements production code and tests.
 * **Deep** reviews architecture, behavior preservation, and risk without writing code.
@@ -21,6 +23,7 @@ Core rule:
 Clio builds.
 Deep audits.
 Elito explains.
+Brio researches.
 Jonathan decides.
 Elo keeps the thread.
 ```
@@ -123,6 +126,13 @@ Shared rules:
 * no HTTP status codes
 * no framework security concepts
 
+Current Phase 1.4 status:
+
+* secured decorators are complete for ContentItem, ContentType, and Site
+* secured runtime composition is complete through Phase 3.1
+* collection read filtering remains an accepted gap
+* alias-to-SiteKey authorization remains an accepted gap
+
 ### 1.4A SecuredContentItemService DONE
 
 Current behavior:
@@ -139,17 +149,17 @@ SecuredContentItemService refuses delete and restore instead of delegating until
 
 SecuredContentItemServiceAuthorizationMatrixTest uses the full real Custos chain with BuiltInRoles, RoleAssignment, PermissionResolver, AccessDecisionService, ContentItemPermissionsService, and SecuredContentItemService. It covers viewer, copywriter, reviewer, editor, site boundary, and AGENT + SUPER_ADMIN invariant scenarios.
 
-### 1.4B SecuredContentTypeService NOT STARTED / NEXT
+### 1.4B SecuredContentTypeService DONE
 
-Add a secured decorator for ContentTypeService using archive vocabulary.
+SecuredContentTypeService gates keyed read and mutating operations using archive vocabulary.
 
-### 1.4C SecuredSiteService NOT STARTED
+### 1.4C SecuredSiteService DONE
 
-Add a secured decorator for SiteService lifecycle and read operations.
+SecuredSiteService gates keyed read and lifecycle operations; unarchive fails closed until semantics exist.
 
-### 1.4D Secure runtime composition FUTURE / likely Phase 3
+### 1.4D Secure runtime composition DONE
 
-Wire secured decorators into runtime composition deliberately after the secured service surface is complete.
+Secured decorators are wired through `ConciliumRuntime.secured(...)`. `ConciliumRuntime.inMemory()` remains an explicit unsecured/back-compat path.
 
 ### 1.5 Decide direct actor grants later
 
@@ -240,16 +250,23 @@ This is important for future contributors adding new operations.
 
 Goal: use Custos to harden the existing domain service layer before exposing Codex externally.
 
-### 3.1 Secured runtime composition
+### 3.1 Secured runtime composition DONE
 
-Update runtime composition so secured decorators can be included deliberately.
+Secured runtime composition is implemented.
 
-Questions to answer:
+Resolved answers:
 
-* Is secure runtime the default?
-* Is there a test/noop authorization mode?
-* How are role assignments and role registry supplied?
-* Does Concilium own composition only, or policy wiring too?
+* secured runtime exists through `ConciliumRuntime.secured(...)`
+* unsecured runtime remains available through `ConciliumRuntime.inMemory()`
+* secured runtime is the recommended path for adapter, external, and domain entrypoints
+* unsecured runtime is a deliberate escape hatch for tests, low-level scenarios, and backward compatibility
+* runtime metadata reports `SECURED` or `UNSECURED`
+* metadata is diagnostic only; security is enforced by the exposed service graph
+
+Composition rule:
+
+* callers should use `runtime.siteService()`, `runtime.contentTypeService()`, and `runtime.contentItemService()`
+* callers should not use `runtime.coreRuntime().siteService()`, `runtime.coreRuntime().contentTypeService()`, or `runtime.coreRuntime().contentItemService()` for adapter, external, or domain entrypoints because those are raw core services
 
 ### 3.2 Audit and authorization integration
 

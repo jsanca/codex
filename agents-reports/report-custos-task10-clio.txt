@@ -1,0 +1,97 @@
+TASK: custos-task10
+DATE: 2026-06-09
+AGENT: clio
+
+SUMMARY
+-------
+Wired AccessDecisionService to PermissionResolver. Introduced AccessDecisionRequest (the
+request type that holds both ResourceRef and ResourceScope), updated AccessDecisionService
+to the new signature, and created DefaultAccessDecisionService — the first concrete
+implementation. 22 new tests. Test count grew from 183 to 205. Full reactor green (1,336 total).
+
+FILES CHANGED
+-------------
++ codex-custos/src/main/java/codex/custos/api/model/AccessDecisionRequest.java
+~ codex-custos/src/main/java/codex/custos/api/service/AccessDecisionService.java
++ codex-custos/src/main/java/codex/custos/internal/service/DefaultAccessDecisionService.java
++ codex-custos/src/test/java/codex/custos/internal/service/DefaultAccessDecisionServiceTest.java
+~ CLAUDE.md
+
+NEW TYPE: AccessDecisionRequest
+--------------------------------
+record(Actor actor, PermissionKey permission, ResourceRef resource, ResourceScope targetScope)
+Validates all four fields non-null. of() factory.
+
+Carries two distinct representations of the target:
+  resource     — the ResourceRef that will appear in the AccessDecision output.
+  targetScope  — the ResourceScope passed to PermissionResolver for the scope hierarchy walk.
+
+These are kept separate because ResourceRef and ResourceScope are parallel but distinct
+hierarchies. A future implementation may use ResourceRef to load resource data (e.g., check
+ownership) while ResourceScope drives the permission walk. Hiding the difference prematurely
+would couple the two concerns.
+
+UPDATED: AccessDecisionService
+--------------------------------
+Old signature (Phase 0, PermissionEvaluator-based, never implemented):
+  evaluate(Actor, PermissionKey, ResourceRef, SecurityEvaluationContext)
+
+New signature (Phase 1, PermissionResolver-based):
+  AccessDecision evaluate(AccessDecisionRequest request, PermissionResolutionSnapshot snapshot)
+
+The old placeholder method was removed. No callers existed. The JavaDoc documents the
+ResourceRef/ResourceScope distinction and the invariant propagation contract.
+
+NEW IMPL: DefaultAccessDecisionService
+----------------------------------------
+Constructor: takes PermissionResolver (injected). Validates non-null.
+
+evaluate(request, snapshot):
+  1. Validate request and snapshot non-null.
+  2. Build PermissionResolutionRequest(actor, permission, targetScope) from the request.
+  3. Call resolver.resolve(resolutionRequest, snapshot).
+  4. Switch on PermissionResolution subtype (sealed switch):
+     - Granted → AccessDecision.granted(actor, permission, resource, granted.reason())
+     - Denied  → AccessDecision.denied(actor, permission, resource, denied.reason())
+  5. Let CustosAgentSuperAdminInvariantViolationException propagate uncaught.
+
+ResourceRef is taken directly from the request — it is NOT derived from targetScope.
+This preserves the caller's intent (e.g., a ContentItemResourceRef in a decision when
+resolution walked up to SiteScope to find the grant).
+
+TESTS (22 tests, 4 nested classes)
+------------------------------------
+NullGuards (7)        — null on each of: request, snapshot, actor, permission, resource,
+                        targetScope, resolver constructor arg.
+
+GrantedResolution (6) — decision is Granted; actor/permission/resource preserved; reason
+                        non-blank; SUPER_ADMIN bypass propagates as Granted with SUPER_ADMIN
+                        reason in message.
+
+DeniedResolution (4)  — decision is Denied; actor/permission/resource preserved on deny;
+                        reason non-blank on deny.
+
+RefScopeSeparation (2) — ResourceRef in decision equals the request's ResourceRef regardless
+                         of the scope used for resolution; targetScope is used for resolution
+                         only and does not appear in AccessDecision.
+
+InvariantPropagation (2) — CustosAgentSuperAdminInvariantViolationException propagates from
+                            resolver; it is never swallowed into a Denied decision; it is
+                            distinct from AccessDeniedException.
+
+DESIGN DECISIONS
+----------------
+- The old four-parameter evaluate() was removed because it had no implementation path
+  (PermissionEvaluator has no DefaultPermissionEvaluator yet) and the Phase 1 API supersedes
+  it. If the PermissionEvaluator path is needed later it can be a separate overload or
+  a separate service.
+
+- DefaultAccessDecisionService uses a sealed switch exhaustively — if a new PermissionResolution
+  subtype is added in the future, the compiler will flag the missing case here immediately.
+
+DEFERRED (still not implemented)
+---------------------------------
+- Direct actor PermissionGrant support
+- Explanation trace / resolution log
+- Resource-specific sub-services (SitePermissionsService, ContentItemPermissionsService)
+- Step-up approval hooks
