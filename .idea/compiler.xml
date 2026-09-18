@@ -6,17 +6,18 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="codex-codex" />
-        <module name="codex-custos" />
-        <module name="codex-porta" />
-        <module name="codex-scriptorium" />
-        <module name="codex-iter" />
         <module name="codex-chronicon" />
         <module name="codex-archivum" />
         <module name="codex-olorin" />
         <module name="codex-fundamentum" />
         <module name="codex-illuminarium" />
         <module name="codex-imaginarium" />
+        <module name="codex-concilium" />
+        <module name="codex-codex" />
+        <module name="codex-custos" />
+        <module name="codex-porta" />
+        <module name="codex-scriptorium" />
+        <module name="codex-iter" />
         <module name="codex-index" />
       </profile>
     </annotationProcessing>

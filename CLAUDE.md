@@ -293,3 +293,14 @@ Full specification in `docs/future-forward/ADR-009.md`.
 - **Active**: may implement when explicitly tasked
 - **Near-future**: be aware, do not implement unless task says so
 - **Future-forward**: document only, do not add code
+
+<!-- OSK:BEGIN -->
+
+## OSK Workspace
+
+Read:
+
+- `docs/PROJECT.md`
+- `docs/OSK.md`
+
+<!-- OSK:END -->

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn compile *)",
+      "Bash(mvn test *)",
+      "Bash(mvn clean *)",
+      "Bash(grep -E \"Tests run:.*Failures: 0.*Skipped: 0$|BUILD\")",
+      "Bash(xargs ls -1)",
+      "Bash(mvn -pl codex-fundamentum test)",
+      "Bash(mvn -pl codex-codex test-compile)",
+      "Bash(mvn -pl codex-codex clean test-compile)",
+      "Bash(grep -E \"Tests run: [0-9]+, Failures: 0, Errors: 0, Skipped: 0$|BUILD\")",
+      "Bash(mvn -pl codex-fundamentum,codex-codex clean test)",
+      "Bash(mvn -pl codex-fundamentum,codex-index clean test)",
+      "Bash(xargs -I{} basename {} .java)",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Bash(echo \"Exit: $?\")"
+    ]
+  }
+}
