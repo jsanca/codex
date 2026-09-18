@@ -1,43 +1,51 @@
-# Project Context
+# Codex Project
 
-> Complete each placeholder with project-specific facts. Mark unknown information as `Unknown` and link evidence when it becomes available.
-
-## Mission
-
-<!-- What problem does this project solve, for whom, and why? -->
-
-## Scope
-
-### In scope
-
-<!-- What the project is responsible for. -->
-
-### Out of scope
-
-<!-- What the project deliberately does not do. -->
+Codex is a Java 25 modular-monolith CMS for managing structured knowledge through sites,
+content types, content items, revisions, lifecycle operations, projections, and domain
+authorization. Its kernel is intentionally transport- and persistence-agnostic.
 
 ## Current State
 
-<!-- Current lifecycle state, active work, known constraints, and material risks. -->
+The working system is an in-memory CMS kernel with lifecycle services, deferred domain events,
+cache invalidation, public-content indexing, Chronicon domain audit, Observance metrics, and a
+secured Custos runtime path. Persistence, transport/API exposure, workflow, direct actor grants,
+collection-read filtering, and authorization-decision records remain deferred. The
+[CODEX-OSK-001 reality check](engineering/agents/reviews/transversal/CODEX-OSK-001—CurrentStateRealityCheck—REVIEW.md)
+is the repository-grounded status evidence for this summary.
 
-## Architecture
+## Where To Start
 
-<!-- Link the current architecture knowledge under knowledge/, or state Unknown. -->
-
-## Technology
-
-<!-- Languages, runtime, build/test commands, data stores, deployment, and relevant tooling. -->
+1. Read [OSK.md](OSK.md) to classify the artifact you need to create or change.
+2. Read the canonical [roadmap](engineering/roadmap/ROADMAP.md) for committed and deferred direction.
+3. Read relevant [architecture](knowledge/architecture/README.md), [domain](knowledge/domain/README.md), or
+   [security](knowledge/security/README.md) knowledge.
+4. Read applicable [ADRs](engineering/adr/README.md) for durable decisions and
+   [engineering evidence](engineering/ENGINEERING_LOG.md) for delivery history.
+5. For active work, use [agent tasks](engineering/agents/tasks/README.md), then record outcomes
+   under [reports](engineering/agents/reports/README.md) or [reviews](engineering/agents/reviews/README.md).
 
 ## Repository Map
 
-<!-- Important directories, entry points, and ownership boundaries. -->
+| Area | Canonical location |
+| --- | --- |
+| Committed direction | [roadmap/ROADMAP.md](engineering/roadmap/ROADMAP.md) |
+| Non-committed proposals | [roadmap/future/](engineering/roadmap/future/) |
+| Architecture and conceptual material | [architecture/](knowledge/architecture/) |
+| Domain concepts and historical MVP model | [domain/](knowledge/domain/) |
+| Authorization | [security/](security/) |
+| Architecture decisions | [adr/](engineering/adr/) |
+| Durable current knowledge | [knowledge/](knowledge/) |
+| Engineering tasks, reports, reviews, checkpoints | [engineering/](engineering/) |
+| Research evidence | [research/](research/) |
+| Module boundaries | [modules/](knowledge/modules/) |
 
-## Getting Started
+## Technology And Validation
 
-<!-- Prerequisites and the smallest reproducible setup/validation path. -->
+Codex uses Maven, JPMS, and Java 25. The normal full verification command is:
 
-## Important References
+```bash
+mvn clean verify
+```
 
-- [Workspace operating guide](OSK.md)
-- [Project knowledge](knowledge/README.md)
-- <!-- Requirements, architecture, external docs, decision records, or runbooks. -->
+Documentation-only work should validate links and run `git diff --check`; it does not require
+tests unless the task says otherwise.

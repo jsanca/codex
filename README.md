@@ -1,109 +1,31 @@
 # Codex
 
-Codex is a headless, multi-tenant, multi-language CMS conceived as a disciplined modular monolith.
+Codex is a Java 25 modular-monolith CMS for structured knowledge. Its domain kernel manages
+sites, content types, content items, revisions, lifecycle transitions, projections, and
+transport-agnostic domain authorization.
 
-It is not intended to be a traditional page-centric CMS. The center of Codex is the domain: structured content, revision-aware lifecycle, workflow-driven operations, and extensibility points that allow the system to evolve without bloating the core.
+The project is deliberately domain-first: HTTP exposure, persistence providers, workflow, and AI
+integration are separate concerns rather than dependencies of the core model.
 
-The Maven/Jigsaw modular foundation is established. Implementation is progressing incrementally — hardening the core domain model before expanding outward into exposure, persistence, and workflow layers.
+## Current State
 
-## Current Direction
+The implemented system is an in-memory CMS kernel with:
 
-Codex is being designed around a small but expressive core.
+- Site, ContentType, ContentItem, and ContentRevision lifecycle services.
+- Deferred domain-event dispatch, cache invalidation, public-content indexing, and Chronicon
+  domain audit.
+- Observance counters and timers for core runtime paths.
+- Custos permission resolution, domain permission services, secured service decorators, and a
+  `ConciliumRuntime.secured(...)` composition path.
 
-At a high level:
+Persistence, transport/API exposure, workflow, collection-read filtering, direct actor grants,
+structured authorization traces, and authorization decision records remain deferred. The
+[CODEX-OSK-001 reality check](docs/engineering/agents/reviews/transversal/CODEX-OSK-001—CurrentStateRealityCheck—REVIEW.md)
+contains the repository-grounded capability inventory and known gaps.
 
-- **Codex** defines what content is.
-- **Chronicon** remembers how content changes over time.
-- **Archivum** concerns itself with storage.
-- **Index** supports search and discoverability.
-- **Scriptorium** is the space for scripting and customization.
-- **Illuminarium** is the future domain of enrichment and semantic enhancement.
-- **Porta** is the external boundary of the system.
-- **Iter** governs workflow and orchestration.
-- **Custos** is the authorization boundary. It models actors, permissions, resource refs and scopes, roles, role assignments, permission grants, built-in roles, and permission resolution. Custos authorizes domain operations — not HTTP endpoints — and remains authentication-agnostic.
-- **Imaginarium** is the AI integration layer.
-- **Olórin** is the agent layer.
+## Build And Test
 
-This separation is intentional.
-
-Imaginarium is not the domain agent itself. It exists to provide the infrastructure required for AI integration, orchestration, and interoperability. Olórin is the component responsible for reasoning over the Codex domain, planning meaningful actions, and operating through explicit capabilities.
-
-## Current Phase
-
-Codex is moving from architectural foundation into early domain implementation. The current priority is hardening the internal model before REST/API exposure or persistence.
-
-Current focus:
-
-- domain lifecycle (sites, content types, content items, revisions)
-- domain events
-- service decorators
-- cache and index foundations
-- Observance
-- authorization via Custos
-- auditability via Chronicon
-- module boundary enforcement
-
-Still deferred:
-
-- REST/API exposure through Porta
-- persistence strategy
-- production authentication integration
-- full workflow engine behavior
-- step-up approval
-- Olórin permission proposal execution
-
-## Module Map
-
-The current conceptual and technical modules are:
-
-- `codex-bom`
-- `codex-fundamentum`
-- `codex-codex`
-- `codex-chronicon`
-- `codex-archivum`
-- `codex-index`
-- `codex-concilium`
-- `codex-scriptorium`
-- `codex-illuminarium`
-- `codex-porta`
-- `codex-iter`
-- `codex-custos`
-- `codex-imaginarium`
-- `codex-olorin`
-
-## Package Convention
-
-The global base package is `codex`.
-
-Each module follows this convention:
-
-- `codex.<module>`
-- `codex.<module>.api`
-- `codex.<module>.internal`
-
-The intent is to make public contracts explicit and keep implementation details clearly separated.
-
-## Architecture
-
-- **Fundamentum** (`codex-fundamentum`) — Foundational shared abstractions and cross-cutting base types.
-- **Codex** (`codex-codex`) — The central domain/kernel of the system.
-- **Chronicon** (`codex-chronicon`) — History, revision memory, and publication narrative.
-- **Archivum** (`codex-archivum`) — Storage abstraction layer.
-- **Index** (`codex-index`) — Search and discoverability.
-- **Concilium** (`codex-concilium`) — Runtime composition layer; assembles module runtimes.
-- **Scriptorium** (`codex-scriptorium`) — Scripting and dynamic customization.
-- **Illuminarium** (`codex-illuminarium`) — Enrichment and semantic enhancement.
-- **Porta** (`codex-porta`) — External exposure layer, including APIs and integrations.
-- **Iter** (`codex-iter`) — Workflow and orchestration.
-- **Custos** (`codex-custos`) — Domain authorization: actors, roles, permissions, resource scopes, and resolution.
-- **Imaginarium** (`codex-imaginarium`) — AI integration infrastructure.
-- **Olórin** (`codex-olorin`) — Agent-oriented reasoning and domain-aware interaction.
-
-## Build
-
-This project uses **Maven** and **Java Modules (Jigsaw)**.
-
-To build and test from the repository root:
+Codex uses Maven, JPMS, and Java 25.
 
 ```bash
 mvn clean verify
@@ -111,12 +33,26 @@ mvn clean verify
 
 ## Documentation
 
-Architectural notes, lore, specs, ADRs, and implementation roadmaps live in `docs/`.
+Start with [project context](docs/PROJECT.md), then follow the OSK documentation model.
 
-This root README is intended to remain an entry point: concise, repository-oriented, and focused on helping readers understand what Codex is, how the repository is organized, and what phase of the project is currently in progress.
+| Need | Canonical document or area |
+| --- | --- |
+| Project orientation and navigation | [docs/PROJECT.md](docs/PROJECT.md) |
+| Documentation placement rules | [docs/OSK.md](docs/OSK.md) |
+| Durable current knowledge | [docs/knowledge/](docs/knowledge/README.md) |
+| Architecture and module boundaries | [Blueprint](docs/knowledge/architecture/CODEX-BLUEPRINT.md) and [module responsibilities](docs/knowledge/modules/MODULE-RESPONSIBILITIES.md) |
+| Authorization model and status | [Custos model](docs/knowledge/security/CUSTOS-MODEL.md) and [checklist](docs/knowledge/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md) |
+| Committed direction | [roadmap](docs/engineering/roadmap/ROADMAP.md) |
+| Architectural rationale | [ADRs](docs/engineering/adr/README.md) |
+| Engineering history | [engineering log](docs/engineering/ENGINEERING_LOG.md) |
+| Tasks, reports, reviews, and checkpoints | [engineering agent artifacts](docs/engineering/agents/README.md) |
 
-Module-specific intent and architectural details should live in the corresponding module documentation.
+## Module Boundaries
 
-## Status
+`codex-fundamentum` provides shared primitives. `codex-codex` owns the CMS domain kernel.
+`codex-index` and `codex-chronicon` consume projections; `codex-custos` owns domain
+authorization; `codex-concilium` composes the local runtime. Edge modules remain intentionally
+separate and mostly deferred.
 
-Codex is in early implementation. The modular structure is established. Core domain foundations — lifecycle, events, authorization, and auditability — are progressing deliberately. The system is not yet ready for production use.
+The detailed boundary map is maintained in
+[docs/knowledge/modules/MODULE-RESPONSIBILITIES.md](docs/knowledge/modules/MODULE-RESPONSIBILITIES.md).

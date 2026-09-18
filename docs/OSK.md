@@ -36,7 +36,7 @@ Place significant Architecture Decision Records in `docs/adr/`. An ADR explains 
 
 ## Roadmap and Future
 
-Use [ROADMAP.md](roadmap/ROADMAP.md) for intended, committed direction. Preserve non-committed ideas in `docs/roadmap/future/`; they do not become roadmap work unless explicitly adopted.
+Use [ROADMAP.md](engineering/roadmap/ROADMAP.md) for intended, committed direction. Preserve non-committed ideas in `docs/roadmap/future/`; they do not become roadmap work unless explicitly adopted.
 
 ## Placement Examples
 

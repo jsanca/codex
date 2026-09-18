@@ -26,7 +26,7 @@ Custos completed the secured service decorator slice for:
 The checkpoint is:
 
 ```text
-docs/agents/checkpoints/CHECKPOINT-CODEX-CUSTOS-SECURED-DECORATORS.md
+docs/engineering/agents/checkpoints/CHECKPOINT-CODEX-CUSTOS-SECURED-DECORATORS.md
 ```
 
 ### Forwarding Services Not Used For Secured Decorators
@@ -47,7 +47,7 @@ The next runtime work is Phase 3.1 Secured Runtime Composition.
 The formal task is:
 
 ```text
-docs/agents/tasks/runtime/Task-CODEX-016—SecuredRuntimeComposition.md
+docs/engineering/agents/tasks/runtime/Task-CODEX-016—SecuredRuntimeComposition.md
 ```
 
 ### Runtime Metadata Direction
@@ -107,3 +107,26 @@ CODEX-017 Denied-operation side-effect consistency
 
 This should expand consistency checks around denied operations and their effects
 on mutation, events, cache, index, and Chronicon behavior.
+
+## 2026-08-08
+
+### CODEX-017 Denied-Operation Side-Effect Consistency Completed
+
+The secured runtime now has repository-backed evidence that denied operations do not mutate
+state or emit domain events, index writes, or Chronicon domain-audit records. The implementation
+and independent review are retained under:
+
+```text
+docs/engineering/agents/reports/runtime/CODEX-017-DeniedSideEffectConsistency-REPORT.md
+docs/engineering/agents/reviews/runtime/CODEX-017-DeniedSideEffectConsistency-REVIEW.md
+```
+
+### CODEX-OSK-001 Reality Check Recorded
+
+The repository-grounded review reconciled the implemented CMS, Custos, projections, runtime
+composition, and known gaps. It identified an overstated
+`RoleAssignmentPermissionsService` completion claim and documentation-location drift. See:
+
+```text
+docs/engineering/agents/reviews/transversal/CODEX-OSK-001—CurrentStateRealityCheck—REVIEW.md
+```

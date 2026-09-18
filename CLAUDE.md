@@ -1,10 +1,12 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 > **`AGENTS.md` is the canonical source for this file.** When conventions change, update both.
 
 ## Build & Test Commands
 
-No Maven wrapper — `mvn` must be on PATH. All commands run from repo root.
+No Maven wrapper — `mvn` must be on PATH. Java 25. All commands run from repo root.
 
 ```bash
 mvn clean verify                                          # full build + tests (all modules)
@@ -15,175 +17,127 @@ mvn test -pl codex-custos -Dtest=DefaultPermissionResolverTest  # single test in
 mvn test -DskipTests                                      # compile only, skip tests
 ```
 
-Test framework: **JUnit 5 + AssertJ**. `assertThatThrownBy` / `assertThatNullPointerException` for exception assertions; avoid JUnit 5's own `assertThrows`. No CI workflows exist. No formatter/lint plugins (spotless, checkstyle) are configured.
+JUnit 5 + AssertJ. Use `assertThatThrownBy` / `assertThatNullPointerException`; do not use JUnit's `assertThrows`. No CI workflows, no formatter/lint plugins (spotless, checkstyle) — nothing to run beyond `mvn`.
 
-`spring-boot-starter-test` is allowed in `<scope>test</scope>` even in `codex-codex` — it does not leak into production code and does not violate core purity.
-
-## Test Conventions
-
-Use `codex-custos` tests as the reference for style. `codex-codex` tests predate these conventions and are a divergent, flatter style — prefer `codex-custos` patterns for new work.
-
-- Group with `@Nested` inner classes per scenario family, each with its own `@DisplayName`
-- `@DisplayName` on every test method — name the observable behaviour, not the implementation
-- Shared fixtures as `private static final` constants in `UPPER_SNAKE_CASE` (e.g. `ALICE`, `SITE_A`, `BLOG_TYPE`)
-- Test classes are package-private
-- For skeleton or documentation-only tasks, make zero code changes — no Java, no pom.xml, no module-info, no wiring, no tests
+`spring-boot-starter-test` in `<scope>test</scope>` is allowed even in `codex-codex` — test scope never leaks into production, so it does not violate core purity.
 
 ## Module Map
 
-Each module has a `module-info.java`, `pom.xml`, and follows `codex.<module>.api` / `codex.<module>.internal` package split.
+Maven + Jigsaw. Each module has `pom.xml` + `module-info.java`, with `codex.<module>.api` (public) / `codex.<module>.internal` (hidden) split. Root `src/` is unused — all source lives in modules.
 
-| Module                  | Responsibility                                      | Has Tests |
-|-------------------------|-----------------------------------------------------|-----------|
-| `codex-bom`             | Bill of Materials (version management)              | —         |
-| `codex-fundamentum`     | Shared abstractions: CodexEvent, dispatchers, cache, Actor, CodexExecutor (virtual-thread pool), Observance (Counter/Timer), TransactionContext | ~192  |
-| `codex-codex`           | Central domain kernel: sites, content types, items, lifecycle | ~607 |
-| `codex-chronicon`       | Audit history, revision memory, event subscribers   | ~281      |
-| `codex-archivum`        | Storage abstraction (skeleton)                      | —         |
-| `codex-index`           | Search/indexing abstractions and subscribers        | ~130      |
-| `codex-concilium`       | Runtime composition: composes CodexRuntime + IndexRuntime + ChroniconRuntime | ~27 |
-| `codex-scriptorium`     | Scripting runtime (skeleton)                        | —         |
-| `codex-illuminarium`    | Enrichment & semantic enhancement (skeleton)        | —         |
-| `codex-porta`           | REST/GraphQL exposure (skeleton)                    | —         |
-| `codex-iter`            | Workflow engine (skeleton)                          | —         |
-| `codex-custos`          | Domain authorization: Phase 0 complete/hardened; early Phase 1 primitives | Yes |
-| `codex-imaginarium`     | AI infrastructure (skeleton)                        | —         |
-| `codex-olorin`          | Agent reasoning (skeleton)                          | —         |
+| Module | Responsibility | State |
+|---|---|---|
+| `codex-bom` | Version management | — |
+| `codex-fundamentum` | Shared primitives: events, dispatchers, cache, `Actor`, `CodexExecutor`, Observance, `TransactionContext` | ✓ |
+| `codex-codex` | Domain kernel: sites, content types, items, revisions, lifecycle | ✓ |
+| `codex-chronicon` | Audit history, revision memory, event subscribers | ✓ |
+| `codex-index` | Search/indexing abstractions and subscribers | ✓ |
+| `codex-concilium` | Runtime composition: `ConciliumRuntime` assembles `CodexRuntime` + `IndexRuntime` + `ChroniconRuntime` | ✓ |
+| `codex-custos` | Domain authorization (kernel + roles + resolver + domain permission services + secured decorators; Phase 4 workflow pending) | ✓ |
+| `codex-archivum`, `codex-scriptorium`, `codex-illuminarium`, `codex-porta`, `codex-iter`, `codex-imaginarium`, `codex-olorin` | Skeletons — no implementation | — |
 
-**Dependency direction**: inward only. `codex-codex` depends only on `codex-fundamentum`. It must never depend on any other Codex module. `codex-concilium` composes module runtimes without making the core depend on projection/adapter modules.
-
-The root `src/` directory is unused — all source lives in modules.
+**Dependency direction: inward only.** `codex-codex` depends only on `codex-fundamentum` and must never depend on any other Codex module. Composition lives in `codex-concilium`, never in the core. Module runtimes live in public `*.api.runtime` packages (moving a runtime there removes the need for qualified exports).
 
 ## Architecture Rules
 
-### Core purity (`codex-codex` and `codex-fundamentum`)
+### Core purity (`codex-codex`, `codex-fundamentum`)
 
-Must never import: Spring Boot, JPA, JDBC, HTTP, REST controllers, persistence annotations, or auth mechanisms. Infrastructure belongs in adapters or runtime modules.
+Never import Spring Boot, JPA, JDBC, HTTP, REST controllers, persistence annotations, or auth mechanisms. Infrastructure belongs in adapters/runtime modules.
 
-### Package conventions
+### Fundamentum rule
 
-- Public contracts: `codex.<module>.api`
-- Implementation: `codex.<module>.internal`
-- Never export `internal` packages in `module-info.java`
-- Qualified exports (`exports X.internal.Y to codex.Z`) are accepted as controlled architectural debt
-- Use `requires transitive` only when the module's own API surface exposes the depended-on module's types (e.g., if `codex.index.api` exposes `codex-codex` types, `requires transitive codex.codex` is correct). Otherwise prefer plain `requires`.
+A type belongs in `codex-fundamentum` only if generic, framework-agnostic, reusable by multiple modules, free of CMS/domain concepts, and small enough to stay stable. Anything mentioning Site, ContentItem, ContentType, IndexDocument, AuditRecord, Workflow, User, Role, REST, AI, or persistence backends does not belong there.
+
+### Package / module-info
+
+- Never export `internal` packages. Qualified exports (`exports X.internal.Y to codex.Z`) are accepted only as documented transitional debt pointing at a future public read/projection API.
+- `requires transitive` only when the module's own API surface exposes the depended-on module's types (e.g. `codex.index.api` exposing `codex-codex` types). Otherwise plain `requires`.
+- For skeleton tasks keep `module-info` and dependencies minimal — only what compiles. No placeholder classes, no `.gitkeep`.
 
 ### Decoration, not inheritance
 
-Services grow through decorator composition (e.g. `TransactionalSiteService -> LockingSiteService -> AuditingSiteService -> EventPublishingSiteService -> CodexSiteService`). Each wrapper adds one concern.
-
-### Events vs Hooks
-
-- **Events** = facts that already happened (`SiteCreatedEvent`, `ContentItemPublished`). Must implement `CodexEvent`.
-- **Hooks** = extension points around something happening (`beforeSave`, `afterPublish`). Keep them conceptually separate.
+Services grow by wrapping: e.g. `TimedSiteService → Caching… → SecuredSiteService (custos) → EventPublishingSiteService → CodexSiteService`. Each decorator adds one concern. Cross-cutting metrics go through Observance (`Timed*Service`, `*MetricNames`); do not invent new metric plumbing.
 
 ### Deferred event dispatch
 
-`codex-codex` services use `DeferredEventDispatcher` to accumulate events during a service operation and flush them as a batch at the end. When adding a new service method that emits events, follow the same defer-then-flush pattern used in `EventPublishingSiteService` and `EventPublishingContentItemService`.
+New service methods that emit events must follow the defer-then-flush pattern in `EventPublishingSiteService` / `EventPublishingContentItemService`: accumulate via `DeferredEventDispatcher` during the operation, flush as one batch at the end.
+
+### Events vs Hooks
+
+- **Events** = facts already happened (`SiteCreatedEvent`, `ContentItemPublishedEvent`). Must implement `CodexEvent`. Never put content values in events.
+- **Hooks** = extension points around something happening (`beforeSave`). Keep the two conceptually separate.
+
+### Subscribers read projections, not repositories
+
+Indexing/Chronicon subscribers must not access repositories or lifecycle services directly — use projection sources (e.g. `ContentItemProjectionSource`). Subscribers stay single-responsibility; no cache, transactions, or runtime wiring inside feature/subscriber tasks unless asked.
 
 ## Java Conventions
 
-### Target version
-Java 25. Prefer virtual threads, `ScopedValue` over `ThreadLocal`, primitives over wrappers.
+- Records for value objects, identities, commands, events. Defensive copies (`List.copyOf()`, `Set.copyOf()`) on all inbound collections.
+- Entities: `static Builder builder()`, `static Builder copyOf(T source)`, `static T of(...)` for simple types. Validation in canonical constructors.
+- Identity types validate + trim in the canonical constructor, with `of(...)` and `generate()`; prefer deterministic identity (`UUID.nameUUIDFromBytes`) where possible.
+- Sealed interfaces + record permits for discriminated unions (e.g. `AccessDecision.Granted/Denied`); pattern-match at call sites, never `instanceof` chains.
+- `Optional<T>` for valid absence, never for error signaling. `Objects.requireNonNull` on every required parameter (constructors, injection, service entry points).
+- SLF4J via `private static final Logger LOGGER = LoggerFactory.getLogger(MyClass.class)`; log at service boundaries and state transitions.
+- ≤20 lines of logic per method (log lines don't count); primitives over wrappers; `ScopedValue`, never `ThreadLocal`; virtual threads for concurrency.
+- Idempotent operations (e.g. `activate` on an already-active entity) must not touch `updatedAt`/`updatedBy`.
+- Schema fields: `Map<FieldKey, Field>`, not `List<Field>`.
+- Domain lambda names: no one-letter names for domain concepts — use `roleAssignment`, `permission`, `scope`, `actor`. Short names only for trivial local transformations where meaning is obvious.
+- JavaDoc on all public types and methods.
+- Enums for closed sets: lifecycle statuses, field types, actor types.
 
-### Records and immutability
-Always use `record` for value objects, identities, commands, and events. Defensive copies (`List.copyOf()`, `Set.copyOf()`) on all collections received from outside.
+## Repositories & Services
 
-### Entity pattern
-Every non-trivial entity needs: `static Builder builder()`, `static Builder copyOf(T source)`, `static T of(...)` for simple types. Canonical constructors do validation.
-
-### Identity types
-```java
-public record SiteId(String value) {
-    public SiteId { /* validate, trim */ }
-    public static SiteId of(String value) { ... }
-    public static SiteId generate() { ... }
-}
-```
-Prefer deterministic identity (`UUID.nameUUIDFromBytes`) where possible.
-
-### Enums for closed sets
-Lifecycle statuses, field types, actor types — any domain concept with a fixed set of values.
-
-### Validation
-Validate at boundaries (constructors, command handlers, service entry points). Use `Objects.requireNonNull(value, "message")`. Throw domain exceptions (unchecked, extend `RuntimeException`, live in `codex.<module>.api.exception`). `Optional<T>` for valid absence, not error signaling.
-
-### Logging
-`private static final Logger LOGGER = LoggerFactory.getLogger(MyClass.class)` using SLF4J. Log at service boundaries and state transitions.
-
-### Method size
-≤20 lines of logic (log statements don't count). Extract well-named private methods if exceeding.
-
-### Domain lambda names
-In domain/security code, do not use one-letter lambda names like `r`, `a`, `s`, or `x` when the value represents a domain concept. Prefer meaningful names such as `roleAssignment`, `role`, `permission`, `scope`, `actor`, `targetScope`, or `assignmentScope`.
-
-Short lambda names are acceptable only for trivial local transformations where the meaning is obvious and not domain-sensitive.
-
-Custos authorization logic must read like domain language. Lambda names should preserve explainability, especially in resolver, policy, audit, and security code.
-
-### Idempotent methods
-If a method is idempotent (e.g., `activate` when the entity is already active), do not update `updatedAt`/`updatedBy`. Only state-changing operations advance the audit timestamps.
-
-### Sealed interfaces
-Use `sealed` interfaces with `record` permits for domain discriminated unions. Pattern-match at call sites — never `instanceof` chains.
-
-```java
-sealed interface AccessDecision permits AccessDecision.Granted, AccessDecision.Denied {
-    record Granted(...) implements AccessDecision {}
-    record Denied(...) implements AccessDecision { void requireGranted() { throw ...; } }
-}
-// call site:
-switch (decision) {
-    case AccessDecision.Granted g -> ...;
-    case AccessDecision.Denied  d -> d.requireGranted();
-}
-```
-
-### Schema field collections
-Prefer `Map<FieldKey, Field>` over `List<Field>` for schema field collections.
-
-## Repository & Service Conventions
-
-- **Repositories are dumb** — CRUD only, no business logic, never call other repositories. Lives in `codex.<module>.internal.repository` (not exported).
-- **Services are smart** — business logic, validation, orchestration. Interface in `codex.<module>.api.model.service` (exported), implementation in `codex.<module>.internal.service`.
-- Every public service method receives an `Actor` for audit context.
-- Constructor injection always; `Objects.requireNonNull` on every constructor parameter.
-- Start with `MemoryXxxRepository` before adding real persistence.
-
-## Concurrency Conventions
-
-- When using `Collections.synchronizedList`, always synchronize explicitly on the list when iterating or copying: `synchronized (list) { return List.copyOf(list); }`. Individual `add()` calls are safe without explicit sync, but `List.copyOf()` iterates internally and is not protected by the wrapper's per-method lock.
-- Same rule applies to `clearRecording()`-style bulk clears: `synchronized (list) { list.clear(); }`.
+- **Repositories are dumb**: CRUD only, no business logic, never call other repositories. `codex.<module>.internal.repository`, unexported.
+- **Services are smart**: validation, orchestration, business logic. Interface in `codex.<module>.api…service`, impl in `codex.<module>.internal.service`.
+- Every public service method takes an `Actor` for audit context. Constructor injection always; `Objects.requireNonNull` on every constructor parameter.
+- Start with `MemoryXxxRepository`; real persistence comes later via `codex-archivum` and must not contain business logic.
 
 ## State Machines
 
-State transitions must be explicit and validated in a dedicated method.
+Transitions are explicit, validated in a dedicated method, no skipped steps.
 
-**SiteStatus** (`STARTED ⟷ SUSPENDED ⟷ ARCHIVED`):
-```
-STARTED → SUSPENDED
-SUSPENDED → STARTED or ARCHIVED
-ARCHIVED → SUSPENDED
-```
-No skipping steps. `unarchive` returns to `SUSPENDED`, not `STARTED`.
+- **SiteStatus**: `STARTED → SUSPENDED → STARTED`, `SUSPENDED → ARCHIVED`, `ARCHIVED → SUSPENDED`. `unarchive` returns to `SUSPENDED`, not `STARTED`.
+- **ContentTypeStatus**: `DRAFT → ACTIVE → ARCHIVED`, plus `DRAFT → ARCHIVED`. One `ACTIVE` version per `(siteId, key)`.
+- **ContentItemStatus**: `DRAFT → PUBLISHED → ARCHIVED`, `PUBLISHED → DRAFT` (unpublish), `ARCHIVED → DRAFT` (restore). Delete requires `ARCHIVED`.
 
-**ContentTypeStatus** (`DRAFT → ACTIVE → ARCHIVED`):
-```
-DRAFT → ACTIVE (activate)
-ACTIVE → ARCHIVED (archive)
-DRAFT → ARCHIVED (archive)
-```
-Only one `ACTIVE` version per `(siteId, key)` at a time.
+## Exception Style
 
-**ContentItemStatus** (`DRAFT → PUBLISHED → ARCHIVED`):
-```
-DRAFT → PUBLISHED (publish)
-PUBLISHED → DRAFT (unpublish)
-DRAFT → ARCHIVED (archive)
-PUBLISHED → ARCHIVED (archive)
-ARCHIVED → DRAFT (restore)
-```
-Delete requires `ARCHIVED` status.
+Unchecked, extend `RuntimeException`, no common base class, no `throws` for domain validation errors. Constructors: `(String message)` + `(String message, Throwable cause)`; never the legacy four-arg constructors. Domain exceptions live in `codex.<module>.api.exception` (exported) — **except `codex-codex`**, whose service exceptions (e.g. `SiteAlreadyExistException`, `InvalidContentTypeStatusTransitionException`) still live unexported in `codex.codex.internal.service`. Do not add new exceptions there; use `api.exception`. `IllegalStateException` for subscriber/projection invariant violations. Keep `NotFoundException` generic in fundamentum; add typed subclasses only when a caller discriminates on them.
+
+## Custos (authorization)
+
+Custos answers `Actor + Permission + Resource + Context → AccessDecision` for **domain operations, not endpoints**. Prefer `contentItemPermissionsService.canPublish(actor, resource)` over role checks.
+
+- Scope walk is bottom-up (`ContentItem → ContentType → Site → Global`); first grant wins; never crosses site boundaries.
+- Implications live in `DefaultPermissionImplicationRules`, not role blueprints: `update` ⇒ `read`, `publish` ⇒ `read`, `publish` ⇏ `update`.
+- `SUPER_ADMIN` bypass belongs in resolver/evaluator behavior, never in `BuiltInRoles`; hard invariants run **before** any bypass. AGENT + SUPER_ADMIN is a fatal invariant violation (`CustosAgentSuperAdminInvariantViolationException`) — never convert to `Denied`, always propagate.
+- `Role` is a permission blueprint only — no actors, no scopes. `PermissionGrant` = permission + scope (no actor/role). `RoleAssignment` = actor + role + scope.
+- Current fail-closed / pass-through edges (do not "fix" opportunistically): item delete/restore, site unarchive are fail-closed; `findAll`/`findBy*` list reads are pass-through pending a read-filtering strategy.
+- Use `ConciliumRuntime.secured(snapshotProvider)` for authorization-sensitive paths; `inMemory()` is unsecured (tests/back-compat). Callers use `runtime.siteService()` etc. — never `runtime.coreRuntime().siteService()`.
+
+Current model in `docs/security/CUSTOS-MODEL.md`.
+
+## Concurrency
+
+With `Collections.synchronizedList`, synchronize explicitly when iterating/copying/clearing: `synchronized (list) { return List.copyOf(list); }`, `synchronized (list) { list.clear(); }`. Bare `add()` is safe; `List.copyOf()` iterates internally and is not covered by the wrapper lock.
+
+## Test Conventions
+
+Follow `codex-custos` style (`codex-codex` tests predate it — do not copy them).
+
+- `@Nested` per scenario family with its own `@DisplayName`; `@DisplayName` on every test naming observable behaviour.
+- Fixtures as `private static final UPPER_SNAKE_CASE` constants (`ALICE`, `SITE_A`). Test classes package-private.
+- AssertJ only for exception assertions. Never rely on unordered repository results in tests.
+- New abstractions get their own focused tests (null args, success, missing entity) — not just coverage through higher-level tests.
+- Check `git status` before finishing: new files must be tracked.
+
+## Workflow Constraints
+
+- Skeleton or documentation-only tasks: zero code changes — no Java, pom.xml, module-info, wiring, or tests.
+- Backlog labels: **Active** = may implement when tasked; **Near-future** = do not implement unless asked; **Future-forward** = document only, never code.
+- Complete partially-built modules minimally; do not recreate or broaden scope. Match existing patterns closely; no dynamic runtime behavior unless requested. No refactors beyond the task.
+- Surface follow-ups in the post-task report (files changed, tests run + result, deviations, open questions) instead of implementing them.
 
 ## Code Quality Constraints
 
@@ -206,93 +160,15 @@ Delete requires `ARCHIVED` status.
 - Ask before making architectural decisions that affect module boundaries
 - Surface follow-up tasks in a post-task report instead of implementing them opportunistically
 
-## Exception Style
-
-- Unchecked exceptions, extend `RuntimeException`
-- Domain exceptions in `codex.<module>.api.exception` (exported). No common base class — direct subtypes with specific names.
-- Constructors: `(String message)` + `(String message, Throwable cause)`. Optional domain-specific factory.
-- Do NOT use Java's legacy four-argument exception constructors (`suppression`, `writableStackTrace`).
-- No `throws` declarations for domain validation errors
-- `IllegalStateException` for subscriber/projection failures (system invariant violation)
-- Keep `NotFoundException` generic in `codex.fundamentum.api.exception`; add typed subclasses only when a caller needs to discriminate.
-
-**Note**: `codex-codex` is a current exception — its service-level exceptions (e.g., `InvalidContentTypeStatusTransitionException`, `SiteAlreadyExistException`) live in `codex.codex.internal.service` (unexported). Only `codex-fundamentum` and `codex-custos` follow the `api.exception` pattern. Do not add new exceptions to `internal.service` — use `api.exception`.
-
 ## Key Documentation Files
 
-- `docs/agents/AGENT-CALIBRATION.md` — accumulated agent feedback, corrections, and task-specific conventions
-- `docs/modules/MODULE-RESPONSIBILITIES.md` — detailed responsibility boundaries and cross-module matrix
-- `docs/security/CUSTOS-MODEL.md` — full Custos authorization model
-- `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — implementation progress checklist for Custos phases
+- `docs/engineering/AGENT-CALIBRATION.md` — accumulated corrections (check here before repeating a known pattern)
+- `docs/modules/MODULE-RESPONSIBILITIES.md` — boundary map; implementation status is verified by code and reviews
+- `docs/security/CUSTOS-MODEL.md` + `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — authorization model and phase status
+- `docs/security/CUSTOS-MODEL.md` — Custos model and current authorization vocabulary
+- `docs/roadmap/ROADMAP.md` — committed direction; non-committed ideas stay in `docs/roadmap/future/`
 - `CODING_IDENTITY.md` — broader design fingerprint
-
-## Fundamentum Rule
-
-A type belongs in `codex-fundamentum` only if it is generic, framework-agnostic, reusable by multiple modules, free of CMS/domain concepts, and small enough to remain stable. If a type mentions Site, ContentItem, ContentType, IndexDocument, AuditRecord, Workflow, User, Role, REST, AI, or persistence backend details, it does not belong in fundamentum.
-
-## Custos / Authorization Rules
-
-`codex-custos` owns domain authorization — not HTTP security. The core question it answers:
-```
-May this Actor perform this PermissionKey on this Codex resource under this Context?
-```
-
-### Key types (Phase 0 + early Phase 1)
-- `PermissionKey` — domain permission name (e.g., `contentItem.publish`)
-- `Permissions` — catalog of built-in domain permission keys
-- `ResourceRef` — sealed hierarchy: `GlobalResourceRef`, `SiteResourceRef`, `ContentTypeResourceRef`, `ContentItemResourceRef`
-- `ResourceScope` — where a grant is assigned; mirrors `ResourceRef` hierarchy
-- `AccessDecision` — sealed: `Granted` / `Denied`; always carries actor, permission, resource, reason
-- `AccessDeniedException` — thrown by `AccessDecision.Denied.requireGranted()`
-- `AccessDecisionRequest` — record: actor + permission + `ResourceRef` (decision output) + `ResourceScope` (resolver input); both ref and scope are explicit
-- `AccessDecisionService` — evaluates `AccessDecisionRequest + PermissionResolutionSnapshot` → `AccessDecision`; delegates to `PermissionResolver`
-- `DefaultAccessDecisionService` — internal implementation; translates `PermissionResolution` → `AccessDecision`, preserving `ResourceRef`
-- `RoleKey` — role identifier
-- `Role` — permission blueprint; it does not contain actors or scopes
-- `PermissionGrant` — pairs a permission with a resource scope
-- `RoleAssignment` — pairs an `Actor` with a `RoleKey` at a `ResourceScope`
-- `BuiltInRoles` — catalog of role blueprints
-- `PermissionResolutionRequest` — record: actor + permission + target scope for a single check
-- `PermissionResolutionSnapshot` — record: immutable snapshot of assignments + role registry (defensively copied)
-- `PermissionResolution` — sealed: `Granted` / `Denied`; carries actor, permission, target scope, reason
-- `PermissionResolver` — resolves `PermissionResolution` from request + snapshot
-- `DefaultPermissionResolver` — internal; uses `DefaultResourceScopeHierarchy` and `DefaultPermissionImplicationRules`
-- `CustosSecurityException` — base exception for authorization failures and invariant violations
-- `CustosInvariantViolationException extends CustosSecurityException` — hard security invariant violated
-- `CustosAgentSuperAdminInvariantViolationException` — AGENT actor holds SUPER_ADMIN (carries offending actor)
-
-### Hard rules
-- `AgentActor` must never be granted permission-management capabilities (hardcoded, not configurable).
-- Permission lookup never crosses site boundaries.
-- Authorization evaluates domain operations, not endpoints. Prefer `contentItemPermissionsService.canPublish(actor, resource)` over checking roles directly.
-- `SUPER_ADMIN` includes all built-in permissions for introspection and blueprint purposes.
-- `SUPER_ADMIN` bypass logic is not encoded in `BuiltInRoles`; it belongs in resolver/evaluator behavior.
-- Hard invariants must run before any `SUPER_ADMIN` bypass.
-- `AccessDecisionService.evaluate(AccessDecisionRequest, PermissionResolutionSnapshot)` delegates to `PermissionResolver` and maps `PermissionResolution` → `AccessDecision`; `ResourceRef` in the decision comes from the request, not from the scope walk.
-- `CustosAgentSuperAdminInvariantViolationException` is never converted to `Denied` — it propagates as a fatal error.
-- Direct actor `PermissionGrant` support and explanation trace are still pending.
-
-### Scope hierarchy walk
-`DefaultResourceScopeHierarchy` resolves grants bottom-up:
-```
-ContentItemResourceScope → ContentTypeResourceScope → SiteResourceScope → GlobalResourceScope
-```
-The first scope level that yields a grant wins; absence at all levels → `Denied`.
-
-### Permission implication rules
-Encoded in `DefaultPermissionImplicationRules` (not in role blueprints):
-- `update` implies `read`
-- `publish` implies `read`
-- `publish` does **not** imply `update` (authoring and publishing are separate capabilities)
-
-### ADR
-Full specification in `docs/future-forward/ADR-009.md`.
-
-## Backlog Classification
-
-- **Active**: may implement when explicitly tasked
-- **Near-future**: be aware, do not implement unless task says so
-- **Future-forward**: document only, do not add code
+- Decisions → `docs/adr/`; durable facts → `docs/knowledge/`; task evidence → `docs/engineering/`; see `docs/OSK.md`
 
 <!-- OSK:BEGIN -->
 
