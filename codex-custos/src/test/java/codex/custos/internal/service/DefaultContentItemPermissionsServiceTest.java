@@ -231,6 +231,134 @@ class DefaultContentItemPermissionsServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // canDeleteContentItem
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("canDeleteContentItem")
+    class CanDeleteContentItem {
+
+        @Test
+        @DisplayName("uses CONTENT_ITEM_DELETE with ContentItemResourceRef and ContentItemScope")
+        void mapsToContentItemScopeWithContentItemDelete() {
+            service.canDeleteContentItem(ALICE, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT);
+
+            assertThat(recording.lastRequest().permission()).isEqualTo(Permissions.CONTENT_ITEM_DELETE);
+            assertThat(recording.lastRequest().resource())
+                    .isEqualTo(new ContentItemResourceRef(SITE_A, BLOG, WELCOME));
+            assertThat(recording.lastRequest().targetScope())
+                    .isEqualTo(new ContentItemScope(SITE_A, BLOG, WELCOME));
+            assertThat(recording.lastRequest().actor()).isEqualTo(ALICE);
+        }
+
+        @Test
+        @DisplayName("returns the AccessDecision from the underlying service")
+        void returnsDelegatedDecision() {
+            AccessDecision decision = service.canDeleteContentItem(ALICE, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT);
+            assertThat(decision).isSameAs(STUBBED_GRANTED);
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canDeleteContentItem(null, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null siteKey is rejected")
+        void nullSiteKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canDeleteContentItem(ALICE, null, BLOG, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null contentTypeKey is rejected")
+        void nullContentTypeKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canDeleteContentItem(ALICE, SITE_A, null, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null contentItemKey is rejected")
+        void nullContentItemKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canDeleteContentItem(ALICE, SITE_A, BLOG, null, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null snapshot is rejected")
+        void nullSnapshot() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canDeleteContentItem(ALICE, SITE_A, BLOG, WELCOME, null));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // canRestoreContentItem
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("canRestoreContentItem")
+    class CanRestoreContentItem {
+
+        @Test
+        @DisplayName("uses CONTENT_ITEM_RESTORE with ContentItemResourceRef and ContentItemScope")
+        void mapsToContentItemScopeWithContentItemRestore() {
+            service.canRestoreContentItem(ALICE, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT);
+
+            assertThat(recording.lastRequest().permission()).isEqualTo(Permissions.CONTENT_ITEM_RESTORE);
+            assertThat(recording.lastRequest().resource())
+                    .isEqualTo(new ContentItemResourceRef(SITE_A, BLOG, WELCOME));
+            assertThat(recording.lastRequest().targetScope())
+                    .isEqualTo(new ContentItemScope(SITE_A, BLOG, WELCOME));
+            assertThat(recording.lastRequest().actor()).isEqualTo(ALICE);
+        }
+
+        @Test
+        @DisplayName("returns the AccessDecision from the underlying service")
+        void returnsDelegatedDecision() {
+            AccessDecision decision = service.canRestoreContentItem(ALICE, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT);
+            assertThat(decision).isSameAs(STUBBED_GRANTED);
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canRestoreContentItem(null, SITE_A, BLOG, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null siteKey is rejected")
+        void nullSiteKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canRestoreContentItem(ALICE, null, BLOG, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null contentTypeKey is rejected")
+        void nullContentTypeKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canRestoreContentItem(ALICE, SITE_A, null, WELCOME, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null contentItemKey is rejected")
+        void nullContentItemKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canRestoreContentItem(ALICE, SITE_A, BLOG, null, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null snapshot is rejected")
+        void nullSnapshot() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canRestoreContentItem(ALICE, SITE_A, BLOG, WELCOME, null));
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // snapshot forwarding
     // -----------------------------------------------------------------------
 

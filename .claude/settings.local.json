@@ -14,7 +14,8 @@
       "Bash(mvn -pl codex-fundamentum,codex-index clean test)",
       "Bash(xargs -I{} basename {} .java)",
       "Bash(echo \"---EXIT:$?---\")",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(mvn -pl codex-custos test)"
     ]
   }
 }

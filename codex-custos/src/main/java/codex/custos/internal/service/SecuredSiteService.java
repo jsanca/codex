@@ -28,10 +28,6 @@ import java.util.function.Supplier;
  * on the result. If the decision is denied, {@link codex.custos.api.exception.AccessDeniedException}
  * is thrown and the delegate is never reached.
  *
- * <p>{@code unarchive} is <strong>not</strong> delegated. It throws
- * {@link UnsupportedOperationException} until {@code canUnarchiveSite} and its corresponding
- * permission key are defined in the Permissions catalog. This is a fail-closed posture.
- *
  * <p>{@code findByAlias} and {@code findAll} are currently delegated without authorization.
  * {@code findByAlias} cannot be checked against {@code canReadSite} without first resolving the
  * alias to a {@link SiteKey} — a future two-phase approach is needed. {@code findAll} requires a
@@ -118,8 +114,13 @@ public final class SecuredSiteService implements SiteService {
 
     @Override
     public Site unarchive(final UnarchiveSiteCommand unarchiveSiteCommand, final Actor actor) {
-        throw new UnsupportedOperationException(
-                "Secured unarchive is not supported until site unarchive permission semantics are defined");
+        Objects.requireNonNull(unarchiveSiteCommand, "unarchiveSiteCommand must not be null");
+        Objects.requireNonNull(actor, "actor must not be null");
+        LOGGER.debug("unarchive: actor=[{}] site=[{}]", actor.id().value(), unarchiveSiteCommand.key().value());
+        permissionsService
+                .canUnarchiveSite(actor, unarchiveSiteCommand.key(), snapshotProvider.get())
+                .requireGranted();
+        return delegate.unarchive(unarchiveSiteCommand, actor);
     }
 
     @Override

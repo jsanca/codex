@@ -67,4 +67,10 @@ final class StubSitePermissionsService implements SitePermissionsService {
                                          final PermissionResolutionSnapshot snapshot) {
         return respond("canArchiveSite");
     }
+
+    @Override
+    public AccessDecision canUnarchiveSite(final Actor actor, final SiteKey siteKey,
+                                           final PermissionResolutionSnapshot snapshot) {
+        return respond("canUnarchiveSite");
+    }
 }

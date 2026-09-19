@@ -319,27 +319,50 @@ class SecuredSiteServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // unarchive — fail closed
+    // unarchive
     // -----------------------------------------------------------------------
 
     @Nested
-    @DisplayName("unarchive — fail closed")
+    @DisplayName("unarchive")
     class Unarchive {
 
         private final UnarchiveSiteCommand UNARCHIVE_CMD = UnarchiveSiteCommand.of(SITE_A);
 
         @Test
-        @DisplayName("unarchive throws UnsupportedOperationException")
-        void throwsUnsupportedOperationException() {
-            assertThatExceptionOfType(UnsupportedOperationException.class)
-                    .isThrownBy(() -> service.unarchive(UNARCHIVE_CMD, ALICE));
+        @DisplayName("checks canUnarchiveSite before delegating")
+        void checksPermissionBeforeDelegate() {
+            service.unarchive(UNARCHIVE_CMD, ALICE);
+            assertThat(permissionsStub.lastOperationChecked()).isEqualTo("canUnarchiveSite");
         }
 
         @Test
-        @DisplayName("unarchive does not call the delegate")
-        void doesNotCallDelegate() {
-            try { service.unarchive(UNARCHIVE_CMD, ALICE); } catch (UnsupportedOperationException ignored) {}
+        @DisplayName("denied unarchive does not call the delegate")
+        void deniedDoesNotCallDelegate() {
+            permissionsStub = new StubSitePermissionsService(DENIED);
+            service = new SecuredSiteService(delegateSpy, permissionsStub, () -> EMPTY_SNAPSHOT);
+
+            assertThatExceptionOfType(AccessDeniedException.class)
+                    .isThrownBy(() -> service.unarchive(UNARCHIVE_CMD, ALICE));
             assertThat(delegateSpy.unarchiveCallCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("granted unarchive delegates exactly once")
+        void grantedDelegatesOnce() {
+            service.unarchive(UNARCHIVE_CMD, ALICE);
+            assertThat(delegateSpy.unarchiveCallCount()).isOne();
+        }
+
+        @Test
+        @DisplayName("null command is rejected")
+        void nullCommand() {
+            assertThatNullPointerException().isThrownBy(() -> service.unarchive(null, ALICE));
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() -> service.unarchive(UNARCHIVE_CMD, null));
         }
     }
 

@@ -313,54 +313,100 @@ class SecuredContentItemServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // delete — fail closed
+    // delete
     // -----------------------------------------------------------------------
 
     @Nested
-    @DisplayName("delete — fail closed")
+    @DisplayName("delete")
     class Delete {
 
         private final DeleteContentItemCommand DELETE_CMD =
                 DeleteContentItemCommand.of(SITE_A, BLOG, WELCOME);
 
         @Test
-        @DisplayName("delete throws UnsupportedOperationException")
-        void throwsUnsupportedOperationException() {
-            assertThatExceptionOfType(UnsupportedOperationException.class)
-                    .isThrownBy(() -> service.delete(DELETE_CMD, ALICE));
+        @DisplayName("checks canDeleteContentItem before delegating")
+        void checksPermissionBeforeDelegate() {
+            service.delete(DELETE_CMD, ALICE);
+            assertThat(permissionsStub.lastOperationChecked()).isEqualTo("canDeleteContentItem");
         }
 
         @Test
-        @DisplayName("delete does not call the delegate")
-        void doesNotCallDelegate() {
-            try { service.delete(DELETE_CMD, ALICE); } catch (UnsupportedOperationException ignored) {}
+        @DisplayName("denied delete does not call the delegate")
+        void deniedDoesNotCallDelegate() {
+            permissionsStub = new StubContentItemPermissionsService(DENIED);
+            service = new SecuredContentItemService(delegateSpy, permissionsStub, () -> EMPTY_SNAPSHOT);
+
+            assertThatExceptionOfType(AccessDeniedException.class)
+                    .isThrownBy(() -> service.delete(DELETE_CMD, ALICE));
             assertThat(delegateSpy.deleteCallCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("granted delete delegates exactly once")
+        void grantedDelegatesOnce() {
+            service.delete(DELETE_CMD, ALICE);
+            assertThat(delegateSpy.deleteCallCount()).isOne();
+        }
+
+        @Test
+        @DisplayName("null command is rejected")
+        void nullCommand() {
+            assertThatNullPointerException().isThrownBy(() -> service.delete(null, ALICE));
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() -> service.delete(DELETE_CMD, null));
         }
     }
 
     // -----------------------------------------------------------------------
-    // restore — fail closed
+    // restore
     // -----------------------------------------------------------------------
 
     @Nested
-    @DisplayName("restore — fail closed")
+    @DisplayName("restore")
     class Restore {
 
         private final RestoreContentItemCommand RESTORE_CMD =
                 RestoreContentItemCommand.of(SITE_A, BLOG, WELCOME);
 
         @Test
-        @DisplayName("restore throws UnsupportedOperationException")
-        void throwsUnsupportedOperationException() {
-            assertThatExceptionOfType(UnsupportedOperationException.class)
-                    .isThrownBy(() -> service.restore(RESTORE_CMD, ALICE));
+        @DisplayName("checks canRestoreContentItem before delegating")
+        void checksPermissionBeforeDelegate() {
+            service.restore(RESTORE_CMD, ALICE);
+            assertThat(permissionsStub.lastOperationChecked()).isEqualTo("canRestoreContentItem");
         }
 
         @Test
-        @DisplayName("restore does not call the delegate")
-        void doesNotCallDelegate() {
-            try { service.restore(RESTORE_CMD, ALICE); } catch (UnsupportedOperationException ignored) {}
+        @DisplayName("denied restore does not call the delegate")
+        void deniedDoesNotCallDelegate() {
+            permissionsStub = new StubContentItemPermissionsService(DENIED);
+            service = new SecuredContentItemService(delegateSpy, permissionsStub, () -> EMPTY_SNAPSHOT);
+
+            assertThatExceptionOfType(AccessDeniedException.class)
+                    .isThrownBy(() -> service.restore(RESTORE_CMD, ALICE));
             assertThat(delegateSpy.restoreCallCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("granted restore delegates exactly once")
+        void grantedDelegatesOnce() {
+            service.restore(RESTORE_CMD, ALICE);
+            assertThat(delegateSpy.restoreCallCount()).isOne();
+        }
+
+        @Test
+        @DisplayName("null command is rejected")
+        void nullCommand() {
+            assertThatNullPointerException().isThrownBy(() -> service.restore(null, ALICE));
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() -> service.restore(RESTORE_CMD, null));
         }
     }
 

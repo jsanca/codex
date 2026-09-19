@@ -55,6 +55,7 @@ public final class BuiltInRoles {
                     Permissions.SITE_START,
                     Permissions.SITE_SUSPEND,
                     Permissions.SITE_ARCHIVE,
+                    Permissions.SITE_UNARCHIVE,
                     Permissions.CONTENT_TYPE_READ,
                     Permissions.CONTENT_TYPE_CREATE,
                     Permissions.CONTENT_TYPE_UPDATE,
@@ -65,6 +66,8 @@ public final class BuiltInRoles {
                     Permissions.CONTENT_ITEM_PUBLISH,
                     Permissions.CONTENT_ITEM_UNPUBLISH,
                     Permissions.CONTENT_ITEM_ARCHIVE,
+                    Permissions.CONTENT_ITEM_DELETE,
+                    Permissions.CONTENT_ITEM_RESTORE,
                     Permissions.PERMISSION_READ,
                     Permissions.PERMISSION_GRANT,
                     Permissions.PERMISSION_REVOKE,
@@ -82,6 +85,7 @@ public final class BuiltInRoles {
                     Permissions.SITE_START,
                     Permissions.SITE_SUSPEND,
                     Permissions.SITE_ARCHIVE,
+                    Permissions.SITE_UNARCHIVE,
                     Permissions.CONTENT_TYPE_READ,
                     Permissions.CONTENT_TYPE_CREATE,
                     Permissions.CONTENT_TYPE_UPDATE,
@@ -92,13 +96,15 @@ public final class BuiltInRoles {
                     Permissions.CONTENT_ITEM_PUBLISH,
                     Permissions.CONTENT_ITEM_UNPUBLISH,
                     Permissions.CONTENT_ITEM_ARCHIVE,
+                    Permissions.CONTENT_ITEM_DELETE,
+                    Permissions.CONTENT_ITEM_RESTORE,
                     Permissions.PERMISSION_READ,
                     Permissions.ROLE_ASSIGN,
                     Permissions.ROLE_REVOKE
             ));
 
     /**
-     * Full content lifecycle editor: read, create, update, publish, unpublish, and archive.
+     * Full content lifecycle editor: read, create, update, publish, unpublish, archive, and restore.
      */
     public static final Role EDITOR = Role.of(
             RoleKey.of("EDITOR"),
@@ -108,7 +114,8 @@ public final class BuiltInRoles {
                     Permissions.CONTENT_ITEM_UPDATE,
                     Permissions.CONTENT_ITEM_PUBLISH,
                     Permissions.CONTENT_ITEM_UNPUBLISH,
-                    Permissions.CONTENT_ITEM_ARCHIVE
+                    Permissions.CONTENT_ITEM_ARCHIVE,
+                    Permissions.CONTENT_ITEM_RESTORE
             ));
 
     /**

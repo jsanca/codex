@@ -31,11 +31,6 @@ import java.util.function.Supplier;
  * on the result. If the decision is denied, {@link codex.custos.api.exception.AccessDeniedException}
  * is thrown and the delegate is never reached.
  *
- * <p>Destructive operations ({@code delete}, {@code restore}) are <strong>not</strong> delegated.
- * They throw {@link UnsupportedOperationException} until the corresponding permission keys and
- * authorization semantics are defined in the Permissions catalog. This is a fail-closed posture:
- * no unauthenticated path exists through the secured decorator for these operations.
- *
  * <p>List operations ({@code findByContentType}, {@code findAll}) are currently delegated
  * without per-item authorization. A future filtering strategy (post-retrieval or query-level)
  * is needed before these can be considered fully secured.
@@ -156,17 +151,23 @@ public final class SecuredContentItemService implements ContentItemService {
     public void delete(final DeleteContentItemCommand command, final Actor actor) {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
-
-        throw new UnsupportedOperationException(
-                "Secured delete is not supported until content item delete permission semantics are defined");
+        LOGGER.debug("delete: actor=[{}] site=[{}] type=[{}] item=[{}]",
+                actor.id().value(), command.siteKey().value(), command.contentTypeKey().value(), command.key().value());
+        permissionsService
+                .canDeleteContentItem(actor, command.siteKey(), command.contentTypeKey(), command.key(), snapshotProvider.get())
+                .requireGranted();
+        delegate.delete(command, actor);
     }
 
     @Override
     public ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
-
-        throw new UnsupportedOperationException(
-                "Secured restore is not supported until content item restore permission semantics are defined");
+        LOGGER.debug("restore: actor=[{}] site=[{}] type=[{}] item=[{}]",
+                actor.id().value(), command.siteKey().value(), command.contentTypeKey().value(), command.key().value());
+        permissionsService
+                .canRestoreContentItem(actor, command.siteKey(), command.contentTypeKey(), command.key(), snapshotProvider.get())
+                .requireGranted();
+        return delegate.restore(command, actor);
     }
 }

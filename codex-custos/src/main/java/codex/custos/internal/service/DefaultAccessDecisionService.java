@@ -38,6 +38,7 @@ public final class DefaultAccessDecisionService implements AccessDecisionService
     @Override
     public AccessDecision evaluate(final AccessDecisionRequest request,
                                    final PermissionResolutionSnapshot snapshot) {
+
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(snapshot, "snapshot must not be null");
 

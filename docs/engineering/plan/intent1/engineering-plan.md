@@ -25,6 +25,57 @@ Each operation must reach an explicit grant/deny decision through the existing C
 - `docs/knowledge/security/CUSTOS-MODEL.md` — current Custos model and authorization vocabulary.
 - Repository evidence for Custos: `codex-custos/src/main/java/codex/custos/` and matching tests.
 
+## 1.1 Lifecycle / Execution Gates
+
+**Current stage:** IMPLEMENTATION
+
+**Implementation authorized:** YES
+
+**Approved design:** `docs/engineering/design/intent1/design.md`
+
+**Gate D:** PASSED
+
+**Next authorized work:** Slice 1 - Permission Vocabulary
+
+### Approved planning evidence
+
+- Intent: `docs/engineering/agents/tasks/intent1/intent.md`
+- Use Cases: `docs/knowledge/use-cases/intent1/`
+- Canonical Test Cases: `docs/knowledge/test-cases/intent1/`
+- Engineering Plan: this document
+- Pre-Implementation Review:
+  `docs/engineering/agents/reviews/intent1/Intent1PreImplementationReview.md`
+- Reconciliation:
+  `docs/engineering/agents/reports/knowledge/Intent1PreImplementationReconciliation-REPORT.md`
+- Pre-Implementation Re-Review:
+  `docs/engineering/agents/reviews/intent1/Intent1PreImplementationReReview.md`
+
+### Approved technical source
+
+`docs/engineering/design/intent1/design.md` is the approved technical source.
+`docs/engineering/agents/reviews/intent1/Intent1DesignReview.md` satisfies
+Gate D and authorizes the planned implementation sequence.
+
+### Authorized execution sequence
+
+```text
+Slice 1
+  -> Slice 2
+  -> Slice 3
+  -> Deep checkpoint
+  -> Slice 4
+  -> Slice 5
+  -> Slice 6
+  -> Slice 7
+  -> Final Engineering Review
+  -> QA / Knowledge Reconciliation
+  -> Objective Closeout
+```
+
+Required review checkpoints are the Deep checkpoint after Slice 3 and the Final
+Engineering Review after Slice 7. Gate D has passed; Slice 1 is the next
+authorized work.
+
 ## 2. Current-State Summary
 
 ### Permission catalog (`codex.custos.api.model.Permissions`)
@@ -177,7 +228,10 @@ The AGENT + `SUPER_ADMIN` invariant continues to propagate as `CustosAgentSuperA
 - **Module boundaries**: unchanged. `codex-custos` remains the sole home of authorization vocabulary. `codex-concilium` assembly (`ConciliumRuntime.secured`) does not change because it wires services by interface, not by method.
 - **Public API surface**: grows by three constants and three interface methods, all additive. No removals. Consumers of the current interfaces remain source-compatible except that new methods on the interfaces will require implementers — the only two implementers are `Default*PermissionsService` and (in tests) the stub doubles. No `default` methods on the interface; this preserves the "implement or fail to compile" rigor already used for the other capabilities.
 - **Decorator chain**: unchanged. Existing wrap order (`TimedSiteService → Caching → SecuredSiteService → EventPublishingSiteService → CodexSiteService`) is preserved. Secured decorators only stop throwing UOE — the surrounding decorators are unaffected.
-- **JavaDoc drift**: the "Absent from this service …" notes in `SitePermissionsService` and `ContentItemPermissionsService` must be removed as part of the slice that fills them.
+- **JavaDoc drift**: remove `contentItem.delete` from the `ContentItemPermissionsService`
+  absence note when Slice 3 adds that capability. Retain the
+  `SitePermissionsService` note for `site.update` and `site.delete`, which C1
+  does not add.
 
 ## 6. Engineering Slices
 
@@ -188,9 +242,12 @@ Seven bounded slices, sequenced so each is reviewable in isolation and each depe
 - **Objective**: introduce the three new `PermissionKey` constants.
 - **Areas affected**: `codex-custos/src/main/java/codex/custos/api/model/Permissions.java`.
 - **Behaviour introduced**: three new constants — `SITE_UNARCHIVE`, `CONTENT_ITEM_DELETE`, `CONTENT_ITEM_RESTORE` — matching the existing constant/JavaDoc style.
-- **Tests required**: none new. The constants are exercised transitively by later slices. Optionally extend an existing catalog-completeness test if one exists.
+- **Tests required**: update `PermissionsTest.catalogSize()` from 20 to 23 in
+  the existing permission-catalog completeness test. The three new constants
+  are also exercised by later slices.
 - **Dependencies**: none.
-- **Acceptance criteria**: three constants exist, are exported, and are referenced nowhere yet.
+- **Acceptance criteria**: three constants exist, are exported, and
+  `PermissionsTest.catalogSize()` expects 23 built-in permissions.
 - **Out of scope**: implication rules, role assignments, permission service methods.
 
 ### Slice 2 — Built-in role updates
@@ -201,7 +258,9 @@ Seven bounded slices, sequenced so each is reviewable in isolation and each depe
   - `SUPER_ADMIN` receives `site.unarchive`, `contentItem.delete`, `contentItem.restore`.
   - `SITE_ADMIN` receives `site.unarchive`, `contentItem.delete`, `contentItem.restore`.
   - `EDITOR` receives `contentItem.restore` only.
-- **Tests required**: unit assertions on the exact permission set for each modified role. Regression check that no unmodified role gained a new permission.
+- **Tests required**: update `BuiltInRolesTest` expectations for the
+  MD-C1-01 blueprint changes, including exact permission sets and affected
+  counts. Regression check that no unmodified role gained a new permission.
 - **Dependencies**: Slice 1.
 - **Acceptance criteria**: blueprint permission sets exactly match §4.2; no other role composition changes.
 - **Out of scope**: `SUPER_ADMIN` bypass behaviour (unchanged).
@@ -214,13 +273,19 @@ Seven bounded slices, sequenced so each is reviewable in isolation and each depe
   - `codex-custos/src/main/java/codex/custos/api/service/ContentItemPermissionsService.java`
   - `codex-custos/src/main/java/codex/custos/internal/service/DefaultSitePermissionsService.java`
   - `codex-custos/src/main/java/codex/custos/internal/service/DefaultContentItemPermissionsService.java`
-  - Remove "Absent from this service …" JavaDoc notes now that the gaps are closed.
+  - Remove `contentItem.delete` from the `ContentItemPermissionsService`
+    absence note. Retain the `SitePermissionsService` absence note for
+    `site.update` and `site.delete`, which remain unsupported.
 - **Behaviour introduced**: three new `can*` methods, each building an `AccessDecisionRequest` and delegating to `AccessDecisionService.evaluate(request, snapshot)`, mirroring the exact shape of `canArchiveSite` / `canArchiveContentItem`.
 - **Tests required**:
   - Extend `DefaultSitePermissionsServiceTest` — a nested suite for `canUnarchiveSite` with null-guard tests plus grant/deny passthrough via a stub `AccessDecisionService`.
   - Extend `DefaultContentItemPermissionsServiceTest` for `canDeleteContentItem` and `canRestoreContentItem` with the same pattern.
 - **Dependencies**: Slice 1 (permission constants). Independent of Slice 2 at runtime — resolver output depends on roles but the permission service just constructs and delegates a request.
-- **Acceptance criteria**: three new methods present; each performs required null guards, logs at DEBUG, and returns whatever the decision service returns; interface JavaDoc no longer lists these as absent.
+- **Acceptance criteria**: three new methods present; each performs required
+  null guards, logs at DEBUG, and returns whatever the decision service
+  returns. `ContentItemPermissionsService` no longer lists
+  `contentItem.delete` as absent; `SitePermissionsService` retains its
+  accurate `site.update` / `site.delete` absence note.
 - **Out of scope**: decorator behaviour.
 
 ### Slice 4 — `SecuredSiteService.unarchive` gating

@@ -22,6 +22,7 @@ class PermissionsTest {
         assertThat(Permissions.SITE_START.value()).isEqualTo("site.start");
         assertThat(Permissions.SITE_SUSPEND.value()).isEqualTo("site.suspend");
         assertThat(Permissions.SITE_ARCHIVE.value()).isEqualTo("site.archive");
+        assertThat(Permissions.SITE_UNARCHIVE.value()).isEqualTo("site.unarchive");
     }
 
     @Test
@@ -42,6 +43,8 @@ class PermissionsTest {
         assertThat(Permissions.CONTENT_ITEM_PUBLISH.value()).isEqualTo("contentItem.publish");
         assertThat(Permissions.CONTENT_ITEM_UNPUBLISH.value()).isEqualTo("contentItem.unpublish");
         assertThat(Permissions.CONTENT_ITEM_ARCHIVE.value()).isEqualTo("contentItem.archive");
+        assertThat(Permissions.CONTENT_ITEM_DELETE.value()).isEqualTo("contentItem.delete");
+        assertThat(Permissions.CONTENT_ITEM_RESTORE.value()).isEqualTo("contentItem.restore");
     }
 
     @Test
@@ -68,9 +71,9 @@ class PermissionsTest {
     }
 
     @Test
-    @DisplayName("Catalog contains exactly 20 built-in permissions")
+    @DisplayName("Catalog contains exactly 23 built-in permissions")
     void catalogSize() {
-        assertThat(allConstants()).hasSize(20);
+        assertThat(allConstants()).hasSize(23);
     }
 
     @Test

@@ -34,6 +34,9 @@ public final class Permissions {
     /** Transition a site to ARCHIVED. */
     public static final PermissionKey SITE_ARCHIVE = PermissionKey.of("site.archive");
 
+    /** Transition a site from ARCHIVED back to SUSPENDED. */
+    public static final PermissionKey SITE_UNARCHIVE = PermissionKey.of("site.unarchive");
+
     // --- Content Type ---
 
     /** Read content type schema and metadata. */
@@ -67,6 +70,12 @@ public final class Permissions {
 
     /** Archive a content item. */
     public static final PermissionKey CONTENT_ITEM_ARCHIVE = PermissionKey.of("contentItem.archive");
+
+    /** Permanently delete an archived content item. */
+    public static final PermissionKey CONTENT_ITEM_DELETE = PermissionKey.of("contentItem.delete");
+
+    /** Restore an archived content item to DRAFT. */
+    public static final PermissionKey CONTENT_ITEM_RESTORE = PermissionKey.of("contentItem.restore");
 
     // --- Permission management ---
 

@@ -4,6 +4,10 @@
 
 Read [PROJECT.md](PROJECT.md) for concise project context. Use this guide to decide where new information belongs, then read the relevant folder README or area index for local guidance. Keep facts traceable to their evidence and do not treat tool-specific instruction files as canonical knowledge.
 
+For non-trivial objectives, Codex applies its project-specific
+[Engineering Lifecycle](engineering/ENGINEERING-LIFECYCLE.md) on top of OSK
+concepts. It does not make that lifecycle a universal OSK requirement.
+
 ## Classification Rule
 
 **Classify documentation by its purpose, not by the task that produced it.** A single task may produce engineering evidence, durable knowledge, a decision, and future intent; place each artifact where it remains useful.

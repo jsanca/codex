@@ -116,7 +116,7 @@ Custos answers `Actor + Permission + Resource + Context → AccessDecision` for 
 - Current fail-closed / pass-through edges (do not "fix" opportunistically): item delete/restore, site unarchive are fail-closed; `findAll`/`findBy*` list reads are pass-through pending a read-filtering strategy.
 - Use `ConciliumRuntime.secured(snapshotProvider)` for authorization-sensitive paths; `inMemory()` is unsecured (tests/back-compat). Callers use `runtime.siteService()` etc. — never `runtime.coreRuntime().siteService()`.
 
-Current model in `docs/security/CUSTOS-MODEL.md`.
+Current model in `docs/knowledge/security/CUSTOS-MODEL.md`.
 
 ## Concurrency
 
@@ -163,12 +163,11 @@ Follow `codex-custos` style (`codex-codex` tests predate it — do not copy them
 ## Key Documentation Files
 
 - `docs/engineering/AGENT-CALIBRATION.md` — accumulated corrections (check here before repeating a known pattern)
-- `docs/modules/MODULE-RESPONSIBILITIES.md` — boundary map; implementation status is verified by code and reviews
-- `docs/security/CUSTOS-MODEL.md` + `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — authorization model and phase status
-- `docs/security/CUSTOS-MODEL.md` — Custos model and current authorization vocabulary
-- `docs/roadmap/ROADMAP.md` — committed direction; non-committed ideas stay in `docs/roadmap/future/`
+- `docs/knowledge/modules/MODULE-RESPONSIBILITIES.md` — boundary map; implementation status is verified by code and reviews
+- `docs/knowledge/security/CUSTOS-MODEL.md` + `docs/knowledge/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — authorization model and phase status
+- `docs/engineering/roadmap/ROADMAP.md` — committed direction; non-committed ideas stay in `docs/engineering/roadmap/future/`
 - `CODING_IDENTITY.md` — broader design fingerprint
-- Decisions → `docs/adr/`; durable facts → `docs/knowledge/`; task evidence → `docs/engineering/`; see `docs/OSK.md`
+- Decisions → `docs/engineering/adr/`; durable facts → `docs/knowledge/`; task evidence → `docs/engineering/`; see `docs/OSK.md`
 
 <!-- OSK:BEGIN -->
 

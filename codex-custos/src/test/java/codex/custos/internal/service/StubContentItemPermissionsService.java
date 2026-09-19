@@ -87,4 +87,20 @@ final class StubContentItemPermissionsService implements ContentItemPermissionsS
                                                 final PermissionResolutionSnapshot snapshot) {
         return respond("canArchiveContentItem");
     }
+
+    @Override
+    public AccessDecision canDeleteContentItem(final Actor actor, final SiteKey siteKey,
+                                               final ContentTypeKey contentTypeKey,
+                                               final ContentItemKey contentItemKey,
+                                               final PermissionResolutionSnapshot snapshot) {
+        return respond("canDeleteContentItem");
+    }
+
+    @Override
+    public AccessDecision canRestoreContentItem(final Actor actor, final SiteKey siteKey,
+                                                final ContentTypeKey contentTypeKey,
+                                                final ContentItemKey contentItemKey,
+                                                final PermissionResolutionSnapshot snapshot) {
+        return respond("canRestoreContentItem");
+    }
 }

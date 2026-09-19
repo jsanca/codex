@@ -59,16 +59,20 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
     private static final Actor CAROL = Actor.human(ActorId.of("user-carol"), "Carol");   // REVIEWER
     private static final Actor DAN   = Actor.human(ActorId.of("user-dan"),   "Dan");     // EDITOR
     private static final Actor EVE   = Actor.human(ActorId.of("user-eve"),   "Eve");     // EDITOR on site-a only
+    private static final Actor FRANK = Actor.human(ActorId.of("user-frank"), "Frank");   // SITE_ADMIN on site-a
     private static final Actor BOT   = Actor.agent("sync-bot");                           // AGENT + SUPER_ADMIN
 
     // --- commands scoped to site-a ---
-    private static final CreateContentItemCommand  CREATE_CMD  = CreateContentItemCommand.of(SITE_A, BLOG, WELCOME, null);
-    private static final UpdateContentItemCommand  UPDATE_CMD  = UpdateContentItemCommand.of(SITE_A, BLOG, WELCOME, null);
-    private static final PublishContentItemCommand PUBLISH_CMD = PublishContentItemCommand.of(SITE_A, BLOG, WELCOME);
-    private static final ArchiveContentItemCommand ARCHIVE_CMD = ArchiveContentItemCommand.of(SITE_A, BLOG, WELCOME);
+    private static final CreateContentItemCommand   CREATE_CMD   = CreateContentItemCommand.of(SITE_A, BLOG, WELCOME, null);
+    private static final UpdateContentItemCommand   UPDATE_CMD   = UpdateContentItemCommand.of(SITE_A, BLOG, WELCOME, null);
+    private static final PublishContentItemCommand  PUBLISH_CMD  = PublishContentItemCommand.of(SITE_A, BLOG, WELCOME);
+    private static final ArchiveContentItemCommand  ARCHIVE_CMD  = ArchiveContentItemCommand.of(SITE_A, BLOG, WELCOME);
+    private static final DeleteContentItemCommand   DELETE_CMD   = DeleteContentItemCommand.of(SITE_A, BLOG, WELCOME);
+    private static final RestoreContentItemCommand  RESTORE_CMD  = RestoreContentItemCommand.of(SITE_A, BLOG, WELCOME);
 
-    // --- command scoped to site-b for boundary test ---
-    private static final UpdateContentItemCommand UPDATE_SITE_B_CMD = UpdateContentItemCommand.of(SITE_B, BLOG, WELCOME, null);
+    // --- commands scoped to site-b for boundary tests ---
+    private static final UpdateContentItemCommand  UPDATE_SITE_B_CMD  = UpdateContentItemCommand.of(SITE_B, BLOG, WELCOME, null);
+    private static final RestoreContentItemCommand RESTORE_SITE_B_CMD = RestoreContentItemCommand.of(SITE_B, BLOG, WELCOME);
 
     // --- role registry shared by all tests ---
     private static final Map<RoleKey, Role> ALL_ROLES = Map.of(
@@ -76,6 +80,7 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
             BuiltInRoles.COPYWRITER.key(),  BuiltInRoles.COPYWRITER,
             BuiltInRoles.REVIEWER.key(),    BuiltInRoles.REVIEWER,
             BuiltInRoles.EDITOR.key(),      BuiltInRoles.EDITOR,
+            BuiltInRoles.SITE_ADMIN.key(),  BuiltInRoles.SITE_ADMIN,
             BuiltInRoles.SUPER_ADMIN.key(), BuiltInRoles.SUPER_ADMIN
     );
 
@@ -264,10 +269,63 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
             service.archive(ARCHIVE_CMD, DAN);
             assertThat(delegateSpy.archiveCount()).isOne();
         }
+
+        @Test
+        @DisplayName("restore is granted")
+        void restoreGranted() {
+            service.restore(RESTORE_CMD, DAN);
+            assertThat(delegateSpy.restoreCount()).isOne();
+        }
+
+        @Test
+        @DisplayName("delete is denied — editor does not have contentItem.delete")
+        void deleteIsDenied() {
+            assertThatExceptionOfType(AccessDeniedException.class)
+                    .isThrownBy(() -> service.delete(DELETE_CMD, DAN))
+                    .satisfies(ex -> assertThat(ex.decision()).isPresent());
+        }
+
+        @Test
+        @DisplayName("denied delete does not reach the delegate")
+        void deniedDeleteDoesNotCallDelegate() {
+            try { service.delete(DELETE_CMD, DAN); } catch (AccessDeniedException ignored) {}
+            assertThat(delegateSpy.deleteCount()).isZero();
+        }
     }
 
     // -----------------------------------------------------------------------
-    // Scenario 5 — Site boundary
+    // Scenario 5 — SITE_ADMIN: delete and restore granted
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("SiteAdmin — delete and restore granted")
+    class SiteAdminRole {
+
+        private SecuredContentItemService service;
+
+        @BeforeEach
+        void setUp() {
+            service = buildService(snapshotWith(
+                    RoleAssignment.of(FRANK, BuiltInRoles.SITE_ADMIN.key(), new SiteScope(SITE_A))));
+        }
+
+        @Test
+        @DisplayName("delete is granted and reaches the delegate")
+        void deleteGranted() {
+            service.delete(DELETE_CMD, FRANK);
+            assertThat(delegateSpy.deleteCount()).isOne();
+        }
+
+        @Test
+        @DisplayName("restore is granted and reaches the delegate")
+        void restoreGranted() {
+            service.restore(RESTORE_CMD, FRANK);
+            assertThat(delegateSpy.restoreCount()).isOne();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Scenario 6 — Site boundary
     // -----------------------------------------------------------------------
 
     @Nested
@@ -306,10 +364,18 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
             service.update(UPDATE_CMD, EVE);
             assertThat(delegateSpy.updateCount()).isOne();
         }
+
+        @Test
+        @DisplayName("restore on site-b is denied when editor role is scoped to site-a")
+        void restoreOnSiteBDenied() {
+            assertThatExceptionOfType(AccessDeniedException.class)
+                    .isThrownBy(() -> service.restore(RESTORE_SITE_B_CMD, EVE))
+                    .satisfies(ex -> assertThat(ex.decision()).isPresent());
+        }
     }
 
     // -----------------------------------------------------------------------
-    // Scenario 6 — AGENT + SUPER_ADMIN invariant
+    // Scenario 7 — AGENT + SUPER_ADMIN invariant
     // -----------------------------------------------------------------------
 
     @Nested
@@ -358,12 +424,16 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
         private int updateCount;
         private int publishCount;
         private int archiveCount;
+        private int deleteCount;
+        private int restoreCount;
 
         int createCount()     { return createCount; }
         int findByKeyCount()  { return findByKeyCount; }
         int updateCount()     { return updateCount; }
         int publishCount()    { return publishCount; }
         int archiveCount()    { return archiveCount; }
+        int deleteCount()     { return deleteCount; }
+        int restoreCount()    { return restoreCount; }
 
         @Override
         public ContentItem create(final CreateContentItemCommand command, final Actor actor) {
@@ -408,10 +478,12 @@ class SecuredContentItemServiceAuthorizationMatrixTest {
 
         @Override
         public void delete(final DeleteContentItemCommand command, final Actor actor) {
+            deleteCount++;
         }
 
         @Override
         public ContentItem restore(final RestoreContentItemCommand command, final Actor actor) {
+            restoreCount++;
             return null;
         }
 

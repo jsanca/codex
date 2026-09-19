@@ -183,6 +183,54 @@ class DefaultSitePermissionsServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // canUnarchiveSite
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("canUnarchiveSite")
+    class CanUnarchiveSite {
+
+        @Test
+        @DisplayName("uses SITE_UNARCHIVE with SiteResourceRef and SiteScope")
+        void mapsToSiteScopeWithSiteUnarchive() {
+            service.canUnarchiveSite(ALICE, SITE_A, EMPTY_SNAPSHOT);
+
+            assertThat(recording.lastRequest().permission()).isEqualTo(Permissions.SITE_UNARCHIVE);
+            assertThat(recording.lastRequest().resource()).isEqualTo(new SiteResourceRef(SITE_A));
+            assertThat(recording.lastRequest().targetScope()).isEqualTo(new SiteScope(SITE_A));
+            assertThat(recording.lastRequest().actor()).isEqualTo(ALICE);
+        }
+
+        @Test
+        @DisplayName("returns the AccessDecision from the underlying service")
+        void returnsDelegatedDecision() {
+            AccessDecision decision = service.canUnarchiveSite(ALICE, SITE_A, EMPTY_SNAPSHOT);
+            assertThat(decision).isSameAs(STUBBED_GRANTED);
+        }
+
+        @Test
+        @DisplayName("null actor is rejected")
+        void nullActor() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canUnarchiveSite(null, SITE_A, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null siteKey is rejected")
+        void nullSiteKey() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canUnarchiveSite(ALICE, null, EMPTY_SNAPSHOT));
+        }
+
+        @Test
+        @DisplayName("null snapshot is rejected")
+        void nullSnapshot() {
+            assertThatNullPointerException().isThrownBy(() ->
+                    service.canUnarchiveSite(ALICE, SITE_A, null));
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // snapshot forwarding
     // -----------------------------------------------------------------------
 

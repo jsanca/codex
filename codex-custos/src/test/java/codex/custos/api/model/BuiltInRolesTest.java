@@ -50,25 +50,31 @@ class BuiltInRolesTest {
     // --- canonical permission sets ---
 
     @Test
-    @DisplayName("SUPER_ADMIN holds all 20 built-in permissions")
+    @DisplayName("SUPER_ADMIN holds all 23 built-in permissions")
     void superAdminHasAllPermissions() {
-        assertThat(BuiltInRoles.SUPER_ADMIN.permissions()).hasSize(20);
+        assertThat(BuiltInRoles.SUPER_ADMIN.permissions()).hasSize(23);
         assertThat(BuiltInRoles.SUPER_ADMIN.permissions()).contains(
                 Permissions.PERMISSION_GRANT,
                 Permissions.PERMISSION_REVOKE,
                 Permissions.ROLE_ASSIGN,
                 Permissions.ROLE_REVOKE,
-                Permissions.SITE_CREATE);
+                Permissions.SITE_CREATE,
+                Permissions.SITE_UNARCHIVE,
+                Permissions.CONTENT_ITEM_DELETE,
+                Permissions.CONTENT_ITEM_RESTORE);
     }
 
     @Test
-    @DisplayName("SITE_ADMIN has the expected 17 permissions")
+    @DisplayName("SITE_ADMIN has the expected 20 permissions")
     void siteAdminPermissions() {
-        assertThat(BuiltInRoles.SITE_ADMIN.permissions()).hasSize(17);
+        assertThat(BuiltInRoles.SITE_ADMIN.permissions()).hasSize(20);
         assertThat(BuiltInRoles.SITE_ADMIN.permissions()).contains(
                 Permissions.SITE_READ,
+                Permissions.SITE_UNARCHIVE,
                 Permissions.CONTENT_TYPE_ARCHIVE,
                 Permissions.CONTENT_ITEM_PUBLISH,
+                Permissions.CONTENT_ITEM_DELETE,
+                Permissions.CONTENT_ITEM_RESTORE,
                 Permissions.PERMISSION_READ,
                 Permissions.ROLE_ASSIGN,
                 Permissions.ROLE_REVOKE);
@@ -77,7 +83,7 @@ class BuiltInRolesTest {
     }
 
     @Test
-    @DisplayName("EDITOR has read, create, update, publish, unpublish, archive")
+    @DisplayName("EDITOR has read, create, update, publish, unpublish, archive, restore — but not delete")
     void editorPermissions() {
         assertThat(BuiltInRoles.EDITOR.permissions()).containsExactlyInAnyOrder(
                 Permissions.CONTENT_ITEM_READ,
@@ -85,7 +91,10 @@ class BuiltInRolesTest {
                 Permissions.CONTENT_ITEM_UPDATE,
                 Permissions.CONTENT_ITEM_PUBLISH,
                 Permissions.CONTENT_ITEM_UNPUBLISH,
-                Permissions.CONTENT_ITEM_ARCHIVE);
+                Permissions.CONTENT_ITEM_ARCHIVE,
+                Permissions.CONTENT_ITEM_RESTORE);
+        assertThat(BuiltInRoles.EDITOR.permissions())
+                .doesNotContain(Permissions.CONTENT_ITEM_DELETE);
     }
 
     @Test
@@ -157,7 +166,7 @@ class BuiltInRolesTest {
     @DisplayName("SUPER_ADMIN blueprint carries all permissions but encodes no bypass, agent denial, or invariant skip")
     void superAdminBlueprintContractIsDocumented() {
         // Blueprint contains all permissions — introspectable by UI and resolver
-        assertThat(BuiltInRoles.SUPER_ADMIN.permissions()).hasSize(20);
+        assertThat(BuiltInRoles.SUPER_ADMIN.permissions()).hasSize(23);
 
         // Blueprint is a plain Role record — no subclass, no special type
         assertThat(BuiltInRoles.SUPER_ADMIN.getClass()).isEqualTo(Role.class);

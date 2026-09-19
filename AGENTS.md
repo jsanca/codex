@@ -137,9 +137,11 @@ Follow `codex-custos` style (flatter `codex-codex` tests predate it — do not c
 
 ## Docs That Matter
 
-- `docs/modules/MODULE-RESPONSIBILITIES.md` — boundary map (partly stale: still lists uncreated `nuntius`/`speculum` modules and pre-migration indexing notes; trust code over prose).
-- `docs/security/CUSTOS-MODEL.md` + `docs/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — authorization model and phase status.
-- `docs/security/CUSTOS-MODEL.md` — Custos model and current authorization vocabulary.
-- `docs/roadmap/ROADMAP.md` — committed direction; non-committed ideas stay in `docs/roadmap/future/`.
+The docs follow an OSK information model — placement is by purpose, not by the task that produced it. Start at `docs/PROJECT.md`, then `docs/OSK.md`.
+
+- `docs/knowledge/modules/MODULE-RESPONSIBILITIES.md` — boundary map (still lists uncreated `nuntius`/`speculum` as conceptual; trust code over prose).
+- `docs/knowledge/security/CUSTOS-MODEL.md` + `docs/knowledge/security/CUSTOS-IMPLEMENTATION-CHECKLIST.md` — authorization model and phase status.
+- `docs/engineering/roadmap/ROADMAP.md` — committed direction; non-committed ideas stay in `docs/engineering/roadmap/future/`.
 - `docs/engineering/AGENT-CALIBRATION.md` — accumulated corrections (check here before repeating a known pattern).
-- Decisions → `docs/adr/`; durable facts → `docs/knowledge/`; task evidence → `docs/engineering/`; see `docs/OSK.md`.
+- `CODING_IDENTITY.md` — broader design fingerprint.
+- Decisions → `docs/engineering/adr/`; durable facts → `docs/knowledge/`; task evidence → `docs/engineering/`.

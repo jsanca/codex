@@ -55,6 +55,7 @@ public final class DefaultPermissionResolver implements PermissionResolver {
     @Override
     public PermissionResolution resolve(final PermissionResolutionRequest request,
                                         final PermissionResolutionSnapshot snapshot) {
+
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(snapshot, "snapshot must not be null");
 
@@ -95,6 +96,7 @@ public final class DefaultPermissionResolver implements PermissionResolver {
 
     private PermissionResolution resolveByScope(final PermissionResolutionRequest request,
                                                 final PermissionResolutionSnapshot snapshot) {
+
         ResourceScope current = request.target();
         while (current != null) {
             final Optional<Role> grantingRole = findGrantingRoleAtScope(request.actor(), request.permission(),

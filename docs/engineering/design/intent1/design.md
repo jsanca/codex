@@ -408,7 +408,9 @@ Concise enumeration of everything the design changes and everything it deliberat
 - `DefaultContentItemPermissionsService`: implement both in the pattern of `canArchiveContentItem`.
 - `SecuredSiteService.unarchive`: replace UOE with the standard authorized-mutation body.
 - `SecuredContentItemService.delete`, `.restore`: replace UOE with the standard authorized-mutation body.
-- `SitePermissionsService` and `ContentItemPermissionsService` JavaDoc: remove the "absent from this service …" notes.
+- `ContentItemPermissionsService` JavaDoc: remove `contentItem.delete` from
+  the absence note. Retain the `SitePermissionsService` absence note for
+  `site.update` and `site.delete`, which remain unsupported after C1.
 
 **Deliberately not changed**
 
@@ -454,7 +456,7 @@ Every change reuses an existing template.
   - Return `decisionService.evaluate(request, snapshot)`.
 - `SecuredSiteService.unarchive`: mirror `SecuredSiteService.archive`.
   - Null-guard `command` and `actor`.
-  - `AccessDecision decision = permissionsService.canUnarchiveSite(actor, command.siteKey(), snapshotProvider.get());`
+  - `AccessDecision decision = permissionsService.canUnarchiveSite(actor, command.key(), snapshotProvider.get());`
   - `decision.requireGranted();`
   - `return delegate.unarchive(command, actor);`
 - `SecuredContentItemService.delete`: mirror `SecuredContentItemService.archive`.

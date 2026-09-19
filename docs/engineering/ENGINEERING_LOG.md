@@ -5,6 +5,29 @@ task list, or review report.
 
 Use it to preserve the timeline of meaningful project movement.
 
+## 2026-09-18
+
+### Intent 1 Gate D Passed
+
+The Intent 1 Design Review passed with minor documentation corrections.
+Gate D is now satisfied, implementation is authorized, and Slice 1 is the next
+authorized work. The reconciliation record is:
+
+```text
+docs/engineering/agents/reports/knowledge/Intent1GateDReconciliation-REPORT.md
+```
+
+### Codex Engineering Lifecycle Documented
+
+Codex now records a project-specific lifecycle for non-trivial engineering
+objectives. The policy makes artifact authority, review feedback loops, and
+planning, design, implementation, and closeout gates explicit.
+
+```text
+docs/engineering/ENGINEERING-LIFECYCLE.md
+docs/engineering/agents/reports/knowledge/CodexEngineeringLifecycle-REPORT.md
+```
+
 ## 2026-08-05
 
 ### Codex OSK Alignment

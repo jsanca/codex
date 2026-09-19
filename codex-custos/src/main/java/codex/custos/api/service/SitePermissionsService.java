@@ -69,4 +69,14 @@ public interface SitePermissionsService {
      * @return an {@link AccessDecision.Granted} or {@link AccessDecision.Denied}
      */
     AccessDecision canArchiveSite(Actor actor, SiteKey siteKey, PermissionResolutionSnapshot snapshot);
+
+    /**
+     * Returns whether {@code actor} may transition the specified site from ARCHIVED back to SUSPENDED.
+     *
+     * @param actor    the actor requesting the operation; must not be null
+     * @param siteKey  the site to check; must not be null
+     * @param snapshot role assignments and role blueprints in effect; must not be null
+     * @return an {@link AccessDecision.Granted} or {@link AccessDecision.Denied}
+     */
+    AccessDecision canUnarchiveSite(Actor actor, SiteKey siteKey, PermissionResolutionSnapshot snapshot);
 }

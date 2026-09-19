@@ -150,4 +150,45 @@ public final class DefaultContentItemPermissionsService implements ContentItemPe
                         new ContentItemScope(siteKey, contentTypeKey, contentItemKey)),
                 snapshot);
     }
+
+    @Override
+    public AccessDecision canDeleteContentItem(final Actor actor, final SiteKey siteKey,
+                                               final ContentTypeKey contentTypeKey,
+                                               final ContentItemKey contentItemKey,
+                                               final PermissionResolutionSnapshot snapshot) {
+
+        Objects.requireNonNull(actor, "actor must not be null");
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
+        Objects.requireNonNull(contentTypeKey, "contentTypeKey must not be null");
+        Objects.requireNonNull(contentItemKey, "contentItemKey must not be null");
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+
+        LOGGER.debug("canDeleteContentItem: actor=[{}] site=[{}] type=[{}] item=[{}]",
+                actor.id().value(), siteKey.value(), contentTypeKey.value(), contentItemKey.value());
+
+        return decisionService.evaluate(
+                AccessDecisionRequest.of(actor, Permissions.CONTENT_ITEM_DELETE,
+                        new ContentItemResourceRef(siteKey, contentTypeKey, contentItemKey),
+                        new ContentItemScope(siteKey, contentTypeKey, contentItemKey)),
+                snapshot);
+    }
+
+    @Override
+    public AccessDecision canRestoreContentItem(final Actor actor, final SiteKey siteKey,
+                                                final ContentTypeKey contentTypeKey,
+                                                final ContentItemKey contentItemKey,
+                                                final PermissionResolutionSnapshot snapshot) {
+        Objects.requireNonNull(actor, "actor must not be null");
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
+        Objects.requireNonNull(contentTypeKey, "contentTypeKey must not be null");
+        Objects.requireNonNull(contentItemKey, "contentItemKey must not be null");
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+        LOGGER.debug("canRestoreContentItem: actor=[{}] site=[{}] type=[{}] item=[{}]",
+                actor.id().value(), siteKey.value(), contentTypeKey.value(), contentItemKey.value());
+        return decisionService.evaluate(
+                AccessDecisionRequest.of(actor, Permissions.CONTENT_ITEM_RESTORE,
+                        new ContentItemResourceRef(siteKey, contentTypeKey, contentItemKey),
+                        new ContentItemScope(siteKey, contentTypeKey, contentItemKey)),
+                snapshot);
+    }
 }

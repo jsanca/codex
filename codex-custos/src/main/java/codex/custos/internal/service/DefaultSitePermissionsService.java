@@ -99,4 +99,18 @@ public final class DefaultSitePermissionsService implements SitePermissionsServi
                         new SiteResourceRef(siteKey), new SiteScope(siteKey)),
                 snapshot);
     }
+
+    @Override
+    public AccessDecision canUnarchiveSite(final Actor actor, final SiteKey siteKey,
+                                           final PermissionResolutionSnapshot snapshot) {
+
+        Objects.requireNonNull(actor, "actor must not be null");
+        Objects.requireNonNull(siteKey, "siteKey must not be null");
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+        LOGGER.debug("canUnarchiveSite: actor=[{}] site=[{}]", actor.id().value(), siteKey.value());
+        return decisionService.evaluate(
+                AccessDecisionRequest.of(actor, Permissions.SITE_UNARCHIVE,
+                        new SiteResourceRef(siteKey), new SiteScope(siteKey)),
+                snapshot);
+    }
 }

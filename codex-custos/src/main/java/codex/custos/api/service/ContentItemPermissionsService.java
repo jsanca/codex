@@ -15,9 +15,6 @@ import codex.fundamentum.api.model.Actor;
  * {@link codex.custos.api.model.ResourceRef}, and {@link codex.custos.api.model.ResourceScope},
  * then delegating to {@link AccessDecisionService}.
  * <p>
- * Absent from this service (not in the Permissions catalog): {@code contentItem.delete}.
- * Add the corresponding {@code PermissionKey} constant to
- * {@link codex.custos.api.model.Permissions} before introducing {@code canDeleteContentItem}.
  */
 public interface ContentItemPermissionsService {
 
@@ -100,5 +97,31 @@ public interface ContentItemPermissionsService {
      * @return an {@link AccessDecision.Granted} or {@link AccessDecision.Denied}
      */
     AccessDecision canArchiveContentItem(Actor actor, SiteKey siteKey, ContentTypeKey contentTypeKey,
+                                         ContentItemKey contentItemKey, PermissionResolutionSnapshot snapshot);
+
+    /**
+     * Returns whether {@code actor} may permanently delete the specified archived content item.
+     *
+     * @param actor          the actor requesting the operation; must not be null
+     * @param siteKey        the site containing the item; must not be null
+     * @param contentTypeKey the content type of the item; must not be null
+     * @param contentItemKey the item to check; must not be null
+     * @param snapshot       role assignments and role blueprints in effect; must not be null
+     * @return an {@link AccessDecision.Granted} or {@link AccessDecision.Denied}
+     */
+    AccessDecision canDeleteContentItem(Actor actor, SiteKey siteKey, ContentTypeKey contentTypeKey,
+                                        ContentItemKey contentItemKey, PermissionResolutionSnapshot snapshot);
+
+    /**
+     * Returns whether {@code actor} may restore the specified archived content item to DRAFT.
+     *
+     * @param actor          the actor requesting the operation; must not be null
+     * @param siteKey        the site containing the item; must not be null
+     * @param contentTypeKey the content type of the item; must not be null
+     * @param contentItemKey the item to check; must not be null
+     * @param snapshot       role assignments and role blueprints in effect; must not be null
+     * @return an {@link AccessDecision.Granted} or {@link AccessDecision.Denied}
+     */
+    AccessDecision canRestoreContentItem(Actor actor, SiteKey siteKey, ContentTypeKey contentTypeKey,
                                          ContentItemKey contentItemKey, PermissionResolutionSnapshot snapshot);
 }
